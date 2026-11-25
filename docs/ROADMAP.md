@@ -1,0 +1,45 @@
+# Roadmap
+
+**English** · [Español](ROADMAP_es.md)
+
+Where Parla is heading, grouped by how soon. It is a plan, not a promise of dates: priorities move with what users
+need. Everything listed here will land in the open-source project under Apache-2.0; there is no paid edition that
+holds features back.
+
+Want to help or need something sooner? Open an issue or comment on an existing one; see
+[CONTRIBUTING.md](../CONTRIBUTING.md). For how Parla compares with other platforms today, see
+[comparison.md](comparison.md).
+
+## Now (in progress)
+
+- **Rasa project importer**: bring intents, entities, examples and responses from a Rasa project (`domain.yml`,
+  `nlu.yml`) into a Parla agent.
+- **WhatsApp channel** (WhatsApp Business Cloud API).
+- **Telegram channel**.
+
+## Next
+
+- **Telephony**: SIP / phone calls through Jambonz and Twilio, with DTMF input, on top of the existing local voice.
+- **Database persistence**: SQLite and Postgres as an alternative to JSON files, with **session retention**
+  policies and an **audit log** of who changed what.
+- **Conversation test suites in CI**: write expected conversations and run them on every change (command line and
+  GitHub Actions).
+- **PII redaction**: mask personal data (emails, phone numbers, IDs, cards) in saved conversations and logs.
+- **OIDC single sign-on** (Keycloak, Entra ID, Google, Okta and others).
+- **OpenAI-compatible model endpoints**: point the AI features at any OpenAI-compatible API, local or hosted, not
+  only local servers.
+- **English UI** (interface internationalization).
+
+## Later
+
+- **Horizontal scaling**: several replicas on shared storage, with sessions outside the process.
+- **Tools in the AI agent step**: let the `agent` step call external tools as an **MCP client**.
+- **Observability**: OpenTelemetry traces and metrics export.
+- **A/B experiments** between flow or bot versions.
+- **Outbound campaigns**: start conversations proactively (reminders, notifications).
+
+## Already there
+
+For reference, what Parla does today: no-code builder, embeddings + CRF NLU, flows with many step types, optional
+local LLM, local voice, versions with `staging`/`production`, users and roles, secret vault, inbox, analytics,
+HTTP API, web widget, MCP server, Docker and Kubernetes. See the [README](../README.md#features).
