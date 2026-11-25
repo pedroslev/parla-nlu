@@ -1,5 +1,6 @@
 # Traefik (ships with k3s). Publishes ONLY the public API, the widget and /files/; administer with kubectl port-forward
 # (or publish / and /api/ and put the domain in PARLA_HOSTS, see docs/deployment.md).
+# /api/v1/ also carries the WhatsApp and Telegram webhooks; set PARLA_PUBLIC_URL to the https address (docs/channels.md).
 # TLS: with cert-manager, add cert-manager.io/cluster-issuer and the tls block as in deploy/k8s/ingress.yaml.
 # Body limit: Traefik doesn't cut by size unless you add a "buffering" middleware.
 apiVersion: networking.k8s.io/v1

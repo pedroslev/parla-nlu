@@ -758,10 +758,10 @@ function render() {
       ['classifications', 'bookmark', 'Clasificaciones', agent.classifications.length], ['settings', 'sliders', 'Ajustes']]],
     ['Inteligencia', [['knowledge', 'book', 'Conocimiento', (agent.knowledge || []).length], ['ai', 'spark', 'IA']]],
     ['Operar', [['inbox', 'inbox', 'Bandeja'], ['sessions', 'history', 'Conversaciones'], ['improve', 'lightbulb', 'Para enseñar'], ['reports', 'chart', 'Reportes']]],
-    ['Publicar', [['releases', 'layers', 'Versiones'], ['widget', 'globe', 'Widget web'], ['secrets', 'key', 'Claves'], ['api', 'code', 'API']]],
+    ['Publicar', [['releases', 'layers', 'Versiones'], ['widget', 'globe', 'Widget web'], ['channels', 'phone', 'Canales'], ['secrets', 'key', 'Claves'], ['api', 'code', 'API']]],
   ].map(([name, items]) => [name, items.filter(([id]) => !allowed() || allowed().includes(id))]).filter(([, items]) => items.length);
   if (allowed() && !allowed().includes(section)) section = allowed()[0];     // cada rol ve solo lo suyo
-  if (!['intents','entities','slots','flows','functions','classifications','settings','knowledge','ai','inbox','sessions','improve','reports','releases','widget','secrets','api'].includes(section)) section = 'intents';
+  if (!['intents','entities','slots','flows','functions','classifications','settings','knowledge','ai','inbox','sessions','improve','reports','releases','widget','channels','secrets','api'].includes(section)) section = 'intents';
   history.replaceState(null, '', '#/' + agent.id + '/' + section);           // F5 vuelve acá, no a «Tus agentes»
   $('#nav').replaceChildren(...groups.flatMap(([name, items]) => [groups.length > 1 ? h('div', { class: 'nav-group', role: 'presentation' }, name) : null,
     ...items.map(([id, ic, text, n]) => h('button', {
@@ -772,7 +772,7 @@ function render() {
   const fn = { intents: intentsView, entities: entitiesView, slots: slotsView, flows: flowsView, settings: settingsView,
     sessions: () => window.sessionsView(), reports: () => window.reportsView(), releases: () => window.releasesView(), classifications: () => window.classificationsView(), functions: () => window.functionsView(), api: () => window.apiDocsView(),
     knowledge: () => window.knowledgeView(), ai: () => window.aiView(), inbox: () => window.inboxView(), improve: () => window.improveView(),
-    widget: () => window.widgetView(), secrets: () => window.secretsView() }[section];
+    widget: () => window.widgetView(), channels: () => window.channelsView(), secrets: () => window.secretsView() }[section];
   let view;
   try { view = fn(); } catch (e) { console.error(e); view = h('div', { class: 'empty' }, 'Esta sección todavía no está lista.'); }   // un módulo que falta no rompe el resto
   c.replaceChildren(view);
@@ -1665,6 +1665,7 @@ addEventListener('DOMContentLoaded', () => {     // después de cargar /static/u
 <script src="/static/inbox.js"></script>
 <script src="/static/widgetadmin.js"></script>
 <script src="/static/secrets.js"></script>
+<script src="/static/channels.js"></script>
 <script src="/static/users.js"></script>
 <script src="/static/voice.js"></script>
 </body>

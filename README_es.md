@@ -84,6 +84,7 @@ costado, publicás una versión y lo conectás a tu web, a tu sistema o a un IVR
 - Borrador → versiones numeradas inmutables → entornos `staging` y `production`. Diff antes de publicar,
   rollback apuntando a una versión anterior, y cada conversación queda atada a la versión con la que empezó.
 - API HTTP pública (`/api/v1`), widget web embebible con un `<script>`, exportar e importar agentes.
+- Canales de WhatsApp (Cloud API) y Telegram, con botones, archivos y respuestas desde la Bandeja ([docs/channels_es.md](docs/channels_es.md)).
 - Temas claro, oscuro y colorido en la interfaz.
 
 ### Seguridad
@@ -236,6 +237,7 @@ Todo es opcional. Copiá `.env.example` para ver los valores.
 | `PARLA_EMBED_CACHE` | `data/models/embeddings` del repo | Dónde se guarda el modelo de vectores (~1,2 GB). |
 | `PARLA_HOSTS` | vacío | Nombres extra por los que se entra a Parla detrás de un proxy (ver [docs/deployment.md](docs/deployment_es.md)). |
 | `PARLA_SECURE_COOKIE` | vacío | `1` marca la cookie de sesión como `Secure` (detrás de HTTPS). |
+| `PARLA_PUBLIC_URL` | vacío | Dirección pública con HTTPS, para los webhooks de WhatsApp y Telegram (ver [docs/channels_es.md](docs/channels_es.md)). |
 | `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` u `off` apagan las funciones de los agentes. |
 | `PARLA_WHISPER` | `base` | Modelo de faster-whisper (`tiny` si la máquina es lenta). |
 | `PARLA_URL` | `http://127.0.0.1:8000` | (MCP) dónde está Parla. |
@@ -262,7 +264,6 @@ extras de voz. Detalle en [docs/development.md](docs/development_es.md#pruebas).
 El plan público (Ahora / Después / Más adelante) está en [docs/ROADMAP_es.md](docs/ROADMAP_es.md). Lo que
 **todavía no** hace:
 
-- Canales de WhatsApp y Telegram (en curso).
 - Endpoint público o túnel integrado (hoy lo publicás vos con un proxy).
 - Plantillas de bots y campañas salientes.
 - Memoria por usuario entre conversaciones.
@@ -283,7 +284,7 @@ Botpress y Voiceflow, incluido lo que a Parla todavía le falta, está en [docs/
 | NLU | Embeddings + kNN, CRF, reglas | Pipeline de ML configurable y enfoques con LLM | Gestionado por Google | Basado en LLM en las versiones actuales |
 | LLM | Opcional, local (Ollama) | Opcional, configurable | Integrado con modelos de Google | Central en la plataforma |
 | Escala y ecosistema | Pensado para un servidor chico | Maduro, producción a gran escala | Gestionado, escala de Google | Gran ecosistema de integraciones |
-| Canales | API HTTP y widget web | Muchos conectores | Muchas integraciones | Muchos canales |
+| Canales | API HTTP, widget web, WhatsApp y Telegram | Muchos conectores | Muchas integraciones | Muchos canales |
 | Costo | Gratis, local | Open source + edición paga | Pago por uso | Plan gratis + planes pagos |
 
 Si necesitás muchos canales, alta disponibilidad o un equipo grande, las otras opciones son más maduras.
@@ -291,9 +292,9 @@ Parla apunta a que un bot útil quede andando en una tarde, en tu máquina y sin
 
 ## Documentación
 
-Todo en [`docs/`](docs/README_es.md): primeros pasos, conceptos, API, MCP, IA y voz, seguridad, despliegue,
-desarrollo, preguntas frecuentes, [comparación](docs/comparison_es.md) y [hoja de ruta](docs/ROADMAP_es.md). Las
-novedades de cada versión están en [CHANGELOG.md](CHANGELOG.md).
+Todo en [`docs/`](docs/README_es.md): primeros pasos, conceptos, API, [WhatsApp y Telegram](docs/channels_es.md), MCP,
+IA y voz, seguridad, despliegue, desarrollo, preguntas frecuentes, [comparación](docs/comparison_es.md) y
+[hoja de ruta](docs/ROADMAP_es.md). Las novedades de cada versión están en [CHANGELOG.md](CHANGELOG.md).
 
 ## Contribuir
 

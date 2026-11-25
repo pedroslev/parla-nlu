@@ -20,6 +20,7 @@ Un **agente** (o bot) es un archivo JSON con todo lo que lo define. Los campos p
 | `system` | Flujos del sistema (ver abajo). |
 | `ai` | IA local (ver [ai-and-voice.md](ai-and-voice_es.md)). |
 | `widget` | `{"enabled", "origins", "title", "color", "greeting", "position", "voice"}`. |
+| `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id"}, "telegram": {"enabled"}}`. Los tokens van en la bóveda, ver [channels_es.md](channels_es.md). |
 | `ignored_phrases` | Frases que «Para enseñar» ya no muestra. |
 
 Exportar un agente baja ese JSON; importarlo crea un agente nuevo. No viajan las versiones, los entornos, el

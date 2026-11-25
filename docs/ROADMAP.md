@@ -10,12 +10,15 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 [CONTRIBUTING.md](../CONTRIBUTING.md). For how Parla compares with other platforms today, see
 [comparison.md](comparison.md).
 
+## Shipped recently
+
+- **WhatsApp channel** (WhatsApp Business Cloud API) and **Telegram channel**, with buttons, files and Inbox
+  replies. See [channels.md](channels.md).
+
 ## Now (in progress)
 
 - **Rasa project importer**: bring intents, entities, examples and responses from a Rasa project (`domain.yml`,
   `nlu.yml`) into a Parla agent.
-- **WhatsApp channel** (WhatsApp Business Cloud API).
-- **Telegram channel**.
 
 ## Next
 

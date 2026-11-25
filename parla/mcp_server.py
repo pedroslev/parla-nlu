@@ -269,6 +269,29 @@ def validate(data, files=None):
             if widget.get("position") not in (None, "left", "right"):
                 errors.append("widget: «position» tiene que ser left o right")
 
+    # canales (WhatsApp, Telegram): acá solo lo que no es secreto; los tokens van en «Claves»
+    chans = agent.get("channels")
+    if chans is not None:
+        if not isinstance(chans, dict) or set(chans) - {"public_url", "whatsapp", "telegram"}:
+            errors.append("«channels» tiene que ser {public_url, whatsapp: {enabled, phone_number_id}, telegram: {enabled}}")
+        else:
+            if chans.get("public_url") not in (None, "") and not re.fullmatch(r"https://[^/\s]+(/[^\s]*)?", str(chans["public_url"])):
+                errors.append("channels: «public_url» tiene que ser https://dominio")
+            for name, keys in (("whatsapp", {"enabled", "phone_number_id"}), ("telegram", {"enabled"})):
+                conf = chans.get(name)
+                if conf is None:
+                    continue
+                if not isinstance(conf, dict) or set(conf) - keys:
+                    errors.append("channels: «%s» solo acepta %s (los tokens se cargan en Claves, nunca acá)" % (name, ", ".join(sorted(keys))))
+                    continue
+                if "enabled" in conf and not isinstance(conf["enabled"], bool):
+                    errors.append("channels: «%s.enabled» tiene que ser true o false" % name)
+            wa = chans.get("whatsapp") if isinstance(chans.get("whatsapp"), dict) else {}
+            if wa.get("phone_number_id") not in (None, "") and not re.fullmatch(r"\d{1,30}", str(wa["phone_number_id"])):
+                errors.append("channels: «whatsapp.phone_number_id» son solo números (el «Phone number ID» de Meta)")
+            if wa.get("enabled") and not wa.get("phone_number_id"):
+                warnings.append("channels: WhatsApp prendido sin «phone_number_id»: no va a poder contestar")
+
     def unique(kind, items):
         seen = set()
         for i, item in enumerate(items):
@@ -1148,6 +1171,11 @@ propias para cancelar o pedir un humano: ya están.
 ## Widget web: widget {enabled, origins, title, color, greeting, position, voice}
 - Chat para pegar en una web. origins: los sitios que lo pueden usar, ["https://mitienda.com"] (sin / al final).
   Con enabled true, las conversaciones del widget no piden clave. position "right" | "left"; voice: micrófono.
+
+## WhatsApp y Telegram: channels {public_url, whatsapp: {enabled, phone_number_id}, telegram: {enabled}}
+- Solo lo que no es secreto. Los tokens (WHATSAPP_TOKEN, WHATSAPP_APP_SECRET, WHATSAPP_VERIFY_TOKEN, TELEGRAM_TOKEN)
+  los carga la persona en «Claves»; vos nunca. Contesta lo publicado en Producción; sesiones wa-<teléfono> / tg-<chat>.
+  Botones: WhatsApp muestra hasta 3 como botones (título ≤20 letras) y hasta 10 como lista.
 
 ## Plantillas {{ }} y CEL
 - En textos: {{ slot }} o {{ expresión CEL }}. Un slot vacío se muestra como "". Si la expresión usa algo que no

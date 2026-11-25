@@ -233,6 +233,21 @@ How many conversations had each classification. Filters `from`, `to`, `channel`.
 
 `configured: false` = a classification that no longer exists in the bot.
 
+### WhatsApp and Telegram webhooks
+
+Called by Meta and Telegram, not by you: they don't use login or API keys and accept any `Host`. They answer 403
+with no details if the channel is off in the bot (`channels.whatsapp.enabled` / `channels.telegram.enabled`), a key
+is missing or the signature doesn't match. Body up to 1 MB. Setup in [channels.md](channels.md).
+
+| Route | Authenticated by | Response |
+|---|---|---|
+| `GET /api/v1/bots/{bot}/whatsapp?hub.mode=subscribe&hub.verify_token=…&hub.challenge=…` | `hub.verify_token` = `WHATSAPP_VERIFY_TOKEN` | `200` with the challenge as `text/plain`. |
+| `POST /api/v1/bots/{bot}/whatsapp` | `X-Hub-Signature-256: sha256=<HMAC-SHA256 of the body with WHATSAPP_APP_SECRET>` | `200 ok` right away; messages are processed in the background. Statuses are ignored, repeated ids are processed once. |
+| `POST /api/v1/bots/{bot}/telegram` | `X-Telegram-Bot-Api-Secret-Token` = `TELEGRAM_WEBHOOK_SECRET` | `200 {}` right away; `message` and `callback_query` are processed in the background. |
+
+Each message is processed like `POST …/events` with `environment: production`, `channel: whatsapp` or `telegram`
+and `sessionId` `wa-<phone>` or `tg-<chat_id>`; the `replies` are sent back through the channel.
+
 ### Calls from a browser (CORS) and allowed host names
 
 Parla rejects with 403 requests to `/api/` that carry an `Origin` header whose host isn't `127.0.0.1:<port>`,
@@ -319,8 +334,10 @@ don't work here).
 |---|---|---|
 | `GET /api/agents/{id}/inbox` | — | `{"sessions": [summary + "handoff"]}`: the conversations a person is handling (or that are waiting for one). |
 | `POST /api/agents/{id}/sessions/{sid}/take` | — | A person takes over the conversation. Returns the state plus `history`. |
-| `POST /api/agents/{id}/sessions/{sid}/reply` | `{"text"}` | Writes to the person (if it wasn't taken, takes it). |
+| `POST /api/agents/{id}/sessions/{sid}/reply` | `{"text"}` | Writes to the person (if it wasn't taken, takes it). On a `whatsapp` or `telegram` conversation it is also sent through that channel. |
 | `POST /api/agents/{id}/sessions/{sid}/release` | — | Hands it back to the bot (stops the flow that was halfway through). |
+| `GET /api/agents/{id}/channels` | — | «Canales» (Channels): `{"public_url", "env_public_url", "whatsapp"/"telegram": {"enabled", "webhook", "secrets": {name: loaded?}, "status": {"last_in", "last_out", "error", "error_at"}}}`. Status is in memory. |
+| `POST /api/agents/{id}/channels/telegram` | `{"connect": true \| false}` | Calls Telegram's `setWebhook` (creating `TELEGRAM_WEBHOOK_SECRET` if missing) or `deleteWebhook`: `{"connected"}`. Owner or editor. |
 | `GET /api/agents/{id}/insights/unrecognized` | Filters `from`, `to`, `channel`, `classification` | `{"groups": [{"label", "count", "texts", "examples", "suggested_intent"}]}`: «Para enseñar» (To teach). |
 | `GET /api/agents/{id}/insights/analytics` | The same filters | `{"sessions", "contained", "handoff", "contained_rate", "handoff_rate", "user_messages", "fallbacks", "fallback_rate", "csat", "abandoned", "drop_off", "flows", "by_day"}` |
 

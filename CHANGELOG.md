@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- WhatsApp (Cloud API) and Telegram channels: signed webhooks, native buttons, file uploads, Inbox replies
+  delivered to the channel, and a «Canales» screen ([docs/channels.md](docs/channels.md)).
 - Apache-2.0 license, `NOTICE` file and a "no open core" pledge: every feature stays in the open-source project.
 - `CONTRIBUTING.md` (setup, tests, style, DCO sign-off), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1) and
   `SECURITY.md` (private vulnerability reporting through GitHub).

@@ -20,6 +20,7 @@ An **agent** (or bot) is a JSON file with everything that defines it. The main f
 | `system` | System flows (see below). |
 | `ai` | Local AI (see [ai-and-voice.md](ai-and-voice.md)). |
 | `widget` | `{"enabled", "origins", "title", "color", "greeting", "position", "voice"}`. |
+| `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id"}, "telegram": {"enabled"}}`. Tokens go in the vault, see [channels.md](channels.md). |
 | `ignored_phrases` | Phrases that «Para enseñar» (To teach) no longer shows. |
 
 Exporting an agent downloads that JSON; importing it creates a new agent. Versions, environments, training, secrets

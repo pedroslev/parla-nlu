@@ -143,6 +143,10 @@ Don't publish `/` or all of `/api/`: with no users created Parla doesn't ask for
 domain needs `PARLA_HOSTS` (see below). If your bots send files (the «Enviar un archivo», Send a file, step), also
 publish `/files/`.
 
+The WhatsApp and Telegram webhooks (`/api/v1/bots/{bot}/whatsapp` and `/telegram`) are under `/api/v1/`, so these
+examples already publish them. Set `PARLA_PUBLIC_URL` to the public address (`https://bots.example.com`) so Parla
+can show the webhook URL and connect Telegram. See [channels.md](channels.md).
+
 ## k3s
 
 k3s already ships with Traefik and the `local-path` storage class (the default), so the base works as-is.
@@ -214,6 +218,8 @@ server {
 
 - The widget is loaded from `https://bots.midominio.com/static/widget.js` and talks to that same server. Add the
   site where you embed it in **Widget web → sitios autorizados** (Web widget → authorized sites).
+- WhatsApp and Telegram call `/api/v1/bots/{bot}/whatsapp` and `/telegram`, already covered by `/api/v1/` (see
+  [channels.md](channels.md)). Don't rate-limit them too tightly: Meta and Telegram retry when they get errors.
 - Parla has no rate limiting of its own (except on login): add it at the proxy.
 
 ## First login and users

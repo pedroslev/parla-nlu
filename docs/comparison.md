@@ -33,7 +33,7 @@ Spanish (i18n is planned). Parla has a **no-open-core pledge**: every feature st
 | Pricing | Free | Not published [2] | Quote-based; a third-party guide cites a $43,080 list price [3] | Quote-based / not published [5] | Per request, published (e.g. $0.007 text, $0.012 with playbooks) [7] | Credit packs ($200 / 25,000 credits / month) or pay-as-you-go ($0.01 / credit) [9] | Free tier + published paid plans [12] | Usage-based for agencies; businesses on request [13] |
 | Local / offline models | Yes: embeddings, CRF and optional LLM all run locally | Configurable LLM providers; self-hosted models possible [2] | Not publicly documented as fully offline | Not publicly documented as fully offline | No (Google models) | No (Microsoft / Azure models) | No | No |
 | Voice | Local STT/TTS, interruptible voice call in test chat; no telephony yet | Yes, via AudioCodes, Jambonz, browser [1] | Yes, Voice Gateway [3] | Yes | Yes (audio billed per second) [7] | Yes, real-time voice [10] | Voice channel on enterprise plan, per third-party guide [12] | Yes (voice and chat) [13] |
-| Channels | HTTP API + web widget | Many connectors | Many | Many | Many integrations | Teams, web and Microsoft channels | Many | Many |
+| Channels | HTTP API, web widget, WhatsApp, Telegram | Many connectors | Many | Many | Many integrations | Teams, web and Microsoft channels | Many | Many |
 | MCP | MCP server (25 tools) to build/test/publish bots | MCP tools server for IDEs (beta, 3.16) [1] | MCP tools in agents; MCP server endpoint (experimental) [4] | Not verified in official docs | Not verified in official docs | MCP tools in agents (GA) [10] | MCP in the ADK CLI, per third-party sources [12] | MCP tools in agents + hosted MCP server [14] |
 | Analytics | Containment, handoffs, fallbacks, CSAT, drop-off | Built-in dashboard in Studio 1.16 [1] | Yes | Yes | Yes (Google Cloud) | Yes | Yes | Yes (observability) [13] |
 | Testing | Self-evaluation, confusion matrix, test chat, replay against another version | Yes (E2E tests) | Simulator [3] | Yes | Yes | Yes | Yes | Yes |
@@ -118,7 +118,7 @@ you need everything on your own machine, including local voice.
 Being honest about gaps matters more than a long feature list. These are on the roadmap (see
 [ROADMAP.md](ROADMAP.md)):
 
-- **Channels:** only the HTTP API and the web widget today. WhatsApp and Telegram are in progress.
+- **Channels:** HTTP API, web widget, WhatsApp (Cloud API) and Telegram. No telephony, Messenger, Teams or Slack yet.
 - **Telephony:** no direct SIP / phone integration (an IVR can call the HTTP API).
 - **Horizontal scaling:** Parla is a single process with files on disk; it is designed for a small server.
 - **SSO** (SAML / OIDC).

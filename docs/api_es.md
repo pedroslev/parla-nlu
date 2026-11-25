@@ -232,6 +232,21 @@ Cuántas conversaciones tuvieron cada clasificación. Filtros `from`, `to`, `cha
 
 `configured: false` = una clasificación que ya no existe en el bot.
 
+### Webhooks de WhatsApp y Telegram
+
+Los llaman Meta y Telegram, no vos: no usan login ni claves de API y aceptan cualquier `Host`. Responden 403 sin
+detalles si el canal está apagado en el bot (`channels.whatsapp.enabled` / `channels.telegram.enabled`), falta una
+clave o la firma no coincide. Cuerpo hasta 1 MB. Configuración en [channels_es.md](channels_es.md).
+
+| Ruta | Se autentica con | Respuesta |
+|---|---|---|
+| `GET /api/v1/bots/{bot}/whatsapp?hub.mode=subscribe&hub.verify_token=…&hub.challenge=…` | `hub.verify_token` = `WHATSAPP_VERIFY_TOKEN` | `200` con el desafío en `text/plain`. |
+| `POST /api/v1/bots/{bot}/whatsapp` | `X-Hub-Signature-256: sha256=<HMAC-SHA256 del cuerpo con WHATSAPP_APP_SECRET>` | `200 ok` enseguida; los mensajes se atienden en segundo plano. Los estados (entregado, leído) se ignoran y un id repetido se atiende una vez. |
+| `POST /api/v1/bots/{bot}/telegram` | `X-Telegram-Bot-Api-Secret-Token` = `TELEGRAM_WEBHOOK_SECRET` | `200 {}` enseguida; `message` y `callback_query` se atienden en segundo plano. |
+
+Cada mensaje se atiende como un `POST …/events` con `environment: production`, `channel: whatsapp` o `telegram` y
+`sessionId` `wa-<teléfono>` o `tg-<chat_id>`; las `replies` vuelven por el canal.
+
 ### Llamadas desde un navegador (CORS) y nombres permitidos
 
 Parla rechaza con 403 los pedidos a `/api/` que traen un encabezado `Origin` cuyo host no es
@@ -319,8 +334,10 @@ nombre ni el slug).
 |---|---|---|
 | `GET /api/agents/{id}/inbox` | — | `{"sessions": [resumen + "handoff"]}`: las conversaciones que atiende (o espera) una persona. |
 | `POST /api/agents/{id}/sessions/{sid}/take` | — | Una persona toma la conversación. Devuelve el estado más `history`. |
-| `POST /api/agents/{id}/sessions/{sid}/reply` | `{"text"}` | Le escribe a la persona (si no estaba tomada, la toma). |
+| `POST /api/agents/{id}/sessions/{sid}/reply` | `{"text"}` | Le escribe a la persona (si no estaba tomada, la toma). En una conversación `whatsapp` o `telegram` también se manda por ese canal. |
 | `POST /api/agents/{id}/sessions/{sid}/release` | — | La devuelve al bot (corta el flujo que estaba a medias). |
+| `GET /api/agents/{id}/channels` | — | «Canales»: `{"public_url", "env_public_url", "whatsapp"/"telegram": {"enabled", "webhook", "secrets": {nombre: ¿cargada?}, "status": {"last_in", "last_out", "error", "error_at"}}}`. El estado vive en memoria. |
+| `POST /api/agents/{id}/channels/telegram` | `{"connect": true \| false}` | Llama a `setWebhook` de Telegram (crea `TELEGRAM_WEBHOOK_SECRET` si falta) o a `deleteWebhook`: `{"connected"}`. Dueño o editor. |
 | `GET /api/agents/{id}/insights/unrecognized` | Filtros `from`, `to`, `channel`, `classification` | `{"groups": [{"label", "count", "texts", "examples", "suggested_intent"}]}`: «Para enseñar». |
 | `GET /api/agents/{id}/insights/analytics` | Los mismos filtros | `{"sessions", "contained", "handoff", "contained_rate", "handoff_rate", "user_messages", "fallbacks", "fallback_rate", "csat", "abandoned", "drop_off", "flows", "by_day"}` |
 

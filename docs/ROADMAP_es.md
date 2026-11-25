@@ -10,12 +10,15 @@ una edición paga que se guarde funciones.
 [CONTRIBUTING_es.md](../CONTRIBUTING_es.md). Para ver cómo se compara Parla hoy con otras plataformas, ver
 [comparison_es.md](comparison_es.md).
 
+## Recién salido
+
+- **Canal de WhatsApp** (WhatsApp Business Cloud API) y **canal de Telegram**, con botones, archivos y respuestas
+  desde la Bandeja. Ver [channels_es.md](channels_es.md).
+
 ## Ahora (en curso)
 
 - **Importador de proyectos Rasa**: traer intenciones, entidades, ejemplos y respuestas de un proyecto Rasa
   (`domain.yml`, `nlu.yml`) a un agente de Parla.
-- **Canal de WhatsApp** (WhatsApp Business Cloud API).
-- **Canal de Telegram**.
 
 ## Después
 
