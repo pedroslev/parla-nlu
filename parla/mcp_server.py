@@ -200,7 +200,16 @@ def validate(data, files=None):
     ai = ai or {}
     ai_on = ai.get("enabled") is True
     if ai.get("provider") not in (None, "ollama", "openai"):
-        errors.append("ai: «provider» tiene que ser ollama u openai (servidor compatible local)")
+        errors.append("ai: «provider» tiene que ser ollama u openai (cualquier servidor compatible con OpenAI)")
+    if ai.get("url") is not None and not (isinstance(ai["url"], str) and re.match(r"https?://", ai["url"])):
+        errors.append("ai: «url» tiene que empezar con http:// o https://")
+    if "api_key" in ai:
+        errors.append("ai: la API key nunca va en el JSON. Pedile a la persona que la cargue en «Claves» y poné su "
+                      "nombre en «api_key_secret»")
+    if ai.get("api_key_secret") not in (None, "") and not (isinstance(ai["api_key_secret"], str) and re.fullmatch(r"[A-Za-z_]\w*", ai["api_key_secret"])):
+        errors.append("ai: «api_key_secret» es el NOMBRE de una clave (letras, números y _), no su valor")
+    if ai.get("url") and ai.get("provider") == "openai" and not ai.get("api_key_secret") and "localhost" not in ai["url"] and "127.0.0.1" not in ai["url"]:
+        warnings.append("ai: un proveedor de afuera suele pedir API key: cargala en «Claves» y poné su nombre en «api_key_secret»")
     temp = ai.get("temperature", 0.2)
     if not isinstance(temp, (int, float)) or isinstance(temp, bool) or not 0 <= temp <= 2:
         errors.append("ai: «temperature» tiene que ser un número de 0 a 2")
@@ -731,7 +740,9 @@ def validate(data, files=None):
 
 def secret_refs(agent):
     """Nombres de claves que usa el agente ({{ secret.X }} en http, entradas secret.X de funciones)."""
-    return set(SECRET_REF.findall(json.dumps([agent.get("flows"), agent.get("functions")], ensure_ascii=False)))
+    refs = set(SECRET_REF.findall(json.dumps([agent.get("flows"), agent.get("functions")], ensure_ascii=False)))
+    name = (agent.get("ai") or {}).get("api_key_secret") if isinstance(agent.get("ai"), dict) else None
+    return refs | ({name.upper()} if isinstance(name, str) and name else set())
 
 
 def secret_warnings(agent_id, agent):
@@ -1156,8 +1167,11 @@ Reparaciones de la charla que ya vienen hechas; editá textos/ejemplos o apagala
 Dejá prendidas cancel, repeat, clarify, correction, resume y handoff (son lo que espera la gente). No hagas intents
 propias para cancelar o pedir un humano: ya están.
 
-## IA local: ai {enabled, provider, url, model, temperature, generative_fallback, rescue_intents, use_knowledge, persona}
-- Modelos chicos locales (Ollama "qwen2.5:0.5b" por defecto, o un servidor compatible con OpenAI local). Apagada
+## IA: ai {enabled, provider, url, model, api_key_secret, azure, temperature, generative_fallback, rescue_intents, use_knowledge, persona}
+- Modelos chicos locales (Ollama "qwen2.5:0.5b" por defecto). O provider "openai": cualquier servidor compatible
+  (vLLM, llama.cpp, LM Studio, OpenAI, Azure OpenAI, Groq, OpenRouter); url = base con /v1 (ej.
+  "https://api.openai.com/v1"). api_key_secret = NOMBRE de una clave de «Claves» (la carga la persona; nunca pongas
+  la key en el JSON). Con un proveedor de afuera, el texto de las conversaciones sale a ese proveedor. Apagada
   por defecto. rescue_intents: si la detección duda, la IA elige la intención; generative_fallback: repregunta
   natural cuando no entiende; use_knowledge: redacta respuestas de la base. persona: cómo habla el bot.
 - La necesitan los pasos agent y los slots fill "ai". Sin IA, el resto del bot anda igual.

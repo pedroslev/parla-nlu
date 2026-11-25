@@ -1899,9 +1899,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(body, status)
         if url == "/api/ai/status" and method == "POST" and data.get("agent") and not auth.allowed_bot(self.user, str(data["agent"])):
             return self.reply({"error": "no existe ese agente"}, 404)
-        if url == "/api/ai/status" and method == "POST":       # {"ai": config} o {"agent": id}
-            cfg = data.get("ai") if isinstance(data.get("ai"), dict) else llm.settings(load(data["agent"])) if data.get("agent") else llm.settings({})
-            return self.reply(llm.status(cfg))
+        if url == "/api/ai/status" and method == "POST":       # {"ai": config} y/o {"agent": id} (su API key sale del vault)
+            ai = data.get("ai") if isinstance(data.get("ai"), dict) else None
+            return self.reply(llm.status(llm.settings(load(str(data["agent"])) if data.get("agent") else {}, ai)))
         if url == "/api/ai/pull" and method == "POST":         # descarga un modelo local (Ollama) en segundo plano
             return self.reply(llm.pull(data.get("ai") or {}, str(data.get("model") or "")))
         if url == "/api/ai/progress" and method == "GET":
