@@ -45,6 +45,8 @@ Todas son opcionales. Nada carga `.env` solo: exportalas en tu shell.
 | `PARLA_SECURE_COOKIE` | vacío | `1` agrega `Secure` a la cookie de sesión (también se agrega sola si un proxy de `PARLA_HOSTS` avisa HTTPS con `X-Forwarded-Proto`). |
 | `PARLA_EMBED_CACHE` | `<repo>/data/models/embeddings` | Dónde se guarda el modelo de vectores. No sigue a `PARLA_DATA`, para que las pruebas no lo bajen cada vez. |
 | `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` u `off` apagan las funciones de los agentes. |
+| `PARLA_PUBLIC_URL` | vacío | Dirección pública con HTTPS para los webhooks de WhatsApp y Telegram (gana `channels.public_url` del agente). Ver [channels_es.md](channels_es.md). |
+| `PARLA_WHATSAPP_API`, `PARLA_TELEGRAM_API` | `https://graph.facebook.com/v21.0`, `https://api.telegram.org` | Dirección base de esas APIs. Solo para pruebas (`tests/test_channels.py` las apunta a un servidor falso). |
 | `PARLA_WHISPER` | `base` | Modelo de faster-whisper (`tiny` si la máquina es lenta). |
 | `PARLA_URL` | `http://127.0.0.1:8000` | (MCP) dónde está Parla. |
 | `PARLA_TOKEN` | vacío | (MCP) clave de API que se manda como `Authorization: Bearer`. |

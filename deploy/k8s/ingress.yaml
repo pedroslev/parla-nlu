@@ -1,4 +1,6 @@
 # Example: publishes ONLY the public API, the widget and the files bots send (/files/).
+# /api/v1/ also carries the WhatsApp and Telegram webhooks (/api/v1/bots/{bot}/whatsapp and /telegram), which Meta
+# and Telegram must reach over HTTPS: set PARLA_PUBLIC_URL (ConfigMap) to https://bots.example.com. See docs/channels.md.
 # Administer with kubectl port-forward, or also publish / and /api/ and put the domain in PARLA_HOSTS
 # (ConfigMap) with PARLA_SECURE_COOKIE=1. See docs/deployment.md and docs/security.md.
 # TLS: with cert-manager, add the cert-manager.io/cluster-issuer annotation and the tls block.

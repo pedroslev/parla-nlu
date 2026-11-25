@@ -68,6 +68,7 @@ The interface is in Spanish, and Parla is aimed at bots for Spanish-speaking use
 - Draft → immutable numbered versions → `staging` and `production` environments. Diff before publishing, rollback
   by pointing to an earlier version, and each conversation stays tied to the version it started with.
 - Public HTTP API (`/api/v1`), web widget embeddable with a `<script>`, agent export and import.
+- WhatsApp (Cloud API) and Telegram channels, with buttons, files and Inbox replies ([docs/channels.md](docs/channels.md)).
 - Light, dark and colorful themes in the interface.
 
 ### Security
@@ -212,6 +213,7 @@ Everything is optional. Copy `.env.example` to see the values.
 | `PARLA_EMBED_CACHE` | the repo's `data/models/embeddings` | Where the embedding model (~1.2 GB) is stored. |
 | `PARLA_HOSTS` | empty | Extra hostnames used to reach Parla behind a proxy (see [docs/deployment.md](docs/deployment.md)). |
 | `PARLA_SECURE_COOKIE` | empty | `1` marks the session cookie as `Secure` (behind HTTPS). |
+| `PARLA_PUBLIC_URL` | empty | Public HTTPS address, for the WhatsApp/Telegram webhooks (see [docs/channels.md](docs/channels.md)). |
 | `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` or `off` disable agent functions. |
 | `PARLA_WHISPER` | `base` | faster-whisper model (`tiny` if the machine is slow). |
 | `PARLA_URL` | `http://127.0.0.1:8000` | (MCP) where Parla is. |
@@ -256,7 +258,7 @@ A general overview, not a benchmark. Each tool has many more options than fit he
 | NLU | Embeddings + kNN, CRF, rules | Configurable ML pipeline and LLM-based approaches | Managed by Google | LLM-based in current versions |
 | LLM | Optional, local (Ollama) | Optional, configurable | Integrated with Google models | Central to the platform |
 | Scale and ecosystem | Designed for a small server | Mature, large-scale production | Managed, Google scale | Large integration ecosystem |
-| Channels | HTTP API and web widget | Many connectors | Many integrations | Many channels |
+| Channels | HTTP API, web widget, WhatsApp and Telegram | Many connectors | Many integrations | Many channels |
 | Cost | Free, local | Open source + paid edition | Pay per use | Free plan + paid plans |
 
 If you need many channels, high availability or a large team, the other options are more mature. Parla aims to
@@ -264,7 +266,7 @@ get a useful bot running in an afternoon, on your machine and without sending da
 
 ## Documentation
 
-Everything is in [`docs/`](docs/README.md): getting started, concepts, API, MCP, AI and voice, security,
+Everything is in [`docs/`](docs/README.md): getting started, concepts, API, WhatsApp and Telegram, MCP, AI and voice, security,
 deployment, development and FAQ.
 
 ## Contributing

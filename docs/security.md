@@ -130,6 +130,26 @@ Things to keep in mind:
   your website.
 - A logged-in user who can see the bot uses those same routes without the public limits.
 
+## Messaging channels (WhatsApp and Telegram)
+
+The webhooks `GET`/`POST /api/v1/bots/{bot}/whatsapp` and `POST /api/v1/bots/{bot}/telegram` are the only `/api/`
+routes that skip the login and the `Host` check: Meta's and Telegram's servers call them. Each request
+authenticates on its own instead:
+
+- WhatsApp `POST`: `X-Hub-Signature-256` has to be `sha256=` + the HMAC-SHA256 of the raw body with the app secret
+  (`WHATSAPP_APP_SECRET`). The verification `GET` has to bring `hub.verify_token` equal to `WHATSAPP_VERIFY_TOKEN`.
+- Telegram `POST`: `X-Telegram-Bot-Api-Secret-Token` has to be equal to `TELEGRAM_WEBHOOK_SECRET` (Parla generates it
+  when you press **Conectar webhook**, Connect webhook).
+- Comparisons are constant-time. Channel off, missing key or bad signature: **403 with no details**. Body up to 1 MB.
+- Only messages for the configured `phone_number_id` are processed; repeated message ids are processed once.
+- The tokens (`WHATSAPP_TOKEN`, `TELEGRAM_TOKEN`) and secrets live in the vault, never in the agent's JSON; outbound
+  errors go to the console with values masked.
+- Conversation ids (`wa-<phone>`, `tg-<chat>`) contain the person's phone number or chat id.
+- The bot answers with the `production` environment. Webhooks can't preload data, read conversations or reach any
+  other route.
+
+Setup and limits in [channels.md](channels.md).
+
 ## Key vault (secrets)
 
 In **Publicar → Claves** (Publish → Keys) you store tokens and passwords for external services, per agent.

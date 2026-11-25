@@ -130,6 +130,27 @@ Lo que hay que tener en cuenta:
   web.
 - Un usuario con sesión que ve el bot usa esas mismas rutas sin los límites públicos.
 
+## Canales de mensajería (WhatsApp y Telegram)
+
+Los webhooks `GET`/`POST /api/v1/bots/{bot}/whatsapp` y `POST /api/v1/bots/{bot}/telegram` son las únicas rutas de
+`/api/` que se saltean el login y el chequeo de `Host`: los llaman los servidores de Meta y Telegram. En cambio,
+cada pedido se autentica solo:
+
+- `POST` de WhatsApp: `X-Hub-Signature-256` tiene que ser `sha256=` + el HMAC-SHA256 del cuerpo tal cual con la clave
+  secreta de la app (`WHATSAPP_APP_SECRET`). El `GET` de verificación tiene que traer `hub.verify_token` igual a
+  `WHATSAPP_VERIFY_TOKEN`.
+- `POST` de Telegram: `X-Telegram-Bot-Api-Secret-Token` tiene que ser igual a `TELEGRAM_WEBHOOK_SECRET` (lo genera
+  Parla al tocar **Conectar webhook**).
+- Se compara en tiempo constante. Canal apagado, clave que falta o firma mala: **403 sin detalles**. Cuerpo hasta 1 MB.
+- Solo se atienden mensajes del `phone_number_id` configurado; un id de mensaje repetido se atiende una vez.
+- Los tokens (`WHATSAPP_TOKEN`, `TELEGRAM_TOKEN`) y secretos viven en la bóveda, nunca en el JSON del agente; los
+  errores de envío van a la consola con los valores tapados.
+- Los ids de conversación (`wa-<teléfono>`, `tg-<chat>`) tienen el teléfono o el chat de la persona.
+- El bot contesta con el entorno `production`. Los webhooks no pueden precargar datos, leer conversaciones ni llegar
+  a otra ruta.
+
+Configuración y límites en [channels_es.md](channels_es.md).
+
 ## Bóveda de claves (secretos)
 
 En **Publicar → Claves** cargás tokens y contraseñas de servicios externos por agente.
