@@ -125,6 +125,7 @@
   #nav .nav-group:first-child { padding-top: 0; }
   #nav button:hover { background: var(--brand-soft); color: var(--brand); }
   .opt-theme { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 10px 4px; margin-top: 4px; border-top: 1px solid var(--line); font-weight: 600; font-size: 14px; }
+  .opt-theme + .opt-theme { border-top: 0; margin-top: 0; }
   .top .more { width: 36px; height: 36px; }
   #nav button[aria-current="page"] { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
   #nav .count { margin-left: auto; font-size: 13px; font-weight: 400; min-width: 2.2ch; text-align: right; font-variant-numeric: tabular-nums; flex: none; }
@@ -373,6 +374,7 @@
     .bubble, .answer, .trigger { max-width: 100%; }
   }
 </style>
+<script src="/static/i18n.js"></script>
 <script src="/static/themes.js"></script>
 </head>
 <body>
@@ -735,7 +737,7 @@ async function home() {
   const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
   app.replaceChildren(
     h('header', { class: 'home-hero' }, h('div', { class: 'home-in' },
-      h('div', { class: 'home-top' }, h('span', { class: 'home-logo' }, 'Parla', h('i', {}, '.')), h('div', { class: 'row' }, window.themeSwitcher?.(), window.userAvatar?.())),
+      h('div', { class: 'home-top' }, h('span', { class: 'home-logo' }, 'Parla', h('i', {}, '.')), h('div', { class: 'row' }, window.langSwitcher?.(), window.themeSwitcher?.(), window.userAvatar?.())),
       h('h1', {}, window.me?.name ? 'Hola, ' + window.me.name : 'Tus agentes'),
       h('p', { class: 'home-lead' }, 'Armá bots que entienden cómo habla tu gente: intenciones, datos, flujos y respuestas, todo en tu compu.'),
       h('div', { class: 'home-actions' }, h('button', { class: 'btn', onclick: create }, icon('plus'), 'Crear agente'),
@@ -772,6 +774,7 @@ async function openAgent(id, start) {
           h('button', { class: 'opt', onclick: () => { closePop(); connectView(); } }, icon('spark'), h('span', {}, 'Conectar con IA', h('small', {}, 'Claude, Codex o Cursor arman bots por vos'))),
           h('button', { class: 'opt', onclick: () => { closePop(); exportAgent(); } }, icon('down'), h('span', {}, 'Exportar agente', h('small', {}, 'Un archivo para llevarlo a otra compu'))),
           h('div', { class: 'opt-theme' }, h('span', {}, 'Tema'), window.themeSwitcher?.()),
+          h('div', { class: 'opt-theme' }, h('span', {}, 'Idioma'), window.langSwitcher?.()),
         ]) }, icon('dots')),
       h('span', { 'data-me-slot': '' }, window.userAvatar?.())),
     h('nav', { id: 'nav', 'aria-label': 'Secciones' }), h('main', { id: 'center' }), h('aside', { id: 'chat', 'aria-label': 'Probar el agente' }));

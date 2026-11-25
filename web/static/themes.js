@@ -19,6 +19,7 @@
   .th-switch button[aria-pressed="true"], #nav .th-switch button[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
   .th-switch button:focus-visible, #nav .th-switch button:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
   .th-switch .ic { width: 16px; height: 16px; display: block; }
+  .lang-switch button { font-size: 12px; font-weight: 700; letter-spacing: .02em; }
   #nav .nav-theme { display: flex; justify-content: center; padding: 12px 0 0; }
   @media (max-width: 1080px) {   /* barra angosta de 64px: segmentos apilados */
     #nav .th-switch { flex-direction: column; }
@@ -215,7 +216,7 @@
   const saved = () => { try { return localStorage.getItem(KEY); } catch { return null; } };
   const os = matchMedia('(prefers-color-scheme: dark)');
   const valid = (t) => THEMES.some(([id]) => id === t);
-  const sync = () => document.querySelectorAll('.th-switch button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.theme === root.dataset.theme));
+  const sync = () => document.querySelectorAll('.th-switch button[data-theme]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.theme === root.dataset.theme));
   const apply = (t) => { root.dataset.theme = t; sync(); };
   apply(valid(saved()) ? saved() : os.matches ? 'dark' : 'light');
   os.addEventListener('change', (e) => { if (!valid(saved())) apply(e.matches ? 'dark' : 'light'); });   // sin elección guardada, sigue al sistema

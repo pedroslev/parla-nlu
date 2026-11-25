@@ -19,7 +19,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import DATA, ROOT, write_json, auth, db, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, rasa_import, runner, vault, voice
+from . import DATA, ROOT, write_json, auth, db, i18n, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, rasa_import, runner, vault, voice
 
 import celpy
 import pycrfsuite
@@ -1834,6 +1834,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def reply(self, data, status=200, ctype="application/json"):
         self.status, self.sent = status, data if isinstance(data, dict) else {}       # para la auditoría (safely)
+        if isinstance(data, (dict, list)):              # errores y avisos en el idioma de la interfaz (parla/i18n.py)
+            data = i18n.translate(data, i18n.lang_of(self.headers.get("Accept-Language")))
         body = data if isinstance(data, bytes) else json.dumps(data, ensure_ascii=False).encode()
         self.send_response(status)
         self.send_header("Content-Type", ctype)
