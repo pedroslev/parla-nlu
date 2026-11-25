@@ -2137,17 +2137,19 @@ class Handler(BaseHTTPRequestHandler):
             detail = ("ok" if self.status == 200 else "falló (%s)" % self.status) + " desde " + self.client_address[0]
         elif action.startswith(("user.", "key.")) and url.startswith("/api/users"):
             target = urllib.parse.unquote(groups[0]) if groups else str(data.get("name") or "")
+            user, role = user or sent.get("name"), role or sent.get("role")      # el primer usuario se crea sin sesión: es él mismo
             changes = ", ".join(("rol: %s" % data["role"]) if k == "role" else k for k in ("role", "bots", "password") if k in data)
             detail = target + (" (%s)" % changes if changes and action in ("user.update", "user.role") else "") + \
                 (" · rol %s" % sent.get("role") if action == "user.create" else "") + \
                 (" · clave «%s»" % (sent.get("label") or groups[-1]) if action.startswith("key.") else "")
         elif action.startswith("secret."):
             detail = str(data.get("name") or "")[:60]                # el nombre; el valor nunca
+        elif action.startswith("inbox.") or action in ("agent.restore", "session.delete"):
+            detail = ("versión " if action == "agent.restore" else "") + urllib.parse.unquote(groups[1])     # la conversación o la versión
         else:
             detail = {"agent.publish": "versión %s" % sent.get("version"), "agent.deploy": "%s → versión %s" % (data.get("environment"), data.get("version")),
-                      "agent.restore": "versión %s" % (groups[1] if len(groups) > 1 else ""), "file.upload": str(data.get("name") or "")[:80],
-                      "key.create": "Conectar con %s" % str(data.get("client") or "")[:30], "channel.telegram": "conectar" if data.get("connect", True) is not False else "desconectar",
-                      "session.delete": urllib.parse.unquote(groups[-1])}.get(action, groups[1] if action.startswith("inbox.") else "")
+                      "file.upload": str(data.get("name") or "")[:80], "key.create": "Conectar con %s" % str(data.get("client") or "")[:30],
+                      "channel.telegram": "conectar" if data.get("connect", True) is not False else "desconectar"}.get(action, "")
         if url.startswith("/api/v1/bots/"):
             agent_id = (find_bot(urllib.parse.unquote(groups[0])) or {}).get("id") or urllib.parse.unquote(groups[0])
         db.audit(user, role, agent_id, action, detail)

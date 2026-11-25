@@ -1323,6 +1323,18 @@ function fallbackPanel() {             // «fallback» puede venir como texto (a
     h('div', {}, h('button', { class: 'btn quiet small', onclick: () => add('') }, icon('plus'), 'Agregar otra respuesta')),
     ideas.length ? h('div', { class: 'chips', style: 'font-size:13px' }, 'Ideas:', ideas.map((t) => h('button', { class: 'chip', style: 'text-align:left', onclick: () => add(t) }, t))) : null);
 }
+function privacyPanel() {             // retention_days y pii_redaction: se aplican a lo guardado (parla/server.py cleanup, parla/pii.py)
+  const pii = !!agent.pii_redaction;
+  return h('div', { class: 'panel' }, h('h2', {}, 'Privacidad y datos'),
+    h('div', { class: 'row' }, 'Borrar las conversaciones sin movimiento después de',
+      h('input', { type: 'number', min: 0, step: 1, style: 'width:90px', value: agent.retention_days ?? '', placeholder: '—', 'aria-label': 'Días que se guardan las conversaciones',
+        oninput: (e) => { const v = e.target.value.trim(); if (v === '') delete agent.retention_days; else agent.retention_days = Math.max(0, Math.floor(Number(v)) || 0); touch(); } }), 'días'),
+    h('p', { class: 'help', style: 'font-size:14px' }, 'Vacío: lo que diga el servidor (PARLA_RETENTION_DAYS) o, si no dice nada, se guardan siempre. 0: se guardan siempre. Los archivos del paso «Enviar un archivo» no se borran.'),
+    h('label', { class: 'toggle' }, h('input', { type: 'checkbox', class: 'switch', role: 'switch', checked: pii,
+      onchange: (e) => { agent.pii_redaction = e.target.checked; touch(); render(); } }), 'Tapar datos personales en lo que se guarda'),
+    h('p', { class: 'help', style: 'font-size:14px' }, 'Emails, teléfonos, tarjetas, DNI o CUIT y cuentas (CBU, CVU o IBAN) quedan como «[email]», «[tarjeta]», etc. en el historial, la Bandeja y los reportes. Durante la charla el bot usa el dato real: los pasos y las consultas lo reciben igual.'),
+    pii ? h('p', { class: 'notice' }, 'Lo ya guardado se tapa recién cuando esa conversación vuelve a guardarse. Las charlas quietas por 24 horas se cierran para borrar su memoria.') : null);
+}
 function settingsView() {
   const pct = h('strong', {}, Math.round(agent.threshold * 100) + '%');
   return h('div', { class: 'page' }, h('h1', {}, 'Ajustes'),
@@ -1332,6 +1344,7 @@ function settingsView() {
       h('div', { class: 'row' }, 'Flexible', h('input', { class: 'grow', type: 'range', min: 0.2, max: 0.9, step: 0.05, value: agent.threshold, 'aria-label': 'Seguridad mínima', style: 'padding:0',
         oninput: (e) => { agent.threshold = Number(e.target.value); pct.textContent = Math.round(agent.threshold * 100) + '%'; touch(); } }), 'Estricto', pct),
       h('p', { class: 'help', style: 'font-size:14px' }, 'Si el bot responde cosas que no le preguntaron, subilo. Si dice seguido que no entiende, bajalo o sumá más frases.')),
+    privacyPanel(),
     h('div', { class: 'panel' }, h('h2', {}, 'Llevarlo a otro lado'),
       h('p', { class: 'help', style: 'font-size:14px' }, 'Exportá el agente completo (intenciones, entidades, slots, flujos y ajustes) en un archivo. Para usarlo en otra compu, tocá «Importar agente» en la pantalla de agentes: se crea como un agente nuevo y se entrena al abrirlo.'),
       h('div', {}, h('button', { class: 'btn quiet', onclick: exportAgent }, 'Exportar agente'))),
@@ -1678,6 +1691,7 @@ function renderChat() {
 addEventListener('DOMContentLoaded', () => {     // después de cargar /static/users.js: si la sesión venció, pide entrar y sigue en el mismo agente
   const m = location.hash.match(/^#\/([0-9a-f]{8})(?:\/([a-z]+))?/);
   if (location.hash === '#/usuarios' && window.usersPage) return window.usersPage();
+  if (location.hash === '#/auditoria' && window.auditPage) return window.auditPage();
   m ? openAgent(m[1], m[2]).catch(home) : home();
 });
 </script>
@@ -1697,6 +1711,7 @@ addEventListener('DOMContentLoaded', () => {     // después de cargar /static/u
 <script src="/static/secrets.js"></script>
 <script src="/static/channels.js"></script>
 <script src="/static/users.js"></script>
+<script src="/static/audit.js"></script>
 <script src="/static/voice.js"></script>
 </body>
 </html>
