@@ -4,7 +4,8 @@
 
 **¿Necesito GPU o internet?**
 No. Todo corre en CPU. Internet solo hace falta para instalar y para bajar los modelos la primera vez (el de
-vectores, ~1,2 GB; el de Ollama y los de voz, si los usás). Después, salvo los pasos `http` que vos armes, nada sale de tu máquina.
+vectores, ~1,2 GB; el de Ollama y los de voz, si los usás). Después, salvo los pasos `http` que vos armes (y un proveedor de IA en la nube, si
+elegís uno), nada sale de tu máquina.
 
 **¿Necesito la IA para que el bot funcione?**
 No. Intenciones, entidades, flujos y la base de conocimiento (en modo extractivo) funcionan sin modelo de
@@ -70,7 +71,10 @@ Corren aisladas de la conversación (si fallan, el bot sigue), pero no son un sa
 [security.md](security_es.md#funciones-no-son-un-sandbox).
 
 **¿Puedo usar otro modelo que no sea de Ollama?**
-Sí, cualquier servidor local compatible con OpenAI (LM Studio, llama.cpp server) con `provider: "openai"`.
+Sí, cualquier endpoint compatible con OpenAI con `provider: "openai"`: uno propio (vLLM, llama.cpp server, LM
+Studio, LocalAI) o uno en la nube (OpenAI, Azure OpenAI, Groq, OpenRouter), con la API key cargada en «Claves». Con
+un proveedor en la nube, el texto de las conversaciones sale de tu máquina. Ver
+[ai-and-voice_es.md](ai-and-voice_es.md#endpoints-compatibles-con-openai).
 
 **¿Cómo cambio el tema?**
 Con el selector de la interfaz: Claro, Oscuro o Colorido. Se recuerda en ese navegador.

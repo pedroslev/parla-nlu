@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- OpenAI-compatible model endpoints for the AI features (`ai.provider: "openai"`): vLLM, llama.cpp, LM Studio,
+  LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter. API key from the agent's vault (`ai.api_key_secret`), JSON mode
+  with a prompt-only fallback, Spanish error messages with the key masked, «Probar conexión» and a privacy warning
+  for non-local URLs ([docs/ai-and-voice.md](docs/ai-and-voice.md#openai-compatible-endpoints)).
 - Rasa 3.x project importer (classic and CALM) from the UI, API, CLI and MCP, with a warnings report
   ([docs/migrate-from-rasa.md](docs/migrate-from-rasa.md)).
 - WhatsApp (Cloud API) and Telegram channels: signed webhooks, native buttons, file uploads, Inbox replies

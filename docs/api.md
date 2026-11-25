@@ -346,7 +346,12 @@ don't work here).
 
 | Route | Body | Response |
 |---|---|---|
-| `POST /api/ai/status` | `{"ai": config}` or `{"agent": id}`; with `ai.prompt`, it also tests the model | `{"ok", "models", "recommended", "provider", "model", "model_ready", "error", "hint", "reply"?, "ms"?}` |
+| `POST /api/ai/status` | `{"ai": config}` and/or `{"agent": id}` (with `agent`, the API key named by `ai.api_key_secret` comes from that agent's vault); with `ai.prompt`, it also tests the model. Owner or editor. | `{"ok", "models", "recommended", "provider", "model", "model_ready", "local", "models_unknown"?, "error", "hint", "reply"?, "ms"?}`. Never returns the key. |
+
+The `ai` config (`agent.ai`): `enabled`, `provider` (`"ollama"` default, or `"openai"` for any OpenAI-compatible
+server), `url`, `model`, `api_key_secret` (the **name** of a vault key; the key itself is never accepted in the
+agent JSON), `azure` / `api_version` (Azure OpenAI), `temperature`, `rescue_intents`, `use_knowledge`,
+`generative_fallback`, `persona`. See [ai-and-voice.md](ai-and-voice.md#openai-compatible-endpoints).
 | `POST /api/ai/pull` | `{"ai": config, "model"}` | `{"ok", "started", "model"}`. Downloads an Ollama model in the background. |
 | `GET /api/ai/progress` | — | `{model: {"status", "completed", "total", "done", "error"}}` |
 | `GET /api/voice/status` | — | `{"stt", "tts", "hint", "errors", "models"}` |

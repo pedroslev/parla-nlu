@@ -16,6 +16,9 @@ Want to help or need something sooner? Open an issue or comment on an existing o
   replies. See [channels.md](channels.md).
 - **Rasa project importer**: classic and CALM Rasa 3.x projects become Parla agents, with a warning for anything
   not converted. See [migrate-from-rasa.md](migrate-from-rasa.md).
+- **OpenAI-compatible model endpoints**: the AI features can use any OpenAI-compatible API (vLLM, llama.cpp,
+  LM Studio, OpenAI, Azure OpenAI, Groq, OpenRouter), with the key in the vault. Ollama stays the default. See
+  [ai-and-voice.md](ai-and-voice.md#openai-compatible-endpoints).
 
 ## Now (in progress)
 
@@ -24,8 +27,6 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 - **Conversation test suites in CI**: write expected conversations and run them on every change (command line and
   GitHub Actions).
 - **PII redaction**: mask personal data (emails, phone numbers, IDs, cards) in saved conversations and logs.
-- **OpenAI-compatible model endpoints**: point the AI features at any OpenAI-compatible API, local or hosted, not
-  only local servers.
 - **English UI** (interface internationalization).
 
 ## Next

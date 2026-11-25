@@ -159,11 +159,22 @@ In **Publicar → Claves** (Publish → Keys) you store tokens and passwords for
 - They're never in the agent's JSON: they don't travel on export and don't end up in published versions.
 - The interface, the API and MCP only see the **names**; values never come back through the API, and MCP can't
   read or set them.
-- They're only resolved in the URL, headers and body of an `http` step (`{{ secret.NOMBRE }}`) and as the
-  `secret.NOMBRE` input of a function. They aren't resolved in messages.
+- They're only resolved in the URL, headers and body of an `http` step (`{{ secret.NOMBRE }}`), as the
+  `secret.NOMBRE` input of a function and as the AI provider's API key (`ai.api_key_secret`). They aren't resolved
+  in messages. The AI key is never returned by `/api/ai/status` and is masked in its errors.
 - Any value of 4 or more characters that shows up in a trace or in a flow error message is masked with `••••`.
   What the service or function returns is **not** masked: if a response contains the key and you save it in a
   slot, it stays in the conversation.
+
+## Hosted AI providers: data leaves the machine
+
+By default the AI runs on Ollama on your own machine. If an agent uses an OpenAI-compatible endpoint that is not
+yours (OpenAI, Azure OpenAI, Groq, OpenRouter, …), **the conversation text, the recent turns, the persona and the
+knowledge-base snippets used for an answer are sent to that provider** and handled under its terms (retention,
+training, region). The AI screen warns when the URL is not on this machine or a private network. Embeddings,
+intents and knowledge search stay local. Only owners and editors can change an agent's AI URL or test it with the
+agent's key; review agents built by someone else before enabling them. See
+[ai-and-voice.md](ai-and-voice.md#openai-compatible-endpoints).
 
 ## HTTP steps
 
