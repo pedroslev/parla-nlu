@@ -26,6 +26,14 @@ const US_ROLES = {
 };
 window.me = null;
 window.authEnabled = false;
+window.oidc = null;      // {enabled, label, only, roles, local} si hay SSO (oidc.py); si no, null
+const US_SSO_ERRORS = {
+  state: t('El inicio de sesión tardó demasiado o empezó en otra pestaña. Probá de nuevo.'),
+  denied: t('Tu proveedor de identidad te dejó entrar, pero no tenés un rol en Parla. Pedile acceso a quien lo administra.'),
+  idp: t('El proveedor de identidad no completó el inicio de sesión.'),
+  config: t('El inicio de sesión con SSO está mal configurado. El detalle quedó en la consola de Parla.'),
+  failed: t('No se pudo iniciar sesión con SSO. El detalle quedó en la auditoría y en la consola de Parla.'),
+};
 
 async function usApi(method, path, body) {     // fuera de /api/agents: fetch directo
   const r = await fetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });
@@ -82,6 +90,10 @@ document.head.append(h('style', {}, `
   .lg-go:disabled { opacity: .7; }
   .lg-form .us-msg { margin: 0; }
   .lg-foot { color: var(--muted); font-size: 13px; }
+  .lg-sso { text-decoration: none; text-align: center; }
+  .lg-or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
+  .lg-or::before, .lg-or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+  .us-badge { font: 600 12px var(--body, inherit); padding: 2px 8px; border-radius: 999px; background: var(--soft); border: 1px solid var(--line); color: var(--muted); }
   @media (max-width: 820px) {
     dialog.lg[open] { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
     .lg-stage { padding: 28px 20px 24px; gap: 18px; } .lg-chat { display: none; } .lg-mark { font-size: 56px; }
@@ -97,6 +109,10 @@ window.showLogin = () => usLogin || (usLogin = new Promise((resolve) => {
   const pass = h('input', { type: 'password', autocomplete: 'current-password', required: true });
   const msg = usMsg(), go = h('button', { class: 'btn lg-go' }, t('Entrar'));
   const field = (text, input) => h('label', { class: 'lg-field' }, text, input);
+  const sso = window.oidc?.enabled, password = !sso || window.oidc.local;    // PARLA_OIDC_ONLY: contraseña solo desde esta compu
+  const ssoError = new URLSearchParams(location.search).get('sso_error');
+  if (ssoError) { msg.textContent = US_SSO_ERRORS[ssoError] || US_SSO_ERRORS.failed; history.replaceState(null, '', location.pathname + location.hash); }
+  const ssoBtn = sso ? h('a', { class: 'btn lg-go lg-sso', href: '/api/auth/oidc/start' }, t('Entrar con {label}', { label: window.oidc.label })) : null;
   const d = h('dialog', { class: 'lg', 'aria-labelledby': 'us-login' },
     h('section', { class: 'lg-stage', 'aria-hidden': 'true' },
       h('div', {}, h('div', { class: 'lg-mark' }, 'Parla', h('span', {}, '.')), h('p', { class: 'lg-lead' }, t('Bots que entienden cómo habla tu gente.'))),
@@ -116,15 +132,18 @@ window.showLogin = () => usLogin || (usLogin = new Promise((resolve) => {
       go.disabled = false; go.textContent = t('Entrar');
     } }, h('h2', { id: 'us-login' }, t('Hola de nuevo')),
       h('p', {}, t('Entrá para seguir armando tus agentes.')),
-      field(t('Usuario'), name), field(t('Contraseña'), pass), msg, go,
+      ssoBtn, sso && password ? h('p', { class: 'lg-or' }, t('o con tu contraseña')) : null,
+      password ? [field(t('Usuario'), name), field(t('Contraseña'), pass)] : null, msg, password ? go : null,
       h('p', { class: 'lg-foot' }, t('Todo corre en esta compu: tus conversaciones no salen a internet.')))));
   d.oncancel = (e) => e.preventDefault();        // sin sesión no hay a dónde volver
-  document.body.append(d); d.showModal(); (last ? pass : name).focus();
+  document.body.append(d); d.showModal(); (password ? (last ? pass : name) : ssoBtn).focus();
 }));
 
 async function usLogout() {
-  try { await usApi('POST', '/api/auth/logout'); } catch {}
-  location.reload();
+  let r = {};
+  try { r = await usApi('POST', '/api/auth/logout'); } catch {}
+  if (r.logout_url) location.href = r.logout_url;      // salir también del proveedor de SSO
+  else location.reload();
 }
 
 function usRolePicker(current) {
@@ -182,7 +201,8 @@ function usUserCard(u, owners, redraw, agents) {
   const act = async (fn) => { msg.textContent = ''; try { await fn(); } catch (e) { usFail(msg, e); } };
   const base = '/api/users/' + encodeURIComponent(u.name);
   const lastOwner = u.role === 'owner' && owners === 1;
-  const role = pick(Object.entries(US_ROLES).map(([k, [title]]) => [k, title]), u.role,
+  const managed = u.sso && window.oidc?.roles;      // con PARLA_OIDC_ROLE_MAP el rol viene del proveedor en cada login
+  const role = managed ? h('span', { class: 'help', style: 'font-size:13px' }, (US_ROLES[u.role] || [u.role])[0], ' · ', t('lo maneja tu proveedor de identidad')) : pick(Object.entries(US_ROLES).map(([k, [title]]) => [k, title]), u.role,
     (v) => act(async () => { await usApi('PUT', base, { role: v }); await redraw(); }).then(() => { role.value = u.role; }), t('Rol de {name}', { name: u.name }));
   const resetForm = () => {
     const pw = usPasswordFields();
@@ -211,9 +231,10 @@ function usUserCard(u, owners, redraw, agents) {
       await redraw(u.name, usKeyShown(r.key));
     }); } }, label, h('button', { class: 'btn small' }, icon('key'), t('Crear clave'))), shown);
   const card = h('div', { class: 'us-user' },
-    h('div', { class: 'row' }, h('strong', {}, u.name, u.name === window.me?.name ? h('small', { class: 'help', style: 'font:400 13px var(--body, inherit)' }, t(' (vos)')) : null), role),
+    h('div', { class: 'row' }, h('strong', {}, u.name, u.name === window.me?.name ? h('small', { class: 'help', style: 'font:400 13px var(--body, inherit)' }, t(' (vos)')) : null),
+      u.sso ? h('span', { class: 'us-badge', title: t('Entra con el proveedor de identidad (SSO): no tiene contraseña en Parla.') }, 'SSO') : null, role),
     h('p', { class: 'help', style: 'font-size:13px' }, US_ROLES[u.role]?.[1] || ''), scope,
-    h('div', { class: 'row' }, h('button', { class: 'btn quiet small', type: 'button', onclick: resetForm }, t('Cambiar contraseña')),
+    h('div', { class: 'row' }, u.sso ? null : h('button', { class: 'btn quiet small', type: 'button', onclick: resetForm }, t('Cambiar contraseña')),
       lastOwner ? null : h('button', { class: 'btn danger small', type: 'button', onclick: () => confirmBox(t('Borrar el usuario'), t('Se borra «{name}» y sus claves de API. No se puede deshacer.', { name: u.name }), t('Borrar usuario'),
         () => act(async () => { await usApi('DELETE', base); await redraw(); })) }, t('Borrar'))),
     extra, keys, msg);
@@ -327,7 +348,7 @@ window.userAvatar = () => {
 (async () => {      // al abrir: ¿hay usuarios? ¿quién soy? (index.html ya pudo dibujar el inicio sin este botón)
   try {
     const r = await usApi('GET', '/api/auth/me');
-    window.authEnabled = r.enabled; window.me = r.user;
+    window.authEnabled = r.enabled; window.me = r.user; window.oidc = r.oidc || null;
     if (r.enabled && !r.user) await window.showLogin();
   } catch {}
   if (location.hash === '#/usuarios') window.usersPage();      // ya sabemos quién es: redibujar con sus permisos

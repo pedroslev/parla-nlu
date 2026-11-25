@@ -2,6 +2,7 @@
 
 users.json (permisos 600; ruta cambiable con PARLA_USERS):
 {"users": [{"name", "role", "hash", "salt", "bots", "keys": [{"id", "hash", "label", "created"}]}]}
+Los usuarios de SSO (oidc.py) no tienen hash ni salt: {"name", "role", "sso": true, "sub", "email", "bots", "keys"}.
 «bots»: null (ve todos los agentes; el dueño siempre) o la lista de ids de agentes que ve. Ver allowed_bot().
 Interfaz: cookie `parla_session`. API/MCP: `Authorization: Bearer <clave>`.
 """
@@ -17,7 +18,7 @@ import threading
 import time
 import urllib.parse
 
-from . import DATA, agents_dir, db, write_json
+from . import DATA, agents_dir, db, oidc, write_json
 ROLES = ("owner", "editor", "analyst", "agent")
 SESSION_HOURS = 12
 LOCK = threading.Lock()
@@ -110,7 +111,7 @@ def _valid_bots(bots):
 
 
 def _public(user):
-    return {"name": user["name"], "role": user["role"], "bots": _scope(user),
+    return {"name": user["name"], "role": user["role"], "bots": _scope(user), "sso": bool(user.get("sso")),
             "keys": [{k: key[k] for k in ("id", "label", "created")} for key in user.get("keys", [])]}
 
 
@@ -129,12 +130,7 @@ def current(handler, users=None):
             if any(hmac.compare_digest(digest, key["hash"]) for key in user.get("keys", [])):
                 name = user["name"]
     else:
-        cookie = http.cookies.SimpleCookie()
-        try:
-            cookie.load(handler.headers.get("Cookie") or "")
-        except http.cookies.CookieError:
-            pass
-        token = cookie["parla_session"].value if "parla_session" in cookie else None
+        token = cookie_value(handler, "parla_session")
         found = db.q("SELECT name, expires FROM logins WHERE token = ?", (_digest(token),)) if token else None
         if found and found[0][1] > time.time():
             name = found[0][0]
@@ -144,14 +140,23 @@ def current(handler, users=None):
     return {"name": user["name"], "role": user["role"], "bots": _scope(user)} if user else None
 
 
+def cookie_value(handler, name):
+    cookie = http.cookies.SimpleCookie()
+    try:
+        cookie.load(handler.headers.get("Cookie") or "")
+    except http.cookies.CookieError:
+        pass
+    return cookie[name].value if name in cookie else None
+
+
 def hosts():
     """PARLA_HOSTS: nombres (host[:puerto]) por los que también se entra a Parla, p. ej. detrás de un proxy."""
     return [h.strip().lower() for h in os.environ.get("PARLA_HOSTS", "").split(",") if h.strip()]
 
 
 def _secure(handler):
-    """¿El pedido llegó por HTTPS? (PARLA_SECURE_COOKIE=1, o el proxy de un PARLA_HOSTS lo avisa)."""
-    if os.environ.get("PARLA_SECURE_COOKIE") == "1":
+    """¿El pedido llegó por HTTPS? (PARLA_SECURE_COOKIE=1, PARLA_PUBLIC_URL con https://, o el proxy de un PARLA_HOSTS lo avisa)."""
+    if os.environ.get("PARLA_SECURE_COOKIE") == "1" or os.environ.get("PARLA_PUBLIC_URL", "").strip().startswith("https://"):
         return True
     host = (handler.headers.get("Host") or "").lower()
     return (handler.headers.get("X-Forwarded-Proto") or "").lower() == "https" and (
@@ -192,7 +197,8 @@ def _handle(handler, method, url, data):
     users = _load()
     me = current(handler, users)
     if url == "/api/auth/me" and method == "GET":
-        return 200, {"enabled": bool(users), "user": me}, {}
+        body = {"enabled": bool(users) or oidc.enabled(), "user": me}
+        return 200, dict(body, oidc=oidc.public_config(handler)) if oidc.enabled() else body, {}
     if url == "/api/auth/login" and method == "POST":
         name, password = str(data.get("name") or "").strip(), str(data.get("password") or "")
         key = (name.lower(), handler.client_address[0])
@@ -203,28 +209,33 @@ def _handle(handler, method, url, data):
         if len(recent) >= 5:
             FAILURES[key] = recent
             return 429, {"error": "Demasiados intentos. Esperá un minuto y probá de nuevo."}, {}
+        if oidc.only() and not oidc.break_glass(handler):      # PARLA_OIDC_ONLY: contraseña solo para el dueño, desde acá
+            return 403, {"error": "El inicio de sesión con contraseña está apagado: entrá con tu proveedor de identidad (SSO)."}, {}
         user = _find(users, name)
+        user = user if user and user.get("hash") else None     # los de SSO no tienen contraseña
         ok = hmac.compare_digest(_scrypt(password, user["salt"] if user else "00" * 16), user["hash"] if user else "")   # mismo tiempo exista o no
         if not user or not ok:
             FAILURES[key] = recent + [now]
             return 401, {"error": "Usuario o contraseña incorrectos."}, {}
         FAILURES.pop(key, None)
+        if oidc.only() and user["role"] != "owner":
+            return 403, {"error": "El inicio de sesión con contraseña está apagado: entrá con tu proveedor de identidad (SSO)."}, {}
         return 200, {"enabled": True, "user": {"name": user["name"], "role": user["role"], "bots": _scope(user)}}, _login(handler, user["name"])
     if url == "/api/auth/logout" and method == "POST":
-        cookie = http.cookies.SimpleCookie()
-        try:
-            cookie.load(handler.headers.get("Cookie") or "")
-        except http.cookies.CookieError:
-            pass
-        if "parla_session" in cookie:
-            db.q("DELETE FROM logins WHERE token = ?", (_digest(cookie["parla_session"].value),))
-        return 200, {"enabled": bool(users), "user": None}, _cookie(handler, "", 0)
+        token = cookie_value(handler, "parla_session")
+        if token:
+            db.q("DELETE FROM logins WHERE token = ?", (_digest(token),))
+        body = {"enabled": bool(users) or oidc.enabled(), "user": None}
+        end = oidc.logout_url(_find(users, me["name"]) if me else None)      # también salir del proveedor, si tiene cómo
+        return 200, dict(body, logout_url=end) if end else body, _cookie(handler, "", 0)
     if url.startswith("/api/auth/"):
         return 404, {"error": "no existe"}, {}
 
     # /api/users*: solo el dueño. Excepción: crear el primer usuario (que queda como dueño)
     parts = [urllib.parse.unquote(p) for p in url[len("/api/users"):].split("/") if p]
     if not users and parts == [] and method == "POST":
+        if oidc.enabled() and not oidc.break_glass(handler):
+            return 403, {"error": "Con SSO configurado, el primer usuario dueño solo se puede crear desde esta misma compu."}, {}
         user = {"name": _valid_name(data.get("name"), users), "role": "owner", "keys": []}
         _set_password(user, data.get("password"))
         _save([user])
@@ -250,6 +261,10 @@ def _handle(handler, method, url, data):
     if not user:
         return 404, {"error": "no hay un usuario «%s»" % (parts[0] if parts else "")}, {}
     if len(parts) == 1 and method == "PUT":
+        if user.get("sso") and data.get("password"):
+            raise ValueError("Este usuario entra con SSO: no tiene contraseña en Parla.")
+        if user.get("sso") and oidc.role_map() and "role" in data and data["role"] != user["role"]:
+            raise ValueError("El rol de los usuarios de SSO lo maneja tu proveedor de identidad (PARLA_OIDC_ROLE_MAP).")
         if "role" in data:
             role = _valid_role(data["role"])
             if user["role"] == "owner" and role != "owner" and len(_owners(users)) == 1:
@@ -343,7 +358,7 @@ def guard(handler, method, url, data):
     Deja handler.user y handler.public (True = chat público del widget sin sesión: server.py lo limita)."""
     handler.user, handler.public = None, False
     users = _load()
-    if not users:
+    if not users and not oidc.enabled():
         return None
     handler.user = current(handler, users)
     if _public_widget(method, url):

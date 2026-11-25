@@ -19,7 +19,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import DATA, ROOT, write_json, auth, db, i18n, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, rasa_import, runner, vault, voice
+from . import DATA, ROOT, write_json, auth, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, rasa_import, runner, vault, voice
 
 import celpy
 import pycrfsuite
@@ -1889,7 +1889,8 @@ class Handler(BaseHTTPRequestHandler):
         origin = self.headers.get("Origin")
         self.cors = self.widget_origin(url, origin)
         self.user, self.public = None, False
-        if url.startswith("/api/") and origin is not None and urllib.parse.urlsplit(origin).netloc.lower() not in ours | set(auth.hosts()) and not self.cors:
+        # la vuelta del proveedor de SSO es una navegación desde otro sitio: la protegen state, nonce y PKCE (oidc.py)
+        if url.startswith("/api/") and url != "/api/auth/oidc/callback" and origin is not None and urllib.parse.urlsplit(origin).netloc.lower() not in ours | set(auth.hosts()) and not self.cors:
             return self.reply({"error": "pedido de otro sitio web rechazado"}, 403)   # cualquier página podría pegarle a localhost
         hooked = re.fullmatch(r"/api/v1/bots/([^/]+)/(whatsapp|telegram)", url)
         if hooked and method in ("GET", "POST"):
@@ -1927,7 +1928,7 @@ class Handler(BaseHTTPRequestHandler):
         self.body = data
         if mine:
             self.user = auth.current(self)               # para la auditoría: quién maneja usuarios o cierra sesión
-        own = auth.handle(self, method, url, data)       # /api/auth/* y /api/users*
+        own = oidc.handle(self, method, url, query) or auth.handle(self, method, url, data)   # /api/auth/* y /api/users*
         if own is not None:
             status, body, headers = own
             self.extra_headers = headers

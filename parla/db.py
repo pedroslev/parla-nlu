@@ -4,6 +4,7 @@ siguen en JSON (chicos y editables a mano). Solo biblioteca estándar.
 sessions(agent_id, session_id, channel, started, updated, handoff, record)   record = el JSON de la conversación
 logins(token, name, expires)        token = SHA-256 del valor de la cookie (el valor no se guarda)
 audit(id, at, user, role, agent_id, action, detail)
+oidc(state, nonce, verifier, expires)   logins de SSO a medio camino (oidc.py); state = su SHA-256, de un solo uso
 """
 import contextlib
 import os
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS logins (token TEXT PRIMARY KEY, name TEXT NOT NULL, e
 CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, at TEXT NOT NULL, user TEXT, role TEXT, agent_id TEXT,
     action TEXT NOT NULL, detail TEXT);
 CREATE INDEX IF NOT EXISTS audit_at ON audit (at);
+CREATE TABLE IF NOT EXISTS oidc (state TEXT PRIMARY KEY, nonce TEXT NOT NULL, verifier TEXT NOT NULL, expires REAL NOT NULL);
 """
 # ponytail: una conexión y un lock para todo el proceso (ThreadingHTTPServer); alcanza para un servidor.
 # Con mucho tráfico: una conexión por hilo (WAL ya deja leer mientras otro escribe)
