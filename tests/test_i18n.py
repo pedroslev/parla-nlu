@@ -1,5 +1,5 @@
-"""Traducciones: cada t('...') de web/ y cada mensaje del servidor para la interfaz tienen su versión en inglés,
-con los mismos {datos} / %s. Sin servidor ni modelos.   .venv/bin/python tests/test_i18n.py"""
+"""Traducciones: cada t('...') de web/ y cada mensaje del servidor para la interfaz tienen su versión en cada idioma
+(inglés y portugués), con los mismos {datos} / %s y los mismos espacios de borde. Sin servidor ni modelos.   .venv/bin/python tests/test_i18n.py"""
 import ast
 import glob
 import json
@@ -14,9 +14,12 @@ problems = []
 
 # ---------- web: i18n.js ----------
 src = open(os.path.join(ROOT, "web", "static", "i18n.js"), encoding="utf-8").read()
-block = re.search(r"// EN-BEGIN.*?\n\s*const EN = \{\n(.*?)\s*\};\s*\n\s*// EN-END", src, re.S)
-assert block, "i18n.js: no encontré el bloque EN-BEGIN / EN-END"
-EN = json.loads("{" + block.group(1).rstrip().rstrip(",") + "}")   # una entrada por línea; la última coma se tolera
+DICTS = {}    # 'en' -> {español: inglés}, 'pt' -> …: cada bloque // XX-BEGIN … // XX-END (JSON, una entrada por línea)
+for m in re.finditer(r"// ([A-Z]{2})-BEGIN.*?\n\s*const \1 = \{\n(.*?)\s*\};\s*\n\s*// \1-END", src, re.S):
+    DICTS[m.group(1).lower()] = json.loads("{" + m.group(2).rstrip().rstrip(",") + "}")
+assert {"en", "pt"} <= set(DICTS), "i18n.js: faltan los bloques EN-BEGIN / PT-BEGIN"
+for lang in DICTS:
+    assert re.search(r"\b%s: '" % lang, src) and re.search(r"\b%s: %s\b" % (lang, lang.upper()), src), "i18n.js: %s no está en LANGS o DICTS" % lang
 
 LIT = r"""'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|`((?:[^`\\]|\\.)*)`"""
 unescape = lambda s: re.sub(r"\\(.)", lambda m: {"n": "\n", "t": "\t"}.get(m[1], m[1]), s)
@@ -47,24 +50,28 @@ for path in [os.path.join(ROOT, "web", "index.html")] + sorted(glob.glob(os.path
         for lit in literals_after(code, m.end(), 2):
             used.setdefault(unescape(lit.group(1) if lit.group(1) is not None else lit.group(2) or ""), name)
 
-for key, where in sorted(used.items()):
-    if key not in EN:
-        problems.append("%s: falta en inglés: %s" % (where, json.dumps(key, ensure_ascii=False)))
 braces = lambda s: sorted(re.findall(r"\{(\w+)\}", s))
-for key, value in EN.items():
-    if braces(key) != braces(value):
-        problems.append("i18n.js: los {datos} no coinciden: %s -> %s" % (key, value))
-    if not value.strip():
-        problems.append("i18n.js: traducción vacía: %s" % key)
-unused = sorted(set(EN) - set(used))
-if unused:
-    print("aviso: %d entradas de i18n.js no se usan (¿quedaron de algo que se borró?): %s" % (len(unused), unused[:10]))
+edges = lambda s: (s[:len(s) - len(s.lstrip())], s[len(s.rstrip()):])
+for lang, d in DICTS.items():
+    for key, where in sorted(used.items()):
+        if key not in d:
+            problems.append("%s: falta en %s: %s" % (where, lang, json.dumps(key, ensure_ascii=False)))
+    for key, value in d.items():
+        if braces(key) != braces(value):
+            problems.append("i18n.js %s: los {datos} no coinciden: %s -> %s" % (lang, key, value))
+        if not value.strip():
+            problems.append("i18n.js %s: traducción vacía: %s" % (lang, key))
+        elif edges(key) != edges(value):
+            problems.append("i18n.js %s: los espacios de borde no coinciden: %r -> %r" % (lang, key, value))
+    unused = sorted(set(d) - set(used))
+    if unused:
+        print("aviso: %d entradas de %s en i18n.js no se usan (¿quedaron de algo que se borró?): %s" % (len(unused), lang, unused[:10]))
 
 # ---------- widget.js: su diccionario chico tiene las mismas claves en cada idioma ----------
 widget = open(os.path.join(ROOT, "web", "static", "widget.js"), encoding="utf-8").read()
 dicts = re.findall(r"^\s*(\w\w): \{(.*?)\},?$", re.search(r"const TEXTS = \{\n(.*?)\n\s*\};", widget, re.S).group(1), re.M)
 keys = {lang: sorted(re.findall(r"(\w+):", body)) for lang, body in dicts}
-assert "es" in keys and "en" in keys, keys
+assert {"es", "en", "pt"} <= set(keys), keys
 for lang, k in keys.items():
     if k != keys["es"]:
         problems.append("widget.js: TEXTS.%s no tiene las mismas claves que TEXTS.es" % lang)
@@ -126,4 +133,4 @@ for path in sorted(glob.glob(os.path.join(ROOT, "parla", "*.py"))):
 for p in problems:
     print(p)
 assert not problems, "%d problemas de traducción" % len(problems)
-print("ok: %d textos de la interfaz y %d mensajes del servidor con su inglés" % (len(used), len(i18n.EN)))
+print("ok: %d textos de la interfaz y %d mensajes del servidor, en %s" % (len(used), len(i18n.EN), " y ".join(sorted(DICTS))))

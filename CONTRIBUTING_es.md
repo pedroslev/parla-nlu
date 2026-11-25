@@ -54,7 +54,7 @@ Toda lógica no trivial que agregues tiene que dejar una prueba en `tests/`.
 - **Funciones chicas** que hacen una cosa y se leen de arriba abajo.
 - **Los comentarios explican el porqué.** Hoy muchos están en español; los nuevos pueden ir en inglés o en español.
 - **Los textos de la interfaz pasan por `t()`** con el texto en español como clave, y cada uno necesita su
-  traducción al inglés (ver [Traducciones](#traducciones)). El español es rioplatense y dice qué hacer; el inglés,
+  traducción al inglés y al portugués (ver [Traducciones](#traducciones)). El español es rioplatense y dice qué hacer; el inglés,
   simple, con mayúscula solo al principio y los mismos nombres que el resto de la interfaz.
 - **Comentarios `ponytail:`** marcan un atajo deliberado con un límite conocido: nombran el límite y cómo mejorarlo.
 - Los módulos opcionales (IA, voz, fechas) nunca pueden cortar una conversación cuando fallan.
@@ -71,27 +71,33 @@ python tests/run_all.py
 
 ## Traducciones
 
-La interfaz está en español y en inglés. La clave es el texto en español, así el código se sigue leyendo igual:
+La interfaz está en español, inglés y portugués (pt-BR). La clave es el texto en español, así el código se sigue
+leyendo igual:
 
 - **Interfaz web** (`web/index.html`, `web/static/*.js`): todo texto visible va dentro de `t()`:
   `t('Crear agente')`, `t('No se pudo guardar: {error}', { error: e.message })`,
-  `t.plural(n, '{n} flujo', '{n} flujos')`. Las fechas usan `t.locale`. Después sumá la traducción al bloque `EN`
-  de [`web/static/i18n.js`](web/static/i18n.js) (JSON, una entrada por línea, en orden). Una clave sin traducir se
+  `t.plural(n, '{n} flujo', '{n} flujos')`. Las fechas usan `t.locale`. Después sumá la traducción a los bloques
+  `EN` y `PT` de [`web/static/i18n.js`](web/static/i18n.js) (JSON, una entrada por línea, en orden). Una clave sin traducir se
   ve en español; con `localStorage['parla-i18n-debug'] = '1'` la consola avisa cuáles faltan.
 - **Mensajes del servidor** que llegan a la interfaz (`error`, `warnings` y `problems` en las respuestas JSON):
-  escribilos como texto con `%s` para los datos (`"no existe la función «%s»" % nombre`, no f-string) y sumá el
-  inglés a `EN` en [`parla/i18n.py`](parla/i18n.py). La respuesta se traduce según el `Accept-Language` del pedido,
+  escribilos como texto con `%s` para los datos (`"no existe la función «%s»" % nombre`, no f-string) y sumalo a
+  `EN` y `PT` en [`parla/i18n.py`](parla/i18n.py). La respuesta se traduce según el `Accept-Language` del pedido,
   que la interfaz manda con su idioma. Los logs quedan en español, y lo que el bot le dice a la gente es contenido
   del agente, no interfaz.
 - **El widget web** (`web/static/widget.js`) corre en sitios ajenos: tiene su propia tablita `TEXTS`, que se elige
   por el idioma principal del bot (`data-lang`).
-- `python tests/test_i18n.py` falla si un texto de `t()` o un mensaje del servidor no tiene inglés, o si los
+- Los textos de fábrica de los flujos del sistema (cancelar, repetir…) para bots cuyo idioma principal no es el
+  español están en `SYSTEM`, en `i18n.py`.
+- `python tests/test_i18n.py` falla si a un texto de `t()` o a un mensaje del servidor le falta un idioma, o si los
   `{datos}` / `%s` no coinciden.
+- El idioma por defecto de la instalación es `PARLA_LANG` (`scripts/setup.sh --lang en|es|pt` lo escribe en
+  `.env`); cada usuario puede elegir el suyo al lado del selector de tema.
 
-**Sumar un idioma** (por ejemplo portugués): agregá `pt: 'Português'` a `LANGS` y un diccionario `PT` a `DICTS` en
-`i18n.js` (y su locale en `t.locale`), un diccionario `PT` a `DICTS` en `i18n.py` y una línea `pt` a `TEXTS` en
-`widget.js`. Partí de las claves del inglés; lo que falte sale en español. Ampliá `tests/test_i18n.py` para que
-revise también los diccionarios nuevos.
+**Sumar un idioma** (por ejemplo francés): en `i18n.js` agregá `fr: 'Français'` a `LANGS`, su locale a `LOCALES` y
+un bloque `// FR-BEGIN` … `// FR-END` con `const FR = {…}` anotado en `DICTS`; en `i18n.py`, un diccionario `FR` en
+`DICTS` (y `SYSTEM["fr"]`); una línea `fr` en `TEXTS` de `widget.js`, y `fr` entre las opciones de `--lang` de
+`scripts/setup.sh`. Partí de las claves del inglés. `tests/test_i18n.py` encuentra cada bloque y revisa que esté
+completo.
 
 ## Firmá tus commits (DCO)
 

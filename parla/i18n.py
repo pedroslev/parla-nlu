@@ -9,6 +9,11 @@ Sumar un idioma: otro diccionario como EN / PT en DICTS (y sus flujos del sistem
 import re
 
 EN = {
+    "El más liviano. Rápido en cualquier compu.": "The lightest. Fast on any computer.",
+    "Muy liviano, un poco más listo.": "Very light, a bit smarter.",
+    "Liviano, buen español.": "Light, good Spanish.",
+    "Liviano, buen seguidor de instrucciones.": "Light, follows instructions well.",
+    "Más preciso; necesita algo más de memoria.": "More accurate; needs a bit more memory.",
     # ---------- pedidos y API (server.py) ----------
     "no existe": "not found",
     "no existe ese agente": "that agent doesn't exist",
@@ -290,6 +295,11 @@ EN = {
 }
 # Portugués de Brasil: mismas claves que EN
 PT = {
+    "El más liviano. Rápido en cualquier compu.": "O mais leve. Rápido em qualquer computador.",
+    "Muy liviano, un poco más listo.": "Muito leve, um pouco mais esperto.",
+    "Liviano, buen español.": "Leve, bom espanhol.",
+    "Liviano, buen seguidor de instrucciones.": "Leve, segue bem as instruções.",
+    "Más preciso; necesita algo más de memoria.": "Mais preciso; precisa de um pouco mais de memória.",
     # ---------- pedidos y API (server.py) ----------
     "no existe": "não encontrado",
     "no existe ese agente": "esse agente não existe",
@@ -629,6 +639,8 @@ def translate(data, lang):
             out[k] = tr(v, lang)
         elif k in FIELDS and isinstance(v, list):
             out[k] = [tr(x, lang) if isinstance(x, str) else translate(x, lang) for x in v]
+        elif k == "recommended" and isinstance(v, list):      # modelos sugeridos (llm.RECOMMENDED): su «note» es interfaz
+            out[k] = [dict(x, note=tr(x.get("note"), lang)) if isinstance(x, dict) else x for x in v]
         else:
             out[k] = translate(v, lang)
     return out

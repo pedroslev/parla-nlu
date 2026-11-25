@@ -705,7 +705,7 @@ assert voice.prewarm(_texts) == 0                       # ya estaban: no se gene
 voice.speak, voice.TTS_CACHE = _saved_speak, _saved_cache
 
 # idioma de la interfaz: el error vuelve en inglés con Accept-Language: en, en español sin el encabezado
-import threading, urllib.error, urllib.request  # noqa: E402,E401
+import re, threading, urllib.error, urllib.request  # noqa: E402,E401
 from http.server import ThreadingHTTPServer  # noqa: E402
 _srv = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
 threading.Thread(target=_srv.serve_forever, daemon=True).start()
@@ -717,4 +717,12 @@ for _lang, _want in ((None, "no existe ese agente"), ("en-US,en;q=0.9", "that ag
         raise AssertionError("tenía que dar 404")
     except urllib.error.HTTPError as e:
         assert e.code == 404 and json.loads(e.read())["error"] == _want, _lang
+# la página con ?lang= y cada <script src="/static/…"> se sirven; PARLA_LANG llega a <html data-default-lang>
+_base = "http://127.0.0.1:%d" % _srv.server_address[1]
+os.environ["PARLA_LANG"] = "pt"
+_page = urllib.request.urlopen(_base + "/?lang=en", timeout=10).read().decode()
+del os.environ["PARLA_LANG"]
+assert 'data-default-lang="pt"' in _page
+for _js in re.findall(r'<script src="(/static/[^"]+)"', _page):
+    assert urllib.request.urlopen(_base + _js, timeout=10).status == 200, _js
 _srv.shutdown()

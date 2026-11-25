@@ -52,7 +52,7 @@ Any non-trivial logic you add should leave a test in `tests/`.
   abstractions nobody asked for. A new dependency needs a good reason in the pull request.
 - **Small functions** that do one thing and read top to bottom.
 - **Comments explain the why.** Many comments are in Spanish today; new comments can be in English or Spanish.
-- **UI strings go through `t()`** with the Spanish text as the key, and every one needs its English translation
+- **UI strings go through `t()`** with the Spanish text as the key, and every one needs its English and Portuguese translations
   (see [Translations](#translations)). Spanish copy is Rioplatense and says what to do; English copy is plain,
   sentence case, and uses the same names as the rest of the UI.
 - **`ponytail:` comments** mark a deliberate shortcut with a known limit, naming the limit and how to improve it.
@@ -70,26 +70,30 @@ python tests/run_all.py
 
 ## Translations
 
-The interface is in Spanish and English. The Spanish text is the key, so the code reads the same as before:
+The interface is in Spanish, English and Portuguese (pt-BR). The Spanish text is the key, so the code reads the same as
+before:
 
 - **Web UI** (`web/index.html`, `web/static/*.js`): wrap every visible string in `t()`:
   `t('Crear agente')`, `t('No se pudo guardar: {error}', { error: e.message })`,
-  `t.plural(n, '{n} flujo', '{n} flujos')`. Dates use `t.locale`. Then add the English entry to the `EN` block in
-  [`web/static/i18n.js`](web/static/i18n.js) (JSON, one entry per line, keep it sorted). A key without a
+  `t.plural(n, '{n} flujo', '{n} flujos')`. Dates use `t.locale`. Then add the entry to the `EN` and `PT` blocks in
+  [`web/static/i18n.js`](web/static/i18n.js) (JSON, one entry per line, keep them sorted). A key without a
   translation shows in Spanish; set `localStorage['parla-i18n-debug'] = '1'` and the console lists the missing ones.
 - **Server messages** that reach the UI (`error`, `warnings` and `problems` in JSON replies): write them as a
-  literal with `%s` for the data (`"no existe la función «%s»" % name`, not an f-string) and add the English to
-  `EN` in [`parla/i18n.py`](parla/i18n.py). The reply is translated from the request's `Accept-Language`, which the
+  literal with `%s` for the data (`"no existe la función «%s»" % name`, not an f-string) and add it to `EN` and `PT`
+  in [`parla/i18n.py`](parla/i18n.py). The reply is translated from the request's `Accept-Language`, which the
   UI sets to its language. Logs stay in Spanish, and what the bot says to people is agent content, not UI.
 - **The web widget** (`web/static/widget.js`) runs on other sites, so it has its own small `TEXTS` table, picked by
   the bot's main language (`data-lang`).
-- `python tests/test_i18n.py` fails if a `t()` string or a server message has no English, or if the `{placeholders}`
-  / `%s` don't match.
+- System-flow defaults (cancel, repeat…) for bots whose main language isn't Spanish live in `SYSTEM` in `i18n.py`.
+- `python tests/test_i18n.py` fails if a `t()` string or a server message is missing in a language, or if the
+  `{placeholders}` / `%s` don't match.
+- The installation default is `PARLA_LANG` (`scripts/setup.sh --lang en|es|pt` writes it to `.env`); each user can
+  still pick their own next to the theme picker.
 
-**Adding a language** (say Portuguese): add `pt: 'Português'` to `LANGS` and a `PT` dictionary to `DICTS` in
-`i18n.js` (and its locale in `t.locale`), a `PT` dictionary to `DICTS` in `i18n.py`, and a `pt` line to `TEXTS` in
-`widget.js`. Start from the English keys; anything missing falls back to Spanish. Extend `tests/test_i18n.py` to
-check the new dictionaries too.
+**Adding a language** (say French): in `i18n.js` add `fr: 'Français'` to `LANGS`, its locale to `LOCALES`, and a
+`// FR-BEGIN` … `// FR-END` block with `const FR = {…}` registered in `DICTS`; in `i18n.py` an `FR` dictionary in
+`DICTS` (and `SYSTEM["fr"]`); a `fr` line in `TEXTS` in `widget.js`; and `fr` in the `--lang` choices of
+`scripts/setup.sh`. Start from the English keys. `tests/test_i18n.py` picks up every block and checks it is complete.
 
 ## Sign your commits (DCO)
 

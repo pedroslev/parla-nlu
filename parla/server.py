@@ -1859,7 +1859,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def route(self, method):
-        if method == "GET" and self.path == "/":
+        if method == "GET" and urllib.parse.urlsplit(self.path).path == "/":      # también /?lang=en
             with open(os.path.join(HERE, "index.html"), "rb") as f:
                 page = f.read()
             lang = os.environ.get("PARLA_LANG", "").strip().lower()[:2]
@@ -1873,7 +1873,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply({"error": "no existe"}, 404)
             self.extra_headers = dict(found[1])
             return self.reply(found[0], ctype=self.extra_headers.pop("Content-Type"))
-        static = re.fullmatch(r"/static/([a-z-]+\.js)", urllib.parse.urlsplit(self.path).path)
+        static = re.fullmatch(r"/static/([a-z0-9-]+\.js)", urllib.parse.urlsplit(self.path).path)
         if method == "GET" and static and os.path.exists(os.path.join(HERE, "static", static.group(1))):
             with open(os.path.join(HERE, "static", static.group(1)), "rb") as f:
                 return self.reply(f.read(), ctype="text/javascript; charset=utf-8")
