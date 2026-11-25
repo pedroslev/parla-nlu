@@ -65,9 +65,17 @@ STOPWORDS = {   # ponytail: detector de idioma de juguete por palabras frecuente
 
 
 def system_of(agent):
-    """La configuración de los flujos del sistema, completa con los valores por defecto."""
+    """La configuración de los flujos del sistema, completa con los valores por defecto en el idioma principal
+    (i18n.SYSTEM: en, pt; si no, español). Un valor igual al de fábrica en cualquier idioma no cuenta como cambio: la
+    interfaz guarda agent["system"] completo, y así los textos de fábrica siguen al idioma principal si se cambia."""
     own = agent.get("system") if isinstance(agent.get("system"), dict) else {}
-    return {**own, **{k: {**v, **(own.get(k) or {})} for k, v in SYSTEM_DEFAULTS.items()}}
+    lang = i18n.SYSTEM.get(languages(agent)[0], {})
+    out = dict(own)
+    for k, v in SYSTEM_DEFAULTS.items():
+        factory = [v.get] + [d.get(k, {}).get for d in i18n.SYSTEM.values()]
+        mine = {f: x for f, x in (own.get(k) or {}).items() if all(x != get(f) for get in factory)}
+        out[k] = {**v, **lang.get(k, {}), **mine}
+    return out
 
 
 def reserved_intents(agent):
@@ -471,8 +479,10 @@ def training_warnings(agent, data):
             out.append("Ningún flujo responde a «%s»: el bot la va a entender pero no va a hacer nada." % i["name"])
     for e in entity_report(data):
         if e["kind"] == "aprende de ejemplos" and e["marked"] < 3:
-            out.append("La entidad «%s» está marcada %d %s: con 3 o más ejemplos en distintas frases la reconoce mejor."
-                       % (e["name"], e["marked"], "vez" if e["marked"] == 1 else "veces"))
+            out.append(("La entidad «%s» está marcada %d vez: con 3 o más ejemplos en distintas frases la reconoce mejor."
+                        if e["marked"] == 1 else
+                        "La entidad «%s» está marcada %d veces: con 3 o más ejemplos en distintas frases la reconoce mejor.")
+                       % (e["name"], e["marked"]))
     return out
 
 
@@ -1851,7 +1861,11 @@ class Handler(BaseHTTPRequestHandler):
     def route(self, method):
         if method == "GET" and self.path == "/":
             with open(os.path.join(HERE, "index.html"), "rb") as f:
-                return self.reply(f.read(), ctype="text/html; charset=utf-8")
+                page = f.read()
+            lang = os.environ.get("PARLA_LANG", "").strip().lower()[:2]
+            if lang.isalpha():        # PARLA_LANG: el idioma de la interfaz si la persona no eligió otro (static/i18n.js)
+                page = page.replace(b'<html lang="es">', b'<html lang="es" data-default-lang="%s">' % lang.encode(), 1)
+            return self.reply(page, ctype="text/html; charset=utf-8")
         served = method == "GET" and re.fullmatch(r"/files/([0-9a-f]{8})/([A-Za-z0-9_-]{22})", urllib.parse.urlsplit(self.path).path)
         if served:      # archivos de un paso «Enviar un archivo»: públicos para el widget y la API, el id aleatorio es la llave
             found = files.read(*served.groups())

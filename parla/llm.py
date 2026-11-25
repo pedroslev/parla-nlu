@@ -108,8 +108,8 @@ def _hint(cfg, error):
         if "refused" in error.lower() or "rechaz" in error.lower():
             return ("No encuentro Ollama en esta compu. Si no lo tenés, instalalo desde ollama.com (es gratis y corre "
                     "todo acá, sin internet). Si ya lo tenés, abrilo y probá de nuevo.")
-        return "Ollama no respondió. Revisá que esté abierto y que la dirección sea " + DEFAULTS["url"] + "."
-    return "No pude hablar con " + cfg["url"] + ". Revisá la dirección, la API key y que el servidor esté prendido."
+        return "Ollama no respondió. Revisá que esté abierto y que la dirección sea %s." % DEFAULTS["url"]
+    return "No pude hablar con %s. Revisá la dirección, la API key y que el servidor esté prendido." % cfg["url"]
 
 
 def status(cfg):
@@ -140,7 +140,7 @@ def status(cfg):
         try:
             out["reply"] = chat(cfg, [{"role": "user", "content": str(cfg["prompt"])[:500]}], max_tokens=120)
         except LLMError as error:
-            out.update(ok=False, error=str(error), hint="El modelo no pudo contestar: " + str(error))
+            out.update(ok=False, error=str(error), hint="El modelo no pudo contestar: %s" % error)
         out["ms"] = int((time.time() - started) * 1000)
     return out
 

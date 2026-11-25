@@ -497,6 +497,14 @@ assert say(st, "Ana")["messages"][-1] == "Ana: 2 de fugazza"
 # 5. flujos del sistema: valores por defecto completos, cancelar, repetir, aclarar, ¿algo más?, encuesta
 conf = app.system_of({"system": {"cancel": {"text": "Chau"}}})
 assert set(conf) == set(app.SYSTEM_DEFAULTS) and conf["cancel"]["text"] == "Chau" and conf["cancel"]["examples"] == app.SYSTEM_DEFAULTS["cancel"]["examples"]
+# bot en inglés: textos y frases de fábrica en inglés; lo propio gana; lo de fábrica guardado (la interfaz guarda
+# system completo) sigue al idioma principal
+conf = app.system_of({"languages": ["en", "es"], "system": {"cancel": {"text": "Bye"}, "handoff": app.SYSTEM_DEFAULTS["handoff"]}})
+assert conf["cancel"]["text"] == "Bye" and conf["cancel"]["examples"][0] == "cancel" and conf["cancel"]["enabled"] is True
+assert conf["handoff"]["examples"][0] == "I want to talk to a human" and conf["clarify"]["margin"] == app.SYSTEM_DEFAULTS["clarify"]["margin"]
+assert app.system_of({"languages": ["es"], "system": conf})["handoff"]["text"] == app.SYSTEM_DEFAULTS["handoff"]["text"]
+conf = app.system_of({"languages": ["pt"], "system": conf})          # y en portugués: lo de fábrica (en inglés) pasa al portugués
+assert conf["handoff"]["text"].startswith("Vou te passar") and conf["cancel"]["text"] == "Bye" and conf["csat"]["text"].startswith("Como foi")
 st = {}
 say(st, "una pizza de muzza")
 assert say(st, "cancelar")["messages"] == ["Listo, lo dejamos acá. ¿Te ayudo con otra cosa?"] and st["flow"] is None and st["stack"] == []
@@ -695,3 +703,18 @@ voice.TTS_CACHE = voice.Path(app.AGENTS) / "tts-cache-test"
 assert voice.prewarm(_texts) == 4 and "Hola {{ nombre }}." not in _spoken and "¿Te ayudo?" in _spoken, _spoken
 assert voice.prewarm(_texts) == 0                       # ya estaban: no se generan de nuevo
 voice.speak, voice.TTS_CACHE = _saved_speak, _saved_cache
+
+# idioma de la interfaz: el error vuelve en inglés con Accept-Language: en, en español sin el encabezado
+import threading, urllib.error, urllib.request  # noqa: E402,E401
+from http.server import ThreadingHTTPServer  # noqa: E402
+_srv = ThreadingHTTPServer(("127.0.0.1", 0), app.Handler)
+threading.Thread(target=_srv.serve_forever, daemon=True).start()
+for _lang, _want in ((None, "no existe ese agente"), ("en-US,en;q=0.9", "that agent doesn't exist"), ("pt-BR,pt;q=0.9", "esse agente não existe")):
+    _req = urllib.request.Request("http://127.0.0.1:%d/api/agents/00000000" % _srv.server_address[1],
+                                  headers={"Accept-Language": _lang} if _lang else {})
+    try:
+        urllib.request.urlopen(_req, timeout=10)
+        raise AssertionError("tenía que dar 404")
+    except urllib.error.HTTPError as e:
+        assert e.code == 404 and json.loads(e.read())["error"] == _want, _lang
+_srv.shutdown()

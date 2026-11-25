@@ -107,8 +107,9 @@ def run_function(function, inputs):
     logs, _, tail = stdout.rpartition(mark) if mark in stdout else (stdout, "", "")
     logs = (logs.rstrip("\n") + ("\n" + stderr if stderr else "")).strip()[-4000:]
     if not tail:
-        why = "se quedó sin memoria o la cortó el sistema" if proc.returncode and proc.returncode < 0 else "terminó sin devolver nada"
-        return done({"ok": False, "error": "La función %s." % why, "logs": logs})
+        killed = proc.returncode and proc.returncode < 0
+        return done({"ok": False, "error": "La función se quedó sin memoria o la cortó el sistema." if killed else
+                     "La función terminó sin devolver nada.", "logs": logs})
     try:
         out = json.loads(tail)
     except ValueError:

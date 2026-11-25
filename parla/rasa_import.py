@@ -13,6 +13,8 @@ import re
 
 import yaml
 
+from . import i18n
+
 ANNOT = re.compile(r"\[([^\]]+)\](?:\(([^)]+)\)|\{([^}]*)\})")    # [texto](entidad) · [texto](entidad:valor) · [texto]{"entity": ...}
 SLOT_REF = re.compile(r"(?<!\{)\{(\w+)\}(?!\})")                  # «Hola {name}» de Rasa -> «Hola {{ name }}»
 RESERVED = {"intent", "confidence", "text", "entities", "status", "body", "true", "false", "null", "in"}   # mcp_server.RESERVED
@@ -23,12 +25,6 @@ TOP_KEYS = {"version", "nlu", "rules", "stories", "flows", "intents", "entities"
             "language", "pipeline", "policies", "recipe", "assistant_id", "session_config", "config", "e2e_actions"}
 WEBHOOK = "http://localhost:5055/webhook"        # el servidor de acciones de Rasa (rasa run actions)
 FALLBACKS = {"en": "Sorry, I didn't get that. Could you rephrase?", "pt": "Não entendi, pode dizer de outro jeito?"}
-SYSTEM_EN = {"cancel": {"examples": ["cancel", "stop", "forget it", "never mind"], "text": "Ok, let's stop here. Anything else I can help with?"},
-             "repeat": {"examples": ["repeat", "what?", "say that again"]},
-             "clarify": {"text": "Did you mean…?"}, "anything_else": {"text": "Anything else I can help with?"},
-             "resume": {"text": "Let's continue where we were."}, "correction": {"text": "Done, I changed it."},
-             "handoff": {"examples": ["I want to talk to a human", "connect me to an agent"], "text": "I'm passing you to a person, they'll write to you shortly."},
-             "csat": {"text": "How did I do? From 1 to 5."}}
 YES_NO = {"true": ["yes", "yeah", "yep", "sure", "sí", "si", "dale", "claro", "sim"], "false": ["no", "nope", "não", "nao"]}
 
 
@@ -92,8 +88,8 @@ def convert(files, name=None):
     agent = {"name": str(name or "").strip()[:80] or "Bot importado de Rasa", "threshold": 0.75, "languages": [lang],
              "fallback": FALLBACKS.get(lang, "No entendí, ¿me lo decís de otra forma?"),
              "intents": [], "entities": [], "slots": [], "flows": [], "classifications": [], "functions": []}
-    if lang == "en":
-        agent["system"] = json.loads(json.dumps(SYSTEM_EN))
+    if lang in i18n.SYSTEM:
+        agent["system"] = json.loads(json.dumps(i18n.SYSTEM[lang]))   # también sale así en el .json de la línea de comandos
     elif lang not in ("es",):
         warn("idioma «%s»: los textos de los flujos del sistema (cancelar, repetir, pasar con una persona) quedan en español; "
              "traducilos en Flujos del sistema" % lang)
@@ -339,9 +335,11 @@ def convert(files, name=None):
         if not step:
             step = {"type": "ask", "slot": n, "text": "¿%s?" % str(rslot).replace("_", " ")}
             custom = "action_ask_%s" % rslot
-            warn("slot «%s»: no hay respuesta utter_ask_%s%s; la pregunta quedó «%s», cambiala" % (
-                rslot, rslot, " (la pregunta la hacía la acción %s, que no se importa)" % custom
-                if custom in (d.get("actions") or []) else "", step["text"]))
+            if custom in (d.get("actions") or []):
+                warn("slot «%s»: no hay respuesta utter_ask_%s (la pregunta la hacía la acción %s, que no se importa); "
+                     "la pregunta quedó «%s», cambiala" % (rslot, rslot, custom, step["text"]))
+            else:
+                warn("slot «%s»: no hay respuesta utter_ask_%s; la pregunta quedó «%s», cambiala" % (rslot, rslot, step["text"]))
         return step
 
     def action_steps(action, rest=()):

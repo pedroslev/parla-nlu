@@ -38,7 +38,7 @@ def status():
     stt, tts = _installed("faster_whisper"), _installed("piper")
     voices = sorted(p.name[:-5] for p in PIPER_DIR.glob("*.onnx")) if PIPER_DIR.exists() else []
     hint = ("" if stt and tts else
-            "Falta instalar: .venv/bin/pip install " + " ".join(n for n, ok in (("faster-whisper", stt), ("piper-tts", tts)) if not ok))
+            "Falta instalar: .venv/bin/pip install %s" % " ".join(n for n, ok in (("faster-whisper", stt), ("piper-tts", tts)) if not ok))
     if stt and tts and not (MODELS / "whisper").exists():
         hint = "La primera vez se bajan los modelos de voz (~150 MB), puede tardar un minuto."
     return {"stt": stt, "tts": tts, "hint": hint, "errors": dict(_errors),

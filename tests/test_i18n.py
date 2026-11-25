@@ -71,9 +71,12 @@ for lang, k in keys.items():
 
 # ---------- servidor: mensajes que van a la interfaz ----------
 pct = lambda s: len(re.findall(r"%[sd]", s))
-for key, value in i18n.EN.items():
-    if pct(key) != pct(value) or "%" in value.replace("%s", "").replace("%d", ""):
-        problems.append("i18n.py: los %%s no coinciden: %s -> %s" % (key, value))
+for lang, d in i18n.DICTS.items():
+    for key, value in d.items():
+        if pct(key) != pct(value) or "%" in value.replace("%s", "").replace("%d", ""):
+            problems.append("i18n.py %s: los %%s no coinciden: %s -> %s" % (lang, key, value))
+    for key in sorted(set(i18n.EN) ^ set(d)):
+        problems.append("i18n.py: %s está en %s pero no en %s" % (json.dumps(key, ensure_ascii=False), *(("en", lang) if key in i18n.EN else (lang, "en"))))
 
 FIELDS = set(i18n.FIELDS)
 
@@ -88,6 +91,12 @@ def message(node):
 
 
 def check(node, where):
+    if isinstance(node, ast.IfExp):                   # "uno" if n == 1 else "varios": los dos
+        check(node.body, where), check(node.orelse, where)
+        return
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod) and isinstance(node.left, ast.IfExp):
+        check(node.left, where)
+        return
     if isinstance(node, ast.JoinedStr):
         problems.append("%s: mensaje con f-string (usá \"...%%s\" %% dato para poder traducirlo)" % where)
         return
@@ -110,8 +119,8 @@ for path in sorted(glob.glob(os.path.join(ROOT, "parla", "*.py"))):
         elif isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call) and node.exc.args and \
                 getattr(node.exc.func, "id", "").endswith("Error"):
             check(node.exc.args[0], where)
-        elif isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "append" and \
-                getattr(node.func.value, "id", "") in ("warnings", "notes", "problems") and node.args:
+        elif isinstance(node, ast.Call) and node.args and (getattr(node.func, "id", "") == "warn" or (   # rasa_import: warn = warnings.append
+                getattr(node.func, "attr", "") == "append" and getattr(node.func.value, "id", "") in ("warnings", "notes", "problems"))):
             check(node.args[0], where)
 
 for p in problems:

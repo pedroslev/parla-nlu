@@ -4,18 +4,592 @@ La clave es el texto en español tal como lo arma el código, con %s / %d donde 
 formateado ("no existe la función «cobrar»") se reconoce y se traduce ("there's no function «cobrar»"), y los datos
 de adentro también se traducen si son otro mensaje conocido. Solo se traducen los campos error / warnings / problems
 de las respuestas JSON (server.py, reply); los logs y lo que el bot le dice a la gente quedan como están.
-Sumar un idioma: otro diccionario como EN en DICTS. Ver CONTRIBUTING.md.
+Sumar un idioma: otro diccionario como EN / PT en DICTS (y sus flujos del sistema en SYSTEM). Ver CONTRIBUTING.md.
 """
 import re
 
 EN = {
+    # ---------- pedidos y API (server.py) ----------
+    "no existe": "not found",
+    "no existe ese agente": "that agent doesn't exist",
+    "no existe esa conversación": "that conversation doesn't exist",
+    "método no permitido": "method not allowed",
+    "método no permitido acá. Mirá la documentación en la sección API de Parla": "method not allowed here. See the docs in Parla's API section",
+    "no existe. Mirá la documentación en la sección API de Parla": "not found. See the docs in Parla's API section",
+    "mandá el pedido como JSON (Content-Type: application/json)": "send the request as JSON (Content-Type: application/json)",
+    "Content-Length inválido": "invalid Content-Length",
+    "pedido de otro sitio web rechazado": "request from another website rejected",
+    "pedido rechazado": "request rejected",
+    "pedido rechazado: ese Host no está permitido (sumalo a PARLA_HOSTS)": "request rejected: that Host isn't allowed (add it to PARLA_HOSTS)",
+    "demasiado grande": "too large",
+    "el cuerpo tiene que ser un JSON válido": "the body must be valid JSON",
+    "el cuerpo tiene que ser un objeto JSON": "the body must be a JSON object",
+    "Solo el dueño puede ver la auditoría.": "Only the owner can see the audit log.",
+    "«limit» tiene que ser un número": "“limit” must be a number",
+    "«after» tiene que ser un número": "“after” must be a number",
+    "el archivo no es un agente de Parla": "the file isn't a Parla agent",
+    "el archivo no es un agente de Parla o está vacío": "the file isn't a Parla agent or it's empty",
+    "el archivo no es un agente de Parla: «%s» tiene que ser una lista": "the file isn't a Parla agent: “%s” must be a list",
+    "sesión inválida": "invalid session",
+    "No se publicó en Producción: %s. Corregilas o mandá «force»: true para publicar igual.":
+        "Not published to Production: %s. Fix them or send “force”: true to publish anyway.",
+    "«names» tiene que ser una lista con los nombres de las pruebas": "“names” must be a list of test names",
+    "mandá «function» (la definición) e «inputs» (un objeto)": "send “function” (the definition) and “inputs” (an object)",
+    "falta «text» con lo que le querés escribir": "missing “text” with what you want to write",
+    "Algo falló en el servidor. El detalle quedó en la consola de Parla.": "Something went wrong on the server. The details are in Parla's console.",
+    "Solo el dueño puede crear, cambiar o probar el código de las funciones (corre en esta compu). Pedíselo al dueño o apagá las funciones con PARLA_FUNCTIONS=0.":
+        "Only the owner can create, change or test function code (it runs on this computer). Ask the owner, or turn functions off with PARLA_FUNCTIONS=0.",
+    "no hay un bot que se llame «%s» (o hay más de uno con ese nombre: usá su id)": "there's no bot called “%s” (or there's more than one with that name: use its id)",
+    "«sessionId» tiene que ser un texto de hasta 100 letras sin tildes, números o . @ + - _ (sin espacios)":
+        "“sessionId” must be text of up to 100 unaccented letters, digits or . @ + - _ (no spaces)",
+    "esa conversación no es del widget web": "that conversation isn't from the web widget",
+    "«data» tiene que ser un objeto, por ejemplo {\"dni\": \"30123456\"}": "“data” must be an object, for example {\"dni\": \"30123456\"}",
+    "falta «text» con el mensaje de la persona": "missing “text” with the person's message",
+    "falta «sessionId» con la conversación a terminar": "missing “sessionId” with the conversation to end",
+    "no hay una conversación «%s» con este bot": "there's no conversation “%s” with this bot",
+    "«type» tiene que ser start (u online), message o end": "“type” must be start (or online), message or end",
+    "«audio» tiene que ser el audio en base64": "“audio” must be the audio in base64",
+    "falta «audio» con la grabación en base64": "missing “audio” with the recording in base64",
+    "no se entendió nada en el audio, probá de nuevo": "couldn't make out anything in the audio, try again",
+    "«zip» tiene que ser el .zip en base64": "“zip” must be the .zip in base64",
+    "mandá {\"zip\": base64} o {\"files\": {ruta: texto}} con el proyecto de Rasa": "send {\"zip\": base64} or {\"files\": {path: text}} with the Rasa project",
+    "no se pudo entrenar ahora (%s); se entrena al abrirlo": "couldn't train now (%s); it will train when you open it",
+    # versiones, entornos y flujos
+    "no existe la versión %s": "version %s doesn't exist",
+    "el entorno tiene que ser production o staging": "the environment must be production or staging",
+    "«environment» tiene que ser production, staging o draft": "“environment” must be production, staging or draft",
+    "no hay ninguna versión publicada en Pruebas (staging)": "there's no version published to Staging",
+    "no pude resolver «%s». Revisá que los slots que usa existan.": "couldn't evaluate “%s”. Check that the slots it uses exist.",
+    "la dirección tiene que empezar con http:// o https://": "the address must start with http:// or https://",
+    "un encabezado no puede tener saltos de línea": "a header can't contain line breaks",
+    "la función «%s» falló: %s": "function “%s” failed: %s",
+    "elegí con qué flujo seguir": "choose which flow to continue with",
+    "no existe la función «%s»": "function “%s” doesn't exist",
+    "elegí qué función ejecutar": "choose which function to run",
+    "elegí qué clasificación aplicar": "choose which classification to apply",
+    "elegí qué flujo llamar": "choose which flow to call",
+    "no existe el flujo «%s»": "flow “%s” doesn't exist",
+    "hay más de %d flujos uno dentro de otro": "more than %d flows are nested inside each other",
+    "no existe el archivo «%s»: subilo de nuevo": "file “%s” doesn't exist: upload it again",
+    "elegí qué archivo enviar": "choose which file to send",
+    # consejos del entrenamiento
+    "«%s» tiene %d frase%s: sumale al menos %d más para que la reconozca bien.": "“%s” has %d phrase%s: add at least %d more so it's recognized reliably.",
+    "Ningún flujo responde a «%s»: el bot la va a entender pero no va a hacer nada.": "No flow answers “%s”: the bot will understand it but won't do anything.",
+    "La entidad «%s» está marcada %d vez: con 3 o más ejemplos en distintas frases la reconoce mejor.":
+        "Entity “%s” is marked %d time: with 3 or more examples in different phrases it's recognized better.",
+    "La entidad «%s» está marcada %d veces: con 3 o más ejemplos en distintas frases la reconoce mejor.":
+        "Entity “%s” is marked %d times: with 3 or more examples in different phrases it's recognized better.",
+    # ---------- usuarios (auth.py) ----------
+    "la contraseña tiene que tener al menos 5 caracteres": "the password must be at least 5 characters long",
+    "«bots» tiene que ser null (todos los agentes) o una lista de ids de agentes.": "“bots” must be null (all agents) or a list of agent ids.",
+    "No existe el agente «%s».": "Agent “%s” doesn't exist.",
+    "Demasiados intentos. Esperá un minuto y probá de nuevo.": "Too many attempts. Wait a minute and try again.",
+    "Usuario o contraseña incorrectos.": "Wrong username or password.",
+    "Todavía no hay usuarios: creá primero el usuario dueño.": "There are no users yet: create the owner user first.",
+    "Iniciá sesión para seguir.": "Sign in to continue.",
+    "Solo el dueño puede manejar usuarios.": "Only the owner can manage users.",
+    "no hay un usuario «%s»": "there's no user “%s”",
+    "Tiene que quedar al menos un dueño: nombrá a otro dueño antes de cambiarle el rol.": "There must be at least one owner: make someone else owner before changing this role.",
+    "No se puede borrar al único dueño.": "The only owner can't be deleted.",
+    "no existe esa clave": "that API key doesn't exist",
+    "El nombre de usuario tiene que tener de 1 a 40 letras, números, espacios o . @ + - _": "The username must have 1 to 40 letters, digits, spaces or . @ + - _",
+    "Ya hay un usuario «%s».": "There's already a user “%s”.",
+    "El rol tiene que ser uno de: dueño (owner), editor, analista (analyst) o atención (agent).": "The role must be one of: owner, editor, analyst or support (agent).",
+    "Tu usuario es de solo lectura: podés mirar, pero no cambiar nada.": "Your user is read-only: you can look, but not change anything.",
+    "Tu usuario es de atención: solo podés usar la Bandeja para leer y responder conversaciones.": "Your user is support: you can only use the Inbox to read and reply to conversations.",
+    # ---------- canales (channels.py) ----------
+    "falta la clave WHATSAPP_TOKEN o el «phone_number_id»": "missing the WHATSAPP_TOKEN secret or the “phone_number_id”",
+    "falta la clave TELEGRAM_TOKEN (o no tiene el formato 123456:ABC… que da BotFather)": "missing the TELEGRAM_TOKEN secret (or it doesn't have the 123456:ABC… format BotFather gives)",
+    "falta la dirección pública con https:// (PARLA_PUBLIC_URL o «Dirección pública» acá arriba)": "missing the public https:// address (PARLA_PUBLIC_URL or “Public address” above)",
+    "el canal está apagado: la respuesta de la Bandeja no se envió": "the channel is off: the reply from the Inbox wasn't sent",
+    "Telegram: %s": "Telegram: %s",
+    "sin respuesta: %s": "no response: %s",
+    # ---------- asistentes de IA (connect.py) ----------
+    "%s no es un JSON válido; no lo toqué para no romperlo. Arreglalo o agregá Parla a mano.": "%s isn't valid JSON; I left it alone so as not to break it. Fix it or add Parla manually.",
+    "%s tiene un formato inesperado; no lo toqué. Agregá Parla a mano.": "%s has an unexpected format; I left it alone. Add Parla manually.",
+    "No pude editar la configuración de Codex sin romperla (%s); no la toqué. Usá «Hacerlo a mano».": "I couldn't edit the Codex config without breaking it (%s); I left it alone. Use “Do it manually”.",
+    "No encontré Claude Code (el comando «claude») en esta compu. Instalalo o usá «Hacerlo a mano».": "I couldn't find Claude Code (the “claude” command) on this computer. Install it or use “Do it manually”.",
+    "Claude Code tardó demasiado en responder. Probá de nuevo o usá «Hacerlo a mano».": "Claude Code took too long to respond. Try again or use “Do it manually”.",
+    "no conozco ese asistente": "unknown assistant",
+    "Claude Code no aceptó el cambio: %s": "Claude Code didn't accept the change: %s",
+    "error %d": "error %d",
+    # ---------- archivos, conocimiento y claves (files.py, knowledge.py, vault.py) ----------
+    "agente inválido": "invalid agent",
+    "ese tipo de archivo no se puede enviar. Sirven: %s": "that file type can't be sent. Allowed: %s",
+    "«data» tiene que ser el archivo en base64": "“data” must be the file in base64",
+    "el archivo está vacío": "the file is empty",
+    "el archivo es muy grande (máximo %d MB)": "the file is too large (max %d MB)",
+    "el archivo llegó dañado; probá subirlo de nuevo": "the file arrived damaged; try uploading it again",
+    "el archivo no parece un PDF": "the file doesn't look like a PDF",
+    "no pude leer el PDF (%s)": "couldn't read the PDF (%s)",
+    "el PDF no tiene texto para leer (¿es una imagen escaneada?)": "the PDF has no text to read (is it a scanned image?)",
+    "la página respondió con error %s": "the page responded with error %s",
+    "no pude abrir la página (%s)": "couldn't open the page (%s)",
+    "la página es demasiado grande (más de 3 MB)": "the page is too large (over 3 MB)",
+    "la página no tiene texto para leer (puede que necesite JavaScript)": "the page has no text to read (it may need JavaScript)",
+    "no sé leer «%s»: usá texto, html, url o pdf": "can't read “%s”: use text, html, url or pdf",
+    "no hay texto para guardar": "there's no text to save",
+    "ponele un nombre a la clave, por ejemplo API_KEY": "give the secret a name, for example API_KEY",
+    "el nombre de la clave es muy largo (hasta 64 letras)": "the secret name is too long (up to 64 characters)",
+    "falta el valor de la clave": "missing the secret's value",
+    "el valor es muy largo (hasta 10.000 caracteres)": "the value is too long (up to 10,000 characters)",
+    # ---------- funciones (runner.py) ----------
+    "Las funciones están apagadas en este Parla (PARLA_FUNCTIONS=0).": "Functions are turned off in this Parla (PARLA_FUNCTIONS=0).",
+    "el lenguaje tiene que ser python o javascript": "the language must be python or javascript",
+    "Para funciones en JavaScript hace falta tener Node.js instalado.": "JavaScript functions need Node.js installed.",
+    "La función tardó más de %d segundos y se cortó.": "The function took more than %d seconds and was stopped.",
+    "No se pudo ejecutar la función: %s": "Couldn't run the function: %s",
+    "La función se quedó sin memoria o la cortó el sistema.": "The function ran out of memory or was stopped by the system.",
+    "La función terminó sin devolver nada.": "The function finished without returning anything.",
+    "La función devolvió algo que no se puede guardar.": "The function returned something that can't be saved.",
+    "NameError: definí una función run(inputs) que devuelva un objeto": "NameError: define a run(inputs) function that returns an object",
+    "Error: definí una función run(inputs) que devuelva un objeto": "Error: define a run(inputs) function that returns an object",
+    # ---------- IA (llm.py) ----------
+    "el servidor respondió %s (%s): %s": "the server responded %s (%s): %s",
+    "el servidor respondió %s (%s)": "the server responded %s (%s)",
+    "el servidor respondió %s: %s": "the server responded %s: %s",
+    "el servidor respondió %s": "the server responded %s",
+    "el servidor falló": "the server failed",
+    "la API key no es válida o falta: revisala en «Claves»": "the API key is invalid or missing: check it in “Secrets”",
+    "la API key no tiene permiso para esto": "the API key doesn't have permission for this",
+    "no existe esa dirección o ese modelo": "that address or model doesn't exist",
+    "demasiados pedidos o se terminó el crédito: esperá un poco": "too many requests or out of credit: wait a bit",
+    "tardó más de %s s en contestar": "took more than %s s to respond",
+    "el servidor no devolvió JSON": "the server didn't return JSON",
+    "el modelo no devolvió JSON válido": "the model didn't return valid JSON",
+    "el modelo no devolvió un objeto": "the model didn't return an object",
+    "No encuentro Ollama en esta compu. Si no lo tenés, instalalo desde ollama.com (es gratis y corre todo acá, sin internet). Si ya lo tenés, abrilo y probá de nuevo.":
+        "I can't find Ollama on this computer. If you don't have it, install it from ollama.com (it's free and runs everything here, offline). If you already have it, open it and try again.",
+    "Ollama no respondió. Revisá que esté abierto y que la dirección sea %s.": "Ollama didn't respond. Check that it's open and that the address is %s.",
+    "No pude hablar con %s. Revisá la dirección, la API key y que el servidor esté prendido.": "I couldn't talk to %s. Check the address, the API key and that the server is running.",
+    "El servidor no ofrece «%s». Elegí uno de los que ofrece.": "The server doesn't offer “%s”. Choose one of the ones it offers.",
+    "El modelo «%s» todavía no está en esta compu. Tocá «Descargar».": "Model “%s” isn't on this computer yet. Click “Download”.",
+    "El modelo no pudo contestar: %s": "The model couldn't answer: %s",
+    "La descarga automática es solo para Ollama. En los otros servidores el modelo se carga ahí.": "Automatic download is only for Ollama. On other servers, load the model there.",
+    "Falta el nombre del modelo.": "Missing the model name.",
+    # ---------- voz (voice.py) ----------
+    "La transcripción de voz no está instalada (faster-whisper).": "Speech transcription isn't installed (faster-whisper).",
+    "No pude leer el audio (formato no reconocido).": "Couldn't read the audio (unrecognized format).",
+    "No llegó audio. Probá grabar de nuevo.": "No audio arrived. Try recording again.",
+    "El audio está vacío o es demasiado corto.": "The audio is empty or too short.",
+    "El audio es muy largo (máximo %d segundos).": "The audio is too long (max %d seconds).",
+    "La voz no está disponible: falta instalar piper-tts.": "Voice isn't available: piper-tts isn't installed.",
+    "La voz no está disponible en este momento (no pude bajar ni cargar el modelo de voz).": "Voice isn't available right now (couldn't download or load the voice model).",
+    "No hay texto para leer.": "There's no text to read.",
+    "Falta instalar: .venv/bin/pip install %s": "Needs installing: .venv/bin/pip install %s",
+    "La primera vez se bajan los modelos de voz (~150 MB), puede tardar un minuto.": "The first time, the voice models are downloaded (~150 MB); it may take a minute.",
+    # ---------- pruebas del bot (bottests.py) ----------
+    "«tests» tiene que ser una lista de pruebas": "“tests” must be a list of tests",
+    "prueba #%d: tiene que ser un objeto con «name»": "test #%d: must be an object with “name”",
+    "prueba «%s»": "test “%s”",
+    "%s, turno %d": "%s, turn %d",
+    "%s está repetida": "%s is duplicated",
+    "%s: «start» tiene que ser un objeto {slot: valor}": "%s: “start” must be an object {slot: value}",
+    "%s: «environment» tiene que ser draft, staging o production": "%s: “environment” must be draft, staging or production",
+    "%s: «turns» tiene que ser una lista de turnos {user, intent?, says?, …}": "%s: “turns” must be a list of turns {user, intent?, says?, …}",
+    "%s: no conozco %s (vale: %s)": "%s: unknown %s (allowed: %s)",
+    "%s: falta «user» con lo que escribe la persona (solo el primero puede no tenerlo: es el saludo)":
+        "%s: missing “user” with what the person writes (only the first one can omit it: it's the greeting)",
+    "%s: «says» tiene que ser un texto o una /regex/": "%s: “says” must be text or a /regex/",
+    "%s: la regex de «says» no compila (%s)": "%s: the “says” regex doesn't compile (%s)",
+    "%s: «buttons» tiene que ser una lista de textos": "%s: “buttons” must be a list of texts",
+    "%s: «slots» tiene que ser un objeto {slot: valor}": "%s: “slots” must be an object {slot: value}",
+    "%s: no existen los slots %s": "%s: these slots don't exist: %s",
+    "%s: «handoff» tiene que ser true o false": "%s: “handoff” must be true or false",
+    "%s: no existe la intención «%s»": "%s: intent “%s” doesn't exist",
+    "%s: no existe el flujo «%s»": "%s: flow “%s” doesn't exist",
+    "pasaron las %d pruebas": "all %d tests passed",
+    "fallaron %d de %d pruebas: %s": "%d of %d tests failed: %s",
+    # ---------- importar de Rasa (rasa_import.py) ----------
+    "%s: no se importa (conexiones y canales de Rasa; en Parla se configuran desde Publicar)": "%s: not imported (Rasa connections and channels; in Parla they're set up from Publish)",
+    "%s: es una prueba de Rasa, no se importa": "%s: it's a Rasa test, not imported",
+    "%s: no es un YAML válido (%s), lo salteo": "%s: not valid YAML (%s), skipping it",
+    "%s: la sección «%s» no la conozco, la salteo": "%s: unknown section “%s”, skipping it",
+    "config.yml: el pipeline y las policies de Rasa no se usan; Parla tiene su propio NLU (embeddings + CRF) y sus flujos":
+        "config.yml: Rasa's pipeline and policies aren't used; Parla has its own NLU (embeddings + CRF) and its flows",
+    "domain: «session_config» no se importa (Parla guarda cada conversación por sessionId)": "domain: “session_config” isn't imported (Parla keeps each conversation by sessionId)",
+    "config.yml: no entiendo el idioma «%s», quedó en español": "config.yml: unknown language “%s”, left in Spanish",
+    "idioma «%s»: los textos de los flujos del sistema (cancelar, repetir, pasar con una persona) quedan en español; traducilos en Flujos del sistema":
+        "language “%s”: the system flow texts (cancel, repeat, hand off to a person) stay in Spanish; translate them in System flows",
+    "%s: no entiendo la marca «%s», queda como texto": "%s: I don't understand the annotation “%s”, it stays as text",
+    "nlu: no entiendo el bloque %s, lo salteo": "nlu: I don't understand the block %s, skipping it",
+    "nlu: Parla no tiene grupos de entidades; se ignoraron los «group» de %s": "nlu: Parla has no entity groups; the “group” of %s was ignored",
+    "entidades con «role»: Parla no tiene roles, cada rol quedó como una entidad aparte (ciudad + role origen -> «ciudad_origen»)":
+        "entities with “role”: Parla has no roles, each role became a separate entity (city + role origin -> “city_origin”)",
+    "sinónimo «%s»: ninguna entidad usa ese valor ([texto]{\"entity\": \"x\", \"value\": \"%s\"}), lo salteo":
+        "synonym “%s”: no entity uses that value ([text]{\"entity\": \"x\", \"value\": \"%s\"}), skipping it",
+    "regex «%s»: no es válida en Python (%s), la entidad queda aprendida por ejemplos": "regex “%s”: not valid in Python (%s), the entity is learned from examples",
+    "entidad «%s»: no está marcada en ninguna frase (en Rasa seguro venía de Duckling o spaCy); quedó como tipo «%s»":
+        "entity “%s”: not marked in any phrase (in Rasa it probably came from Duckling or spaCy); set to type “%s”",
+    "entidad «%s»: tiene sinónimos pero se aprende por ejemplos; Parla guarda el valor como lo escribió la persona. Si las opciones son fijas, pasala a «De una lista de opciones»":
+        "entity “%s”: has synonyms but is learned from examples; Parla saves the value as the person wrote it. If the options are fixed, switch it to “From a list of options”",
+    "regex «%s»: en Rasa es una pista para el clasificador; Parla no la necesita, la salteo (si es un dato, creá una entidad «Un formato propio» con esa regex)":
+        "regex “%s”: in Rasa it's a hint for the classifier; Parla doesn't need it, skipping it (if it's a piece of data, create a “Custom format” entity with that regex)",
+    "lookup «%s»: no hay una entidad con ese nombre, la salteo": "lookup “%s”: there's no entity with that name, skipping it",
+    "slot «%s»: las condiciones de su mapping (intent, not_intent, conditions, group) no se importan":
+        "slot “%s”: its mapping conditions (intent, not_intent, conditions, group) aren't imported",
+    "slot «%s»: tiene más de un mapping from_entity; quedó solo el primero (%s)": "slot “%s”: has more than one from_entity mapping; only the first one was kept (%s)",
+    "slot «%s»: el mapping «%s» no existe en Parla (se llena sola con una entidad o al preguntar); para un valor fijo usá un paso «Guardar un valor» en el flujo":
+        "slot “%s”: mapping “%s” doesn't exist in Parla (slots fill from an entity or by asking); for a fixed value use a “Set a value” step in the flow",
+    "slot «%s»: «initial_value» (%s) no se importa; poné un paso «Guardar un valor» al principio del flujo que lo use":
+        "slot “%s”: “initial_value” (%s) isn't imported; add a “Set a value” step at the start of the flow that uses it",
+    "slots que en Rasa llena el LLM (%s): en Parla guardan la respuesta entera cuando se preguntan. Para que la IA saque el dato, prendé la IA y elegí «Lo completa la IA» en el slot":
+        "slots that Rasa's LLM fills (%s): in Parla they save the whole answer when asked. To have the AI extract the value, turn on AI and choose “Filled by the AI” on the slot",
+    "%s: el botón «%s» manda entidades en el payload (%s); en Parla manda «%s»": "%s: button “%s” sends entities in the payload (%s); in Parla it sends “%s”",
+    "%s: «%s» no se importa (Parla manda texto y botones%s)": "%s: “%s” isn't imported (Parla sends text and buttons%s)",
+    "; para imágenes o archivos usá un paso «Enviar un archivo»": "; for images or files use a “Send a file” step",
+    "%s: no tiene texto; quedó «%s»": "%s: has no text; set to “%s”",
+    "slot «%s»: se pregunta pero no está en el domain; lo creé sin entidad (guarda la respuesta entera)":
+        "slot “%s”: it's asked but isn't in the domain; I created it without an entity (it saves the whole answer)",
+    "slot «%s»: no hay respuesta utter_ask_%s; la pregunta quedó «%s», cambiala": "slot “%s”: there's no utter_ask_%s response; the question was set to “%s”, change it",
+    "slot «%s»: no hay respuesta utter_ask_%s (la pregunta la hacía la acción %s, que no se importa); la pregunta quedó «%s», cambiala":
+        "slot “%s”: there's no utter_ask_%s response (the question was asked by action %s, which isn't imported); the question was set to “%s”, change it",
+    "form «%s»: la validación validate_%s es código de Rasa y no se importa; en Parla validá con entidades de formato o de lista (rechazan lo que no coincide)":
+        "form “%s”: the validate_%s validation is Rasa code and isn't imported; in Parla validate with format or list entities (they reject what doesn't match)",
+    "form «%s»: «%s» no se importa": "form “%s”: “%s” isn't imported",
+    "%s: no está en las respuestas del domain; quedó un mensaje con su nombre": "%s: not in the domain's responses; replaced by a message with its name",
+    "action_restart: Parla no reinicia la conversación desde un flujo; borrá los slots con pasos «Guardar un valor» si hace falta":
+        "action_restart: Parla doesn't restart the conversation from a flow; clear the slots with “Set a value” steps if needed",
+    "%s: «%s» no se importa": "%s: “%s” isn't imported",
+    "%s: «conversation_start» no se importa (para algo al empezar, usá un flujo con trigger __start__)":
+        "%s: “conversation_start” isn't imported (for something at the start, use a flow with trigger __start__)",
+    "%s: los pasos «user» (texto de punta a punta) no se importan": "%s: “user” steps (end-to-end text) aren't imported",
+    "%s: «slot_was_set» (%s) no se importa; si la historia depende de un slot, poné un paso «Tomar un camino»":
+        "%s: “slot_was_set” (%s) isn't imported; if the story depends on a slot, add a “Branch” step",
+    "%s: los checkpoints no se importan; cada intención queda con su propio flujo": "%s: checkpoints aren't imported; each intent gets its own flow",
+    "%s: no entiendo el paso %s": "%s: I don't understand the step %s",
+    "%s: empieza sin una intención; sus acciones no se importan": "%s: starts without an intent; its actions aren't imported",
+    "intención «%s»: %s responde distinto que %s (depende del contexto); quedó la primera": "intent “%s”: %s answers differently than %s (it depends on context); the first one was kept",
+    "flow «%s»: es un patrón de conversación de CALM; Parla tiene los suyos en Flujos del sistema, no se importa":
+        "flow “%s”: it's a CALM conversation pattern; Parla has its own in System flows, not imported",
+    "flow «%s»: «%s» no se importa%s": "flow “%s”: “%s” isn't imported%s",
+    " (para arrancarlo solo en algún caso, poné un paso «Tomar un camino» al principio)": " (to start it only in some cases, add a “Branch” step at the beginning)",
+    "CALM elige el flujo con un LLM leyendo la descripción; Parla necesita frases de ejemplo. Los flujos %s quedaron con una intención que tiene solo la descripción como frase: sumale 5 a 10 frases reales a cada una":
+        "CALM picks the flow with an LLM reading the description; Parla needs example phrases. Flows %s got an intent whose only phrase is the description: add 5 to 10 real phrases to each",
+    "respuestas con variaciones (o por canal o condición): quedó la primera de %s": "responses with variations (or per channel or condition): the first one was kept for %s",
+    "respuestas que no usa ninguna regla, historia ni flow, no se importaron: %s": "responses not used by any rule, story or flow weren't imported: %s",
+    "acción personalizada «%s»: es código de Rasa; quedó un paso «Consultar un servicio» a %s (el servidor de acciones) como marcador. Reemplazalo por la consulta real o por una función":
+        "custom action “%s”: it's Rasa code; a “Call a service” step to %s (the action server) was left as a placeholder. Replace it with the real request or a function",
+    "acciones del domain que no usa ninguna regla, historia ni flow, no se importaron: %s": "domain actions not used by any rule, story or flow weren't imported: %s",
+    "slots sin mappings (%s): quedaron sin entidad, guardan la respuesta entera cuando se preguntan": "slots without mappings (%s): left without an entity, they save the whole answer when asked",
+    "intenciones sin frases de ejemplo (%s): sumales frases o el bot no las va a reconocer": "intents without example phrases (%s): add phrases or the bot won't recognize them",
+    "no encontré nada de Rasa para importar: mandá los .yml del proyecto (data/, domain.yml, config.yml)": "found nothing from Rasa to import: send the project's .yml files (data/, domain.yml, config.yml)",
+    "flow «%s»: «next: %s» apunta a un paso que no existe; ahí termina": "flow “%s”: “next: %s” points to a step that doesn't exist; it ends there",
+    "flow «%s»: no pude traducir la condición «%s»; quedó como «no se cumple» (siempre va por el otro camino), arreglala en el paso «Tomar un camino»":
+        "flow “%s”: couldn't translate the condition “%s”; it was left as “false” (it always takes the other path), fix it in the “Branch” step",
+    "flow «%s»: el paso %s tiene «%s», que no se importa": "flow “%s”: step %s has “%s”, which isn't imported",
+    "flow «%s»: las «rejections» de %s no se importan; usá una entidad de lista o de formato para rechazar respuestas":
+        "flow “%s”: the “rejections” of %s aren't imported; use a list or format entity to reject answers",
+    "flow «%s»: set_slots usa «%s», que no está en los slots del domain": "flow “%s”: set_slots uses “%s”, which isn't among the domain's slots",
+    "flow «%s»: %s «%s» apunta a un flow que no existe o no se importa": "flow “%s”: %s “%s” points to a flow that doesn't exist or isn't imported",
+    "flow «%s»: no tiene pasos": "flow “%s”: has no steps",
+    "el archivo no es un .zip válido": "the file isn't a valid .zip",
+    "%s: ruta insegura dentro del zip, la salteo": "%s: unsafe path inside the zip, skipping it",
+    "el zip es demasiado grande: hasta %d archivos .yml y %d MB descomprimidos": "the zip is too large: up to %d .yml files and %d MB uncompressed",
+    "el zip es demasiado grande o está dañado": "the zip is too large or damaged",
 }
-DICTS = {"en": EN}
-FIELDS = ("error", "warnings", "problems")
+# Portugués de Brasil: mismas claves que EN
+PT = {
+    # ---------- pedidos y API (server.py) ----------
+    "no existe": "não encontrado",
+    "no existe ese agente": "esse agente não existe",
+    "no existe esa conversación": "essa conversa não existe",
+    "método no permitido": "método não permitido",
+    "método no permitido acá. Mirá la documentación en la sección API de Parla": "método não permitido aqui. Veja a documentação na seção API do Parla",
+    "no existe. Mirá la documentación en la sección API de Parla": "não encontrado. Veja a documentação na seção API do Parla",
+    "mandá el pedido como JSON (Content-Type: application/json)": "envie a requisição como JSON (Content-Type: application/json)",
+    "Content-Length inválido": "Content-Length inválido",
+    "pedido de otro sitio web rechazado": "requisição de outro site rejeitada",
+    "pedido rechazado": "requisição rejeitada",
+    "pedido rechazado: ese Host no está permitido (sumalo a PARLA_HOSTS)": "requisição rejeitada: esse Host não é permitido (adicione-o a PARLA_HOSTS)",
+    "demasiado grande": "grande demais",
+    "el cuerpo tiene que ser un JSON válido": "o corpo precisa ser um JSON válido",
+    "el cuerpo tiene que ser un objeto JSON": "o corpo precisa ser um objeto JSON",
+    "Solo el dueño puede ver la auditoría.": "Só o dono pode ver a auditoria.",
+    "«limit» tiene que ser un número": "“limit” precisa ser um número",
+    "«after» tiene que ser un número": "“after” precisa ser um número",
+    "el archivo no es un agente de Parla": "o arquivo não é um agente do Parla",
+    "el archivo no es un agente de Parla o está vacío": "o arquivo não é um agente do Parla ou está vazio",
+    "el archivo no es un agente de Parla: «%s» tiene que ser una lista": "o arquivo não é um agente do Parla: “%s” precisa ser uma lista",
+    "sesión inválida": "sessão inválida",
+    "No se publicó en Producción: %s. Corregilas o mandá «force»: true para publicar igual.":
+        "Não foi publicado em Produção: %s. Corrija-os ou envie “force”: true para publicar mesmo assim.",
+    "«names» tiene que ser una lista con los nombres de las pruebas": "“names” precisa ser uma lista com os nomes dos testes",
+    "mandá «function» (la definición) e «inputs» (un objeto)": "envie “function” (a definição) e “inputs” (um objeto)",
+    "falta «text» con lo que le querés escribir": "falta “text” com o que você quer escrever",
+    "Algo falló en el servidor. El detalle quedó en la consola de Parla.": "Algo deu errado no servidor. Os detalhes estão no console do Parla.",
+    "Solo el dueño puede crear, cambiar o probar el código de las funciones (corre en esta compu). Pedíselo al dueño o apagá las funciones con PARLA_FUNCTIONS=0.":
+        "Só o dono pode criar, alterar ou testar o código das funções (ele roda neste computador). Peça ao dono ou desative as funções com PARLA_FUNCTIONS=0.",
+    "no hay un bot que se llame «%s» (o hay más de uno con ese nombre: usá su id)": "não há um bot chamado “%s” (ou há mais de um com esse nome: use o id dele)",
+    "«sessionId» tiene que ser un texto de hasta 100 letras sin tildes, números o . @ + - _ (sin espacios)":
+        "“sessionId” precisa ser um texto de até 100 letras sem acento, números ou . @ + - _ (sem espaços)",
+    "esa conversación no es del widget web": "essa conversa não é do widget web",
+    "«data» tiene que ser un objeto, por ejemplo {\"dni\": \"30123456\"}": "“data” precisa ser um objeto, por exemplo {\"dni\": \"30123456\"}",
+    "falta «text» con el mensaje de la persona": "falta “text” com a mensagem da pessoa",
+    "falta «sessionId» con la conversación a terminar": "falta “sessionId” com a conversa a encerrar",
+    "no hay una conversación «%s» con este bot": "não há uma conversa “%s” com este bot",
+    "«type» tiene que ser start (u online), message o end": "“type” precisa ser start (ou online), message ou end",
+    "«audio» tiene que ser el audio en base64": "“audio” precisa ser o áudio em base64",
+    "falta «audio» con la grabación en base64": "falta “audio” com a gravação em base64",
+    "no se entendió nada en el audio, probá de nuevo": "não deu para entender nada no áudio, tente de novo",
+    "«zip» tiene que ser el .zip en base64": "“zip” precisa ser o .zip em base64",
+    "mandá {\"zip\": base64} o {\"files\": {ruta: texto}} con el proyecto de Rasa": "envie {\"zip\": base64} ou {\"files\": {caminho: texto}} com o projeto do Rasa",
+    "no se pudo entrenar ahora (%s); se entrena al abrirlo": "não foi possível treinar agora (%s); ele será treinado ao abrir",
+    # versiones, entornos y flujos
+    "no existe la versión %s": "a versão %s não existe",
+    "el entorno tiene que ser production o staging": "o ambiente precisa ser production ou staging",
+    "«environment» tiene que ser production, staging o draft": "“environment” precisa ser production, staging ou draft",
+    "no hay ninguna versión publicada en Pruebas (staging)": "não há nenhuma versão publicada em Homologação (staging)",
+    "no pude resolver «%s». Revisá que los slots que usa existan.": "não consegui avaliar “%s”. Verifique se os slots que ela usa existem.",
+    "la dirección tiene que empezar con http:// o https://": "o endereço precisa começar com http:// ou https://",
+    "un encabezado no puede tener saltos de línea": "um cabeçalho não pode ter quebras de linha",
+    "la función «%s» falló: %s": "a função “%s” falhou: %s",
+    "elegí con qué flujo seguir": "escolha com qual fluxo continuar",
+    "no existe la función «%s»": "a função “%s” não existe",
+    "elegí qué función ejecutar": "escolha qual função executar",
+    "elegí qué clasificación aplicar": "escolha qual classificação aplicar",
+    "elegí qué flujo llamar": "escolha qual fluxo chamar",
+    "no existe el flujo «%s»": "o fluxo “%s” não existe",
+    "hay más de %d flujos uno dentro de otro": "há mais de %d fluxos um dentro do outro",
+    "no existe el archivo «%s»: subilo de nuevo": "o arquivo “%s” não existe: envie de novo",
+    "elegí qué archivo enviar": "escolha qual arquivo enviar",
+    # consejos del entrenamiento
+    "«%s» tiene %d frase%s: sumale al menos %d más para que la reconozca bien.": "“%s” tem %d frase%s: adicione pelo menos mais %d para que seja bem reconhecida.",
+    "Ningún flujo responde a «%s»: el bot la va a entender pero no va a hacer nada.": "Nenhum fluxo responde a “%s”: o bot vai entender, mas não vai fazer nada.",
+    "La entidad «%s» está marcada %d vez: con 3 o más ejemplos en distintas frases la reconoce mejor.":
+        "A entidade “%s” está marcada %d vez: com 3 ou mais exemplos em frases diferentes ela é reconhecida melhor.",
+    "La entidad «%s» está marcada %d veces: con 3 o más ejemplos en distintas frases la reconoce mejor.":
+        "A entidade “%s” está marcada %d vezes: com 3 ou mais exemplos em frases diferentes ela é reconhecida melhor.",
+    # ---------- usuarios (auth.py) ----------
+    "la contraseña tiene que tener al menos 5 caracteres": "a senha precisa ter pelo menos 5 caracteres",
+    "«bots» tiene que ser null (todos los agentes) o una lista de ids de agentes.": "“bots” precisa ser null (todos os agentes) ou uma lista de ids de agentes.",
+    "No existe el agente «%s».": "O agente “%s” não existe.",
+    "Demasiados intentos. Esperá un minuto y probá de nuevo.": "Tentativas demais. Espere um minuto e tente de novo.",
+    "Usuario o contraseña incorrectos.": "Usuário ou senha incorretos.",
+    "Todavía no hay usuarios: creá primero el usuario dueño.": "Ainda não há usuários: crie primeiro o usuário dono.",
+    "Iniciá sesión para seguir.": "Entre para continuar.",
+    "Solo el dueño puede manejar usuarios.": "Só o dono pode gerenciar usuários.",
+    "no hay un usuario «%s»": "não há um usuário “%s”",
+    "Tiene que quedar al menos un dueño: nombrá a otro dueño antes de cambiarle el rol.": "Precisa ficar pelo menos um dono: torne outra pessoa dona antes de mudar este papel.",
+    "No se puede borrar al único dueño.": "Não é possível excluir o único dono.",
+    "no existe esa clave": "essa chave de API não existe",
+    "El nombre de usuario tiene que tener de 1 a 40 letras, números, espacios o . @ + - _": "O nome de usuário precisa ter de 1 a 40 letras, números, espaços ou . @ + - _",
+    "Ya hay un usuario «%s».": "Já existe um usuário “%s”.",
+    "El rol tiene que ser uno de: dueño (owner), editor, analista (analyst) o atención (agent).": "O papel precisa ser um de: dono (owner), editor, analista (analyst) ou atendimento (agent).",
+    "Tu usuario es de solo lectura: podés mirar, pero no cambiar nada.": "Seu usuário é somente leitura: você pode olhar, mas não alterar nada.",
+    "Tu usuario es de atención: solo podés usar la Bandeja para leer y responder conversaciones.": "Seu usuário é de atendimento: você só pode usar a Caixa de entrada para ler e responder conversas.",
+    # ---------- canales (channels.py) ----------
+    "falta la clave WHATSAPP_TOKEN o el «phone_number_id»": "falta o segredo WHATSAPP_TOKEN ou o “phone_number_id”",
+    "falta la clave TELEGRAM_TOKEN (o no tiene el formato 123456:ABC… que da BotFather)": "falta o segredo TELEGRAM_TOKEN (ou ele não tem o formato 123456:ABC… que o BotFather fornece)",
+    "falta la dirección pública con https:// (PARLA_PUBLIC_URL o «Dirección pública» acá arriba)": "falta o endereço público com https:// (PARLA_PUBLIC_URL ou “Endereço público” aqui em cima)",
+    "el canal está apagado: la respuesta de la Bandeja no se envió": "o canal está desativado: a resposta da Caixa de entrada não foi enviada",
+    "Telegram: %s": "Telegram: %s",
+    "sin respuesta: %s": "sem resposta: %s",
+    # ---------- asistentes de IA (connect.py) ----------
+    "%s no es un JSON válido; no lo toqué para no romperlo. Arreglalo o agregá Parla a mano.": "%s não é um JSON válido; não mexi para não quebrá-lo. Corrija-o ou adicione o Parla manualmente.",
+    "%s tiene un formato inesperado; no lo toqué. Agregá Parla a mano.": "%s tem um formato inesperado; não mexi. Adicione o Parla manualmente.",
+    "No pude editar la configuración de Codex sin romperla (%s); no la toqué. Usá «Hacerlo a mano».": "Não consegui editar a configuração do Codex sem quebrá-la (%s); não mexi. Use “Fazer manualmente”.",
+    "No encontré Claude Code (el comando «claude») en esta compu. Instalalo o usá «Hacerlo a mano».": "Não encontrei o Claude Code (o comando “claude”) neste computador. Instale-o ou use “Fazer manualmente”.",
+    "Claude Code tardó demasiado en responder. Probá de nuevo o usá «Hacerlo a mano».": "O Claude Code demorou demais para responder. Tente de novo ou use “Fazer manualmente”.",
+    "no conozco ese asistente": "assistente desconhecido",
+    "Claude Code no aceptó el cambio: %s": "O Claude Code não aceitou a alteração: %s",
+    "error %d": "erro %d",
+    # ---------- archivos, conocimiento y claves (files.py, knowledge.py, vault.py) ----------
+    "agente inválido": "agente inválido",
+    "ese tipo de archivo no se puede enviar. Sirven: %s": "esse tipo de arquivo não pode ser enviado. Permitidos: %s",
+    "«data» tiene que ser el archivo en base64": "“data” precisa ser o arquivo em base64",
+    "el archivo está vacío": "o arquivo está vazio",
+    "el archivo es muy grande (máximo %d MB)": "o arquivo é grande demais (máximo %d MB)",
+    "el archivo llegó dañado; probá subirlo de nuevo": "o arquivo chegou corrompido; tente enviá-lo de novo",
+    "el archivo no parece un PDF": "o arquivo não parece um PDF",
+    "no pude leer el PDF (%s)": "não consegui ler o PDF (%s)",
+    "el PDF no tiene texto para leer (¿es una imagen escaneada?)": "o PDF não tem texto para ler (é uma imagem escaneada?)",
+    "la página respondió con error %s": "a página respondeu com erro %s",
+    "no pude abrir la página (%s)": "não consegui abrir a página (%s)",
+    "la página es demasiado grande (más de 3 MB)": "a página é grande demais (mais de 3 MB)",
+    "la página no tiene texto para leer (puede que necesite JavaScript)": "a página não tem texto para ler (pode precisar de JavaScript)",
+    "no sé leer «%s»: usá texto, html, url o pdf": "não sei ler “%s”: use texto, html, url ou pdf",
+    "no hay texto para guardar": "não há texto para salvar",
+    "ponele un nombre a la clave, por ejemplo API_KEY": "dê um nome ao segredo, por exemplo API_KEY",
+    "el nombre de la clave es muy largo (hasta 64 letras)": "o nome do segredo é longo demais (até 64 caracteres)",
+    "falta el valor de la clave": "falta o valor do segredo",
+    "el valor es muy largo (hasta 10.000 caracteres)": "o valor é longo demais (até 10.000 caracteres)",
+    # ---------- funciones (runner.py) ----------
+    "Las funciones están apagadas en este Parla (PARLA_FUNCTIONS=0).": "As funções estão desativadas neste Parla (PARLA_FUNCTIONS=0).",
+    "el lenguaje tiene que ser python o javascript": "a linguagem precisa ser python ou javascript",
+    "Para funciones en JavaScript hace falta tener Node.js instalado.": "Funções em JavaScript precisam do Node.js instalado.",
+    "La función tardó más de %d segundos y se cortó.": "A função demorou mais de %d segundos e foi interrompida.",
+    "No se pudo ejecutar la función: %s": "Não foi possível executar a função: %s",
+    "La función se quedó sin memoria o la cortó el sistema.": "A função ficou sem memória ou foi interrompida pelo sistema.",
+    "La función terminó sin devolver nada.": "A função terminou sem retornar nada.",
+    "La función devolvió algo que no se puede guardar.": "A função retornou algo que não pode ser salvo.",
+    "NameError: definí una función run(inputs) que devuelva un objeto": "NameError: defina uma função run(inputs) que retorne um objeto",
+    "Error: definí una función run(inputs) que devuelva un objeto": "Error: defina uma função run(inputs) que retorne um objeto",
+    # ---------- IA (llm.py) ----------
+    "el servidor respondió %s (%s): %s": "o servidor respondeu %s (%s): %s",
+    "el servidor respondió %s (%s)": "o servidor respondeu %s (%s)",
+    "el servidor respondió %s: %s": "o servidor respondeu %s: %s",
+    "el servidor respondió %s": "o servidor respondeu %s",
+    "el servidor falló": "o servidor falhou",
+    "la API key no es válida o falta: revisala en «Claves»": "a chave de API é inválida ou está faltando: confira em “Segredos”",
+    "la API key no tiene permiso para esto": "a chave de API não tem permissão para isso",
+    "no existe esa dirección o ese modelo": "esse endereço ou modelo não existe",
+    "demasiados pedidos o se terminó el crédito: esperá un poco": "requisições demais ou o crédito acabou: espere um pouco",
+    "tardó más de %s s en contestar": "demorou mais de %s s para responder",
+    "el servidor no devolvió JSON": "o servidor não retornou JSON",
+    "el modelo no devolvió JSON válido": "o modelo não retornou JSON válido",
+    "el modelo no devolvió un objeto": "o modelo não retornou um objeto",
+    "No encuentro Ollama en esta compu. Si no lo tenés, instalalo desde ollama.com (es gratis y corre todo acá, sin internet). Si ya lo tenés, abrilo y probá de nuevo.":
+        "Não encontro o Ollama neste computador. Se você não tem, instale pelo ollama.com (é grátis e roda tudo aqui, sem internet). Se já tem, abra-o e tente de novo.",
+    "Ollama no respondió. Revisá que esté abierto y que la dirección sea %s.": "O Ollama não respondeu. Verifique se ele está aberto e se o endereço é %s.",
+    "No pude hablar con %s. Revisá la dirección, la API key y que el servidor esté prendido.": "Não consegui falar com %s. Verifique o endereço, a chave de API e se o servidor está ligado.",
+    "El servidor no ofrece «%s». Elegí uno de los que ofrece.": "O servidor não oferece “%s”. Escolha um dos que ele oferece.",
+    "El modelo «%s» todavía no está en esta compu. Tocá «Descargar».": "O modelo “%s” ainda não está neste computador. Clique em “Baixar”.",
+    "El modelo no pudo contestar: %s": "O modelo não conseguiu responder: %s",
+    "La descarga automática es solo para Ollama. En los otros servidores el modelo se carga ahí.": "O download automático é só para o Ollama. Nos outros servidores, carregue o modelo lá.",
+    "Falta el nombre del modelo.": "Falta o nome do modelo.",
+    # ---------- voz (voice.py) ----------
+    "La transcripción de voz no está instalada (faster-whisper).": "A transcrição de voz não está instalada (faster-whisper).",
+    "No pude leer el audio (formato no reconocido).": "Não consegui ler o áudio (formato não reconhecido).",
+    "No llegó audio. Probá grabar de nuevo.": "Nenhum áudio chegou. Tente gravar de novo.",
+    "El audio está vacío o es demasiado corto.": "O áudio está vazio ou é curto demais.",
+    "El audio es muy largo (máximo %d segundos).": "O áudio é longo demais (máximo %d segundos).",
+    "La voz no está disponible: falta instalar piper-tts.": "A voz não está disponível: falta instalar o piper-tts.",
+    "La voz no está disponible en este momento (no pude bajar ni cargar el modelo de voz).": "A voz não está disponível no momento (não consegui baixar nem carregar o modelo de voz).",
+    "No hay texto para leer.": "Não há texto para ler.",
+    "Falta instalar: .venv/bin/pip install %s": "Falta instalar: .venv/bin/pip install %s",
+    "La primera vez se bajan los modelos de voz (~150 MB), puede tardar un minuto.": "Na primeira vez os modelos de voz são baixados (~150 MB); pode levar um minuto.",
+    # ---------- pruebas del bot (bottests.py) ----------
+    "«tests» tiene que ser una lista de pruebas": "“tests” precisa ser uma lista de testes",
+    "prueba #%d: tiene que ser un objeto con «name»": "teste #%d: precisa ser um objeto com “name”",
+    "prueba «%s»": "teste “%s”",
+    "%s, turno %d": "%s, turno %d",
+    "%s está repetida": "%s está repetido",
+    "%s: «start» tiene que ser un objeto {slot: valor}": "%s: “start” precisa ser um objeto {slot: valor}",
+    "%s: «environment» tiene que ser draft, staging o production": "%s: “environment” precisa ser draft, staging ou production",
+    "%s: «turns» tiene que ser una lista de turnos {user, intent?, says?, …}": "%s: “turns” precisa ser uma lista de turnos {user, intent?, says?, …}",
+    "%s: no conozco %s (vale: %s)": "%s: desconhecido %s (valem: %s)",
+    "%s: falta «user» con lo que escribe la persona (solo el primero puede no tenerlo: es el saludo)":
+        "%s: falta “user” com o que a pessoa escreve (só o primeiro pode não ter: é a saudação)",
+    "%s: «says» tiene que ser un texto o una /regex/": "%s: “says” precisa ser um texto ou uma /regex/",
+    "%s: la regex de «says» no compila (%s)": "%s: a regex de “says” não compila (%s)",
+    "%s: «buttons» tiene que ser una lista de textos": "%s: “buttons” precisa ser uma lista de textos",
+    "%s: «slots» tiene que ser un objeto {slot: valor}": "%s: “slots” precisa ser um objeto {slot: valor}",
+    "%s: no existen los slots %s": "%s: estes slots não existem: %s",
+    "%s: «handoff» tiene que ser true o false": "%s: “handoff” precisa ser true ou false",
+    "%s: no existe la intención «%s»": "%s: a intenção “%s” não existe",
+    "%s: no existe el flujo «%s»": "%s: o fluxo “%s” não existe",
+    "pasaron las %d pruebas": "os %d testes passaram",
+    "fallaron %d de %d pruebas: %s": "%d de %d testes falharam: %s",
+    # ---------- importar de Rasa (rasa_import.py) ----------
+    "%s: no se importa (conexiones y canales de Rasa; en Parla se configuran desde Publicar)": "%s: não é importado (conexões e canais do Rasa; no Parla são configurados em Publicar)",
+    "%s: es una prueba de Rasa, no se importa": "%s: é um teste do Rasa, não é importado",
+    "%s: no es un YAML válido (%s), lo salteo": "%s: não é um YAML válido (%s), pulando",
+    "%s: la sección «%s» no la conozco, la salteo": "%s: seção “%s” desconhecida, pulando",
+    "config.yml: el pipeline y las policies de Rasa no se usan; Parla tiene su propio NLU (embeddings + CRF) y sus flujos":
+        "config.yml: o pipeline e as policies do Rasa não são usados; o Parla tem seu próprio NLU (embeddings + CRF) e seus fluxos",
+    "domain: «session_config» no se importa (Parla guarda cada conversación por sessionId)": "domain: “session_config” não é importado (o Parla guarda cada conversa por sessionId)",
+    "config.yml: no entiendo el idioma «%s», quedó en español": "config.yml: idioma “%s” desconhecido, ficou em espanhol",
+    "idioma «%s»: los textos de los flujos del sistema (cancelar, repetir, pasar con una persona) quedan en español; traducilos en Flujos del sistema":
+        "idioma “%s”: os textos dos fluxos do sistema (cancelar, repetir, passar para uma pessoa) ficam em espanhol; traduza-os em Fluxos do sistema",
+    "%s: no entiendo la marca «%s», queda como texto": "%s: não entendo a marcação “%s”, fica como texto",
+    "nlu: no entiendo el bloque %s, lo salteo": "nlu: não entendo o bloco %s, pulando",
+    "nlu: Parla no tiene grupos de entidades; se ignoraron los «group» de %s": "nlu: o Parla não tem grupos de entidades; os “group” de %s foram ignorados",
+    "entidades con «role»: Parla no tiene roles, cada rol quedó como una entidad aparte (ciudad + role origen -> «ciudad_origen»)":
+        "entidades com “role”: o Parla não tem roles, cada role virou uma entidade separada (cidade + role origem -> “cidade_origem”)",
+    "sinónimo «%s»: ninguna entidad usa ese valor ([texto]{\"entity\": \"x\", \"value\": \"%s\"}), lo salteo":
+        "sinônimo “%s”: nenhuma entidade usa esse valor ([texto]{\"entity\": \"x\", \"value\": \"%s\"}), pulando",
+    "regex «%s»: no es válida en Python (%s), la entidad queda aprendida por ejemplos": "regex “%s”: não é válida em Python (%s), a entidade é aprendida por exemplos",
+    "entidad «%s»: no está marcada en ninguna frase (en Rasa seguro venía de Duckling o spaCy); quedó como tipo «%s»":
+        "entidade “%s”: não está marcada em nenhuma frase (no Rasa devia vir do Duckling ou do spaCy); ficou como tipo “%s”",
+    "entidad «%s»: tiene sinónimos pero se aprende por ejemplos; Parla guarda el valor como lo escribió la persona. Si las opciones son fijas, pasala a «De una lista de opciones»":
+        "entidade “%s”: tem sinônimos, mas é aprendida por exemplos; o Parla guarda o valor como a pessoa escreveu. Se as opções são fixas, mude para “De uma lista de opções”",
+    "regex «%s»: en Rasa es una pista para el clasificador; Parla no la necesita, la salteo (si es un dato, creá una entidad «Un formato propio» con esa regex)":
+        "regex “%s”: no Rasa é uma dica para o classificador; o Parla não precisa dela, pulando (se for um dado, crie uma entidade “Formato próprio” com essa regex)",
+    "lookup «%s»: no hay una entidad con ese nombre, la salteo": "lookup “%s”: não há uma entidade com esse nome, pulando",
+    "slot «%s»: las condiciones de su mapping (intent, not_intent, conditions, group) no se importan":
+        "slot “%s”: as condições do mapping (intent, not_intent, conditions, group) não são importadas",
+    "slot «%s»: tiene más de un mapping from_entity; quedó solo el primero (%s)": "slot “%s”: tem mais de um mapping from_entity; ficou só o primeiro (%s)",
+    "slot «%s»: el mapping «%s» no existe en Parla (se llena sola con una entidad o al preguntar); para un valor fijo usá un paso «Guardar un valor» en el flujo":
+        "slot “%s”: o mapping “%s” não existe no Parla (slots são preenchidos por uma entidade ou ao perguntar); para um valor fixo use um passo “Definir um valor” no fluxo",
+    "slot «%s»: «initial_value» (%s) no se importa; poné un paso «Guardar un valor» al principio del flujo que lo use":
+        "slot “%s”: “initial_value” (%s) não é importado; coloque um passo “Definir um valor” no início do fluxo que o usa",
+    "slots que en Rasa llena el LLM (%s): en Parla guardan la respuesta entera cuando se preguntan. Para que la IA saque el dato, prendé la IA y elegí «Lo completa la IA» en el slot":
+        "slots que no Rasa o LLM preenche (%s): no Parla guardam a resposta inteira quando são perguntados. Para a IA extrair o dado, ative a IA e escolha “Preenchido pela IA” no slot",
+    "%s: el botón «%s» manda entidades en el payload (%s); en Parla manda «%s»": "%s: o botão “%s” envia entidades no payload (%s); no Parla envia “%s”",
+    "%s: «%s» no se importa (Parla manda texto y botones%s)": "%s: “%s” não é importado (o Parla envia texto e botões%s)",
+    "; para imágenes o archivos usá un paso «Enviar un archivo»": "; para imagens ou arquivos use um passo “Enviar um arquivo”",
+    "%s: no tiene texto; quedó «%s»": "%s: não tem texto; ficou “%s”",
+    "slot «%s»: se pregunta pero no está en el domain; lo creé sin entidad (guarda la respuesta entera)":
+        "slot “%s”: é perguntado, mas não está no domain; criei sem entidade (guarda a resposta inteira)",
+    "slot «%s»: no hay respuesta utter_ask_%s; la pregunta quedó «%s», cambiala": "slot “%s”: não há resposta utter_ask_%s; a pergunta ficou “%s”, altere-a",
+    "slot «%s»: no hay respuesta utter_ask_%s (la pregunta la hacía la acción %s, que no se importa); la pregunta quedó «%s», cambiala":
+        "slot “%s”: não há resposta utter_ask_%s (a pergunta era feita pela ação %s, que não é importada); a pergunta ficou “%s”, altere-a",
+    "form «%s»: la validación validate_%s es código de Rasa y no se importa; en Parla validá con entidades de formato o de lista (rechazan lo que no coincide)":
+        "form “%s”: a validação validate_%s é código do Rasa e não é importada; no Parla valide com entidades de formato ou de lista (elas rejeitam o que não corresponde)",
+    "form «%s»: «%s» no se importa": "form “%s”: “%s” não é importado",
+    "%s: no está en las respuestas del domain; quedó un mensaje con su nombre": "%s: não está nas respostas do domain; ficou uma mensagem com o nome dela",
+    "action_restart: Parla no reinicia la conversación desde un flujo; borrá los slots con pasos «Guardar un valor» si hace falta":
+        "action_restart: o Parla não reinicia a conversa a partir de um fluxo; limpe os slots com passos “Definir um valor” se precisar",
+    "%s: «%s» no se importa": "%s: “%s” não é importado",
+    "%s: «conversation_start» no se importa (para algo al empezar, usá un flujo con trigger __start__)":
+        "%s: “conversation_start” não é importado (para algo no início, use um fluxo com trigger __start__)",
+    "%s: los pasos «user» (texto de punta a punta) no se importan": "%s: os passos “user” (texto de ponta a ponta) não são importados",
+    "%s: «slot_was_set» (%s) no se importa; si la historia depende de un slot, poné un paso «Tomar un camino»":
+        "%s: “slot_was_set” (%s) não é importado; se a história depende de um slot, coloque um passo “Ramificar”",
+    "%s: los checkpoints no se importan; cada intención queda con su propio flujo": "%s: os checkpoints não são importados; cada intenção fica com seu próprio fluxo",
+    "%s: no entiendo el paso %s": "%s: não entendo o passo %s",
+    "%s: empieza sin una intención; sus acciones no se importan": "%s: começa sem uma intenção; suas ações não são importadas",
+    "intención «%s»: %s responde distinto que %s (depende del contexto); quedó la primera": "intenção “%s”: %s responde diferente de %s (depende do contexto); ficou a primeira",
+    "flow «%s»: es un patrón de conversación de CALM; Parla tiene los suyos en Flujos del sistema, no se importa":
+        "flow “%s”: é um padrão de conversa do CALM; o Parla tem os seus em Fluxos do sistema, não é importado",
+    "flow «%s»: «%s» no se importa%s": "flow “%s”: “%s” não é importado%s",
+    " (para arrancarlo solo en algún caso, poné un paso «Tomar un camino» al principio)": " (para iniciá-lo só em alguns casos, coloque um passo “Ramificar” no começo)",
+    "CALM elige el flujo con un LLM leyendo la descripción; Parla necesita frases de ejemplo. Los flujos %s quedaron con una intención que tiene solo la descripción como frase: sumale 5 a 10 frases reales a cada una":
+        "O CALM escolhe o fluxo com um LLM lendo a descrição; o Parla precisa de frases de exemplo. Os fluxos %s ficaram com uma intenção que tem só a descrição como frase: adicione de 5 a 10 frases reais a cada uma",
+    "respuestas con variaciones (o por canal o condición): quedó la primera de %s": "respostas com variações (ou por canal ou condição): ficou a primeira de %s",
+    "respuestas que no usa ninguna regla, historia ni flow, no se importaron: %s": "respostas que nenhuma regra, história ou flow usa não foram importadas: %s",
+    "acción personalizada «%s»: es código de Rasa; quedó un paso «Consultar un servicio» a %s (el servidor de acciones) como marcador. Reemplazalo por la consulta real o por una función":
+        "ação personalizada “%s”: é código do Rasa; ficou um passo “Consultar um serviço” para %s (o servidor de ações) como marcador. Substitua pela consulta real ou por uma função",
+    "acciones del domain que no usa ninguna regla, historia ni flow, no se importaron: %s": "ações do domain que nenhuma regra, história ou flow usa não foram importadas: %s",
+    "slots sin mappings (%s): quedaron sin entidad, guardan la respuesta entera cuando se preguntan": "slots sem mappings (%s): ficaram sem entidade, guardam a resposta inteira quando são perguntados",
+    "intenciones sin frases de ejemplo (%s): sumales frases o el bot no las va a reconocer": "intenções sem frases de exemplo (%s): adicione frases ou o bot não vai reconhecê-las",
+    "no encontré nada de Rasa para importar: mandá los .yml del proyecto (data/, domain.yml, config.yml)": "não encontrei nada do Rasa para importar: envie os .yml do projeto (data/, domain.yml, config.yml)",
+    "flow «%s»: «next: %s» apunta a un paso que no existe; ahí termina": "flow “%s”: “next: %s” aponta para um passo que não existe; termina aí",
+    "flow «%s»: no pude traducir la condición «%s»; quedó como «no se cumple» (siempre va por el otro camino), arreglala en el paso «Tomar un camino»":
+        "flow “%s”: não consegui traduzir a condição “%s”; ficou como “falso” (sempre vai pelo outro caminho), corrija no passo “Ramificar”",
+    "flow «%s»: el paso %s tiene «%s», que no se importa": "flow “%s”: o passo %s tem “%s”, que não é importado",
+    "flow «%s»: las «rejections» de %s no se importan; usá una entidad de lista o de formato para rechazar respuestas":
+        "flow “%s”: as “rejections” de %s não são importadas; use uma entidade de lista ou de formato para rejeitar respostas",
+    "flow «%s»: set_slots usa «%s», que no está en los slots del domain": "flow “%s”: set_slots usa “%s”, que não está nos slots do domain",
+    "flow «%s»: %s «%s» apunta a un flow que no existe o no se importa": "flow “%s”: %s “%s” aponta para um flow que não existe ou não é importado",
+    "flow «%s»: no tiene pasos": "flow “%s”: não tem passos",
+    "el archivo no es un .zip válido": "o arquivo não é um .zip válido",
+    "%s: ruta insegura dentro del zip, la salteo": "%s: caminho inseguro dentro do zip, pulando",
+    "el zip es demasiado grande: hasta %d archivos .yml y %d MB descomprimidos": "o zip é grande demais: até %d arquivos .yml e %d MB descompactados",
+    "el zip es demasiado grande o está dañado": "o zip é grande demais ou está corrompido",
+}
+DICTS = {"en": EN, "pt": PT}
+# Los flujos del sistema de un bot en inglés o portugués (languages[0]): textos y frases de fábrica, sobre server.SYSTEM_DEFAULTS.
+# Esto sí lo dice el bot; va acá para que server.py y rasa_import.py usen el mismo.
+SYSTEM_EN = {"cancel": {"examples": ["cancel", "stop", "forget it", "never mind"], "text": "Ok, let's stop here. Anything else I can help with?"},
+             "repeat": {"examples": ["repeat", "what?", "say that again"]},
+             "clarify": {"text": "Did you mean…?"}, "anything_else": {"text": "Anything else I can help with?"},
+             "resume": {"text": "Let's continue where we were."}, "correction": {"text": "Done, I changed it."},
+             "handoff": {"examples": ["I want to talk to a human", "connect me to an agent"], "text": "I'm passing you to a person, they'll write to you shortly."},
+             "csat": {"text": "How did I do? From 1 to 5."}}
+SYSTEM_PT = {"cancel": {"examples": ["cancelar", "para", "esquece", "não quero continuar"], "text": "Tudo bem, paramos por aqui. Posso ajudar com outra coisa?"},
+             "repeat": {"examples": ["repete", "como?", "não entendi"]},
+             "clarify": {"text": "Você quis dizer…?"}, "anything_else": {"text": "Posso ajudar com mais alguma coisa?"},
+             "resume": {"text": "Vamos continuar de onde paramos."}, "correction": {"text": "Pronto, alterei."},
+             "handoff": {"examples": ["quero falar com uma pessoa", "me passa para um atendente"], "text": "Vou te passar para uma pessoa, já vão te responder."},
+             "csat": {"text": "Como foi o meu atendimento? De 1 a 5."}}
+SYSTEM = {"en": SYSTEM_EN, "pt": SYSTEM_PT}     # idioma principal del bot -> sus valores de fábrica (si no, los de server.py)
+FIELDS = ("error", "warnings", "problems", "hint")
 
 
 def _compile(key):
-    return re.compile(re.escape(key).replace("%s", "(.+?)").replace("%d", r"(-?\d+)"), re.S)
+    return re.compile(re.escape(key).replace("%s", "(.*?)").replace("%d", r"(-?\d+)"), re.S)
 
 
 _PATTERNS = {lang: [(_compile(k), v) for k, v in sorted(d.items(), key=lambda kv: -len(kv[0])) if "%" in k] for lang, d in DICTS.items()}
@@ -68,5 +642,5 @@ if __name__ == "__main__":
     assert tr("falló: no existe", "en") == "failed: not found"
     assert translate({"error": "no existe", "x": {"warnings": ["no existe", "otro"]}, "text": "no existe"}, "en") == \
         {"error": "not found", "x": {"warnings": ["not found", "otro"]}, "text": "no existe"}
-    assert lang_of("en-US,en;q=0.9") == "en" and lang_of(None) == "es" and lang_of("es-AR") == "es" and lang_of("fr") == "en"
+    assert lang_of("en-US,en;q=0.9") == "en" and lang_of(None) == "es" and lang_of("es-AR") == "es" and lang_of("fr") == "en" and lang_of("pt-BR,pt;q=0.9") == "pt"
     print("ok")

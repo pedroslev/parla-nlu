@@ -70,7 +70,7 @@ def save(agent_id, name, data):
     name = re.sub(r"[\x00-\x1f\x7f/\\]", "", os.path.basename(str(name or "").replace("\\", "/"))).strip()[:120]
     ext = name.rpartition(".")[2].lower() if "." in name else ""
     if ext not in TYPES:
-        raise ValueError("ese tipo de archivo no se puede enviar. Sirven: " + ", ".join(sorted(TYPES)))
+        raise ValueError("ese tipo de archivo no se puede enviar. Sirven: %s" % ", ".join(sorted(TYPES)))
     try:
         body = base64.b64decode(str(data or "").rpartition(",")[2], validate=True)
     except ValueError:
