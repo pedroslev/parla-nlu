@@ -33,13 +33,46 @@ administra. Esta página cuenta qué protege, qué no, y qué hacer antes de exp
   `PARLA_HOSTS` (un proxy con HTTPS delante). Sin eso, la cookie viaja también por HTTP. Si el proxy reescribe el
   `Host` (nginx con `proxy_pass` lo hace por defecto), la segunda condición no se cumple: usá
   `PARLA_SECURE_COOKIE=1`.
-- Las sesiones viven **en memoria**: al reiniciar el servidor hay que volver a entrar. El rol y los bots de cada
-  usuario se leen de `users.json` en cada pedido, así que un cambio de rol vale al instante.
+- Las sesiones se guardan en `parla.db`, en la carpeta de datos, solo como el SHA-256 del valor de la cookie:
+  sobreviven a un reinicio. El rol y los bots de cada usuario se leen de `users.json` en cada pedido, así que un
+  cambio de rol vale al instante.
 - Cambiar la contraseña o borrar un usuario cierra sus sesiones. Salir (`/api/auth/logout`) borra la sesión.
 - **Bloqueo de login:** después de 5 intentos fallidos en un minuto para el mismo nombre de usuario y la misma IP,
   el login responde 429 hasta que pase el minuto. Detrás de un proxy la IP es la del proxy (Parla no lee
   `X-Forwarded-For`): el bloqueo pasa a ser por usuario, y alguien puede trabar el login de otro un minuto por
   vez. Un usuario que no existe tarda lo mismo en contestar que uno que sí.
+
+## Registro de auditoría
+
+Parla anota las escrituras que salieron bien en la tabla `audit` de `parla.db`: quién (usuario y rol), cuándo, en
+qué agente, qué y un detalle corto. El dueño lo ve en **Auditoría** (`#/auditoria`, desde el menú del avatar, al
+lado de «Administrar usuarios») o con `GET /api/audit` ([api_es.md](api_es.md)); los otros roles reciben 403.
+
+- Acciones: `login` (bien **y mal**, con la IP; nunca la contraseña), `logout`, `user.create`, `user.update`,
+  `user.role`, `user.delete`, `key.create` (también «Conectar con IA»), `key.revoke`, `agent.create`,
+  `agent.import`, `agent.save`, `agent.delete`, `agent.train`, `agent.publish`, `agent.deploy`, `agent.restore`,
+  `secret.set` / `secret.delete` (solo el nombre, nunca el valor), `file.upload` / `file.delete`,
+  `channel.update` (un guardado que cambió `channels`), `channel.telegram`, `inbox.take` / `inbox.release` /
+  `inbox.reply` y `session.delete`.
+- La interfaz guarda sola cada ~400 ms: los `agent.save` seguidos del mismo usuario en el mismo agente dentro de 5
+  minutos se juntan en una sola entrada.
+- Sin usuarios configurados, las entradas quedan con el usuario vacío.
+- La limpieza de cada hora borra las entradas de más de `PARLA_AUDIT_DAYS` días (365 por defecto).
+- No anota lecturas ni cada pedido: para eso, el log de accesos del proxy.
+
+## Datos personales en las conversaciones
+
+- **Retención:** `retention_days` en el agente (o `PARLA_RETENTION_DAYS` para todos) borra las conversaciones sin
+  movimiento en esa cantidad de días. Sin ninguno de los dos, se guardan para siempre. Ver
+  [concepts_es.md](concepts_es.md#retención-y-datos-personales).
+- **Tapado (`pii_redaction`):** cambia emails, teléfonos, tarjetas, documentos y cuentas bancarias por «[email]»,
+  «[teléfono]», etc. en lo que se **guarda** (historial, Bandeja, «lo que no entendió», analíticas, el historial de
+  la API). El turno en vivo (el flujo, los pasos `http`, las funciones y la respuesta de ese turno) sigue viendo el
+  valor real, y el estado de trabajo de la conversación lo guarda hasta que termina; con el tapado prendido, las
+  conversaciones quietas por 24 h se cierran para que se borre.
+- El tapado es una heurística (expresiones regulares): se le puede escapar un formato o tapar un número que no es
+  un dato personal. No reescribe lo que ya estaba guardado cuando lo prendés y no se aplica a lo que el servidor
+  escribe en la consola.
 
 ## Claves de API
 
@@ -244,7 +277,8 @@ protegelo en el proxy y configurá `PARLA_MCP_ALLOWED_HOSTS` (los `Host` aceptad
    metadatos de la nube y la red interna.
 7. **Contenedor:** usuario sin privilegios (la imagen usa el uid `10001`), sistema de archivos de solo lectura
    (`--read-only --tmpfs /tmp`, o `readOnlyRootFilesystem` en Kubernetes) y sin capabilities.
-8. **Copias:** la carpeta de datos tiene conversaciones, usuarios y claves. Guardá las copias en un lugar privado
+8. **Copias:** la carpeta de datos tiene conversaciones, usuarios y claves (`parla.db` incluida, ver
+   [deployment_es.md](deployment_es.md#copias-de-seguridad)). Guardá las copias en un lugar privado
    y mantené `users.json` y `*.secrets.json` con permisos 600 al restaurar.
 9. Revisá los pasos `http`, los orígenes del widget y las claves de API viejas (sobre todo las de «Conectar con
    IA»).
@@ -253,14 +287,14 @@ protegelo en el proxy y configurá `PARLA_MCP_ALLOWED_HOSTS` (los `Host` aceptad
 
 ## Lo que todavía no hay
 
-- Una sola réplica por carpeta de datos. Sesiones y contadores de login en memoria: se pierden al reiniciar.
+- Una sola réplica por carpeta de datos. Los contadores del bloqueo de login viven en memoria: se reinician con el
+  servidor.
 - Sin límite de pedidos, salvo el bloqueo de login.
-- Sin registro de auditoría ni de accesos: Parla no guarda quién cambió qué (el registro de despliegues no dice
-  quién) ni loguea los pedidos. La Bandeja sí anota quién tomó y respondió cada conversación.
+- Sin registro de accesos: la auditoría anota escrituras, no lecturas ni cada pedido.
 - Sin segundo factor, sin política de contraseñas y sin lista de sesiones abiertas para cerrarlas a mano.
-- Las claves no se cifran en disco. Los agentes y las conversaciones se guardan con los permisos normales del
-  sistema (solo `users.json` y las claves son 600).
-- No se tapan datos personales en las conversaciones guardadas y no se borran solas.
+- Las claves no se cifran en disco. Los agentes se guardan con los permisos normales del sistema; `users.json`, las
+  claves y `parla.db` (conversaciones, hashes de los logins y la auditoría) son 600.
+- Tapar datos personales es una heurística, y viene apagado.
 
 ## Reportar una vulnerabilidad
 

@@ -16,15 +16,17 @@ una edición paga que se guarde funciones.
   desde la Bandeja. Ver [channels_es.md](channels_es.md).
 - **Importador de proyectos Rasa**: los proyectos de Rasa 3.x, clásicos y CALM, pasan a agentes de Parla, con un
   aviso por todo lo que no se convierte. Ver [migrate-from-rasa_es.md](migrate-from-rasa_es.md).
+- **Conversaciones en SQLite** (`parla.db`), con migración automática desde los archivos JSON viejos, y **sesiones
+  de login que sobreviven a un reinicio**. Ver [deployment_es.md](deployment_es.md#dónde-quedan-los-datos).
+- **Retención de conversaciones** por agente y **registro de auditoría** de quién cambió qué. Ver
+  [security_es.md](security_es.md#registro-de-auditoría).
+- **Enmascarado de datos personales (PII)**: tapar emails, teléfonos, documentos, tarjetas y cuentas bancarias en
+  las conversaciones guardadas. Ver [concepts_es.md](concepts_es.md#retención-y-datos-personales).
 
 ## Ahora (en curso)
 
-- **Persistencia en base de datos**: SQLite y Postgres como alternativa a los archivos JSON, con políticas de
-  **retención de sesiones** y un **registro de auditoría** de quién cambió qué.
 - **Suites de pruebas de conversación en CI**: escribir conversaciones esperadas y correrlas en cada cambio (línea
   de comandos y GitHub Actions).
-- **Enmascarado de datos personales (PII)**: tapar emails, teléfonos, documentos y tarjetas en las conversaciones
-  guardadas y en los registros.
 - **Endpoints de modelos compatibles con OpenAI**: apuntar las funciones de IA a cualquier API compatible con
   OpenAI, local o en la nube, no solo a servidores locales.
 - **Interfaz en inglés** (internacionalización de la interfaz).
@@ -36,7 +38,8 @@ una edición paga que se guarde funciones.
 
 ## Más adelante
 
-- **Escalado horizontal**: varias réplicas sobre almacenamiento compartido, con las sesiones fuera del proceso.
+- **Escalado horizontal y Postgres**: varias réplicas sobre almacenamiento compartido, con Postgres como
+  alternativa a SQLite.
 - **Herramientas en el paso de agente de IA**: que el paso `agent` llame herramientas externas como **cliente MCP**.
 - **Observabilidad**: exportar trazas y métricas con OpenTelemetry.
 - **Experimentos A/B** entre versiones de flujos o de bots.

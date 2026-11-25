@@ -22,9 +22,12 @@ An **agent** (or bot) is a JSON file with everything that defines it. The main f
 | `widget` | `{"enabled", "origins", "title", "color", "greeting", "position", "voice"}`. |
 | `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id"}, "telegram": {"enabled"}}`. Tokens go in the vault, see [channels.md](channels.md). |
 | `ignored_phrases` | Phrases that «Para enseñar» (To teach) no longer shows. |
+| `retention_days` | Days to keep conversations with no activity. Absent or `null`: `PARLA_RETENTION_DAYS`; `0`: forever. See [Retention and personal data](#retention-and-personal-data). |
+| `pii_redaction` | Mask personal data in stored conversations: `false` (default), `true` (everything) or a list of categories. Same section. |
 
 Exporting an agent downloads that JSON; importing it creates a new agent. Versions, environments, training, secrets
-and uploaded files are not included (it is trained when opened).
+and uploaded files are not included (it is trained when opened), and neither are `retention_days` and
+`pii_redaction`.
 
 ## Intent
 
@@ -312,4 +315,37 @@ stays tied to the version it started with: publishing doesn't change the steps i
 Rollback = pointing the environment to another version. «Restaurar» (Restore) brings the draft back to what a
 version had.
 
-What belongs to the bot rather than to a version: secrets, files and conversations.
+What belongs to the bot rather than to a version: secrets, files, conversations and the operational settings
+`retention_days` and `pii_redaction` (they aren't versioned and «Restaurar» keeps them).
+
+## Retention and personal data
+
+Conversations are stored in `parla.db`, in the data folder. Both settings are in the agent's **Ajustes**
+(Settings) → **Privacidad y datos** (Privacy and data).
+
+**Retention (`retention_days`).** Conversations whose last activity is older than that many days are deleted. Without
+the field (or `null`), `PARLA_RETENTION_DAYS` applies; `0`, or neither of the two, keeps them forever. The cleanup
+runs at startup and every hour. Uploaded files (`file` step) belong to the agent, not to a conversation: retention
+never deletes them.
+
+**Masking (`pii_redaction`).** `true` masks every category; a list masks only those:
+
+| Category | Becomes | What it catches |
+|---|---|---|
+| `email` | «[email]» | Email addresses. |
+| `phone` | «[teléfono]» | Phone numbers. |
+| `card` | «[tarjeta]» | 13 to 19 digits, only if they pass the Luhn check. |
+| `id` | «[documento]» | CUIT/CUIL (11 digits), DNI (7 or 8 digits, with or without dots) and any other run of 9 or more digits. |
+| `bank` | «[cuenta]» | CBU/CVU (22 digits) and IBAN (validated with mod 97). |
+
+It applies to what is **stored**: the history text, entity values and the start data. So the Bandeja (Inbox), the
+conversation viewer, «lo que no entendió», analytics and the API's history see the masked text. It doesn't apply
+to the live turn: the flow, `http` steps and functions get the real value, and that turn's reply carries the real
+text. Slots and the AI context keep the real values while the conversation is open (later steps need them) and
+are wiped when it ends; with masking on, conversations idle for 24 hours (not in handoff) are closed so that
+happens.
+
+Limits: it's a heuristic, so it can miss a format or mask a number that isn't personal data (an order number with 9
+or more digits); the operator's replies in the Bandeja are stored masked too (a widget reading the history sees
+them masked); turning it on doesn't rewrite what was already stored (each conversation is masked from its next
+save on); and it doesn't apply to the server's console output.

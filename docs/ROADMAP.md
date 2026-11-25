@@ -16,14 +16,17 @@ Want to help or need something sooner? Open an issue or comment on an existing o
   replies. See [channels.md](channels.md).
 - **Rasa project importer**: classic and CALM Rasa 3.x projects become Parla agents, with a warning for anything
   not converted. See [migrate-from-rasa.md](migrate-from-rasa.md).
+- **SQLite storage** for conversations (`parla.db`), with automatic migration from the old JSON files, and
+  **login sessions that survive a restart**. See [deployment.md](deployment.md#where-the-data-lives).
+- **Conversation retention** per agent and an **audit log** of who changed what. See
+  [security.md](security.md#audit-log).
+- **PII redaction**: mask emails, phone numbers, IDs, cards and bank accounts in saved conversations. See
+  [concepts.md](concepts.md#retention-and-personal-data).
 
 ## Now (in progress)
 
-- **Database persistence**: SQLite and Postgres as an alternative to JSON files, with **session retention**
-  policies and an **audit log** of who changed what.
 - **Conversation test suites in CI**: write expected conversations and run them on every change (command line and
   GitHub Actions).
-- **PII redaction**: mask personal data (emails, phone numbers, IDs, cards) in saved conversations and logs.
 - **OpenAI-compatible model endpoints**: point the AI features at any OpenAI-compatible API, local or hosted, not
   only local servers.
 - **English UI** (interface internationalization).
@@ -35,7 +38,8 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Later
 
-- **Horizontal scaling**: several replicas on shared storage, with sessions outside the process.
+- **Horizontal scaling and Postgres**: several replicas on shared storage, with Postgres as an alternative to
+  SQLite.
 - **Tools in the AI agent step**: let the `agent` step call external tools as an **MCP client**.
 - **Observability**: OpenTelemetry traces and metrics export.
 - **A/B experiments** between flow or bot versions.
