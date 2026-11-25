@@ -19,7 +19,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import DATA, ROOT, write_json, auth, brain, connect, dates, files, insights, knowledge, llm, runner, vault, voice
+from . import DATA, ROOT, write_json, auth, brain, channels, connect, dates, files, insights, knowledge, llm, runner, vault, voice
 
 import celpy
 import pycrfsuite
@@ -1773,6 +1773,8 @@ def human(agent_id, sid, action, text, who):
     sync(record)
     del record["history"][:-MAX_HISTORY]
     save_session(agent_id, record)
+    if action == "reply":
+        channels.human_reply(agent_id, record, text)     # WhatsApp o Telegram: que le llegue a la persona
     return record
 
 
@@ -1831,6 +1833,11 @@ class Handler(BaseHTTPRequestHandler):
         self.user, self.public = None, False
         if url.startswith("/api/") and origin is not None and urllib.parse.urlsplit(origin).netloc.lower() not in ours | set(auth.hosts()) and not self.cors:
             return self.reply({"error": "pedido de otro sitio web rechazado"}, 403)   # cualquier página podría pegarle a localhost
+        hooked = re.fullmatch(r"/api/v1/bots/([^/]+)/(whatsapp|telegram)", url)
+        if hooked and method in ("GET", "POST"):
+            # webhooks de Meta y Telegram: vienen de otro Host y sin sesión; los autentica la firma o el secreto (channels.py)
+            status, body, ctype = channels.webhook(self.headers, self.rfile, method, *hooked.groups(), query, length)
+            return self.reply(body, status, ctype)
         if method == "OPTIONS":
             if not self.cors:
                 return self.reply({"error": "pedido de otro sitio web rechazado"}, 403)
@@ -1899,7 +1906,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(*reversed(api_v1(method, [p for p in url[len("/api/v1/"):].split("/") if p], data, query, self.user, self.public)))
         match = re.fullmatch(r"/api/agents(?:/([0-9a-f]{8})(?:/(chat|reset|http|train|versions|deploy|diff|versions/\d+|versions/\d+/restore|functions/test"
                              r"|knowledge/extract|knowledge/search|voice/transcribe|secrets|files|files/[A-Za-z0-9_-]{22}|insights/unrecognized|insights/analytics"
-                             r"|inbox|sessions/[A-Za-z0-9_.@+-]+/(?:reply|release|take)))?)?", url)
+                             r"|inbox|channels|channels/telegram|sessions/[A-Za-z0-9_.@+-]+/(?:reply|release|take)))?)?", url)
         if not match:
             return self.reply({"error": "no existe"}, 404)
         agent_id, action = match.groups()
@@ -2006,6 +2013,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(http_step(data.get("step") or {}, dict(data.get("vars") or {}, secret=secrets({"id": agent_id}))))
         elif action == "inbox" and method == "GET":
             return self.reply(inbox(agent_id))
+        elif action == "channels" and method == "GET":                # pantalla «Canales»: webhooks, claves que faltan, estado
+            return self.reply(channels.info(load(agent_id)))
+        elif action == "channels/telegram" and method == "POST":      # {"connect": true|false}: setWebhook / deleteWebhook
+            return self.reply(channels.telegram_webhook(load(agent_id), data.get("connect", True) is not False))
         elif action and action.startswith("sessions/") and method == "POST":   # reply | take | release
             _, sid, what = action.split("/")
             text = str(data.get("text") or "").strip()[:4000]
@@ -2105,7 +2116,7 @@ def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     print("Listo: http://127.0.0.1:%d  (Ctrl+C para salir)" % port, flush=True)
     # ponytail: un hilo por pedido (la IA y la voz tardan segundos); dos mensajes a la vez en la MISMA conversación
-    # pueden pisarse: agregar un lock por sessionId si algún canal los manda en paralelo
+    # por la API pueden pisarse. WhatsApp y Telegram ya se atienden con un lock por conversación (channels.py)
     ThreadingHTTPServer((os.environ.get("PARLA_HOST", "127.0.0.1"), port), Handler).serve_forever()
 
 
