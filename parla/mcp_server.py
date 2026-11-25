@@ -294,8 +294,9 @@ def validate(data, files=None):
     used_functions = set()
     for c in classifications:
         color = c.get("color", 0)
-        if not isinstance(color, int) or isinstance(color, bool) or not 0 <= color <= 5:
-            errors.append("classification «%s»: «color» tiene que ser un entero de 0 a 5" % c["name"])
+        palette = isinstance(color, int) and not isinstance(color, bool) and 0 <= color <= 5
+        if not palette and not (isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color)):
+            errors.append("classification «%s»: «color» es un índice de la paleta (0 a 5) o un hex \"#rrggbb\", como en las entidades" % c["name"])
         if not isinstance(c.get("description", ""), str):
             errors.append("classification «%s»: «description» tiene que ser un texto" % c["name"])
     used_classifications = set()
@@ -1062,7 +1063,7 @@ values, la aprende el CRF por contexto de las frases marcadas. "kind" lo usa la 
 
 ## classifications: [{name, color?, description?}]
 - Etiquetas de resultado para reportes: qué pasó en la conversación ("Cita agendada", "Cancelación", "Derivada a
-  operador"). color: entero 0-5 (interfaz); description: texto para humanos.
+  operador"). color: índice de la paleta (0-5) o hex "#rrggbb", igual que en las entidades; description: texto para humanos.
 - Se aplican con el paso classify. La sesión guarda [{name, at}], el historial suma un evento
   "Clasificada como «X»", y las respuestas de events/sessions traen "classifications": [nombres].
 - get_report cuenta conversaciones por clasificación (total y por día, con filtros de fecha/canal);

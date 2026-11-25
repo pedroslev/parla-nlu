@@ -650,3 +650,18 @@ for name, data in (("virus.html", "PGI+"), ("foto.svg", "PHN2Zz4="), ("vacio.pdf
         pass
 app.all_agents, app.load, app.model, app.parse = saved
 print("ok")
+
+# frases fijas para la llamada: se cortan igual que en static/voice.js y las que tienen {{ }} no se pregeneran
+assert voice.sentences("Hola Ana. ¿Te sirve?\nDime sí o no.") == ["Hola Ana.", "¿Te sirve?", "Dime sí o no."]
+_texts = app.spoken_texts({"fallback": ["No entendí."], "languages": ["es"], "flows": [{"steps": [
+    {"type": "message", "text": "Hola {{ nombre }}. ¿Te ayudo?"},
+    {"type": "if", "then": [{"type": "ask", "slot": "x", "text": "¿Presencial o virtual?"}]}]}]})
+assert "¿Presencial o virtual?" in _texts and "No entendí." in _texts and "No reconocí ese dato, probemos de nuevo." in _texts, _texts
+_spoken = []
+_saved_speak = voice.speak
+voice.speak = lambda text, lang="es", keep=True: _spoken.append(text) or b"RIFF"
+_saved_cache = voice.TTS_CACHE
+voice.TTS_CACHE = voice.Path(app.AGENTS) / "tts-cache-test"
+assert voice.prewarm(_texts) == 4 and "Hola {{ nombre }}." not in _spoken and "¿Te ayudo?" in _spoken, _spoken
+assert voice.prewarm(_texts) == 0                       # ya estaban: no se generan de nuevo
+voice.speak, voice.TTS_CACHE = _saved_speak, _saved_cache

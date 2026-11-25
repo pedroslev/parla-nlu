@@ -30,9 +30,8 @@ function clManage() {
     const flows = clUses(c.name);
     return h('div', { class: 'panel' },
       h('div', { class: 'row', style: 'flex-wrap:nowrap' },
-        h('button', { class: 'dot', style: markStyle(c) + ';width:22px;height:22px', title: 'Cambiar color', 'aria-label': 'Cambiar color',
-          onclick: () => { c.color = ((c.color ?? 0) + 1) % COLORS.length; touch(); render(); } }),
         h('input', { class: 'grow', value: c.name, 'aria-label': 'Nombre de la clasificación', style: 'font-weight:600', onchange: (e) => clRename(c, e.target.value) }),
+        colorField(c, 'Color de la clasificación'),
         iconBtn('trash', 'Borrar clasificación', () => clRemove(c))),
       lab('Cuándo se usa (opcional)', h('input', { ...bind(c, 'description'), placeholder: 'Por ejemplo: la persona confirmó día y horario' })),
       h('div', { class: 'cl-uses' }, flows.length

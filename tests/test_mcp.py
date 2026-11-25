@@ -92,6 +92,10 @@ has(errs, "(classify)", "«Venta» no existe")
 has(errs, "(classify)", "falta «classification»")
 has(errs, "classification «Reclamo» está repetido")
 has(errs, "«Reclamo»", "color")
+# color libre como en las entidades: un hex vale, una palabra no
+_ok = copy.deepcopy(m.DEMO_IVR); _ok["classifications"] = [{"name": "Libre", "color": "#3346d3"}, {"name": "Rojo", "color": "rojo"}]
+_e = errors_of(_ok)
+assert not [x for x in _e if "«Libre»" in x] and [x for x in _e if "«Rojo»" in x and "color" in x], _e
 assert not any("usa «size»" in e or "usa «nombre»" in e for e in errs), errs   # funciones y slots reales no son errores
 
 warn = m.validate_agent({"name": "x", "intents": [{"name": "Hola", "examples": ["hola"]}], "entities": [], "slots": [], "flows": []})

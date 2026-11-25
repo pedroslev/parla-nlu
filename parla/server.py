@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import sys
+import threading
 import time
 import unicodedata
 import urllib.error
@@ -1254,7 +1255,24 @@ def load(agent_id):
 def store(agent):
     with open(path(agent["id"]), "w", encoding="utf-8") as f:
         json.dump(agent, f, ensure_ascii=False, indent=2)
+    if any(voice.PIPER_DIR.glob("*.onnx")):       # con voz instalada: las frases fijas quedan listas para las llamadas
+        threading.Thread(target=voice.prewarm, args=(spoken_texts(agent), languages(agent)[0]), daemon=True).start()
     return agent
+
+
+def spoken_texts(agent):
+    """Todo lo que el bot puede decir tal cual: mensajes, preguntas, pasar a una persona, el «no entendí» y el
+    «No reconocí ese dato». voice.prewarm se saltea las frases con {{ }}."""
+    out = [fallback for fallback in ([agent.get("fallback")] if isinstance(agent.get("fallback"), str) else agent.get("fallback") or [])]
+    out.append(REJECT.get(languages(agent)[0], REJECT["es"]))
+    def walk(steps):
+        for s in steps or []:
+            if s.get("type") in ("message", "ask", "handoff", "file") and isinstance(s.get("text"), str):
+                out.append(s["text"])
+            walk(s.get("then")); walk(s.get("else"))
+    for flow in agent.get("flows") or []:
+        walk(flow.get("steps"))
+    return [t for t in out if isinstance(t, str) and t.strip()]
 
 
 def imported(data):
