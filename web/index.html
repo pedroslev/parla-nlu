@@ -443,7 +443,7 @@ const SYSTEM = [
 ];
 const sysOf = (key) => agent.system?.[key] || {};   // el servidor manda agent.system completo (load); {} solo si una versión vieja restaurada no lo trae
 // roles (static/users.js deja window.me; null o undefined = sin usuarios, todo abierto)
-const ROLE_SECTIONS = { agent: ['inbox', 'sessions'], analyst: ['sessions', 'reports', 'inbox', 'improve'] };
+const ROLE_SECTIONS = { agent: ['inbox', 'sessions'], analyst: ['sessions', 'reports', 'inbox', 'improve', 'tests'] };
 const allowed = () => ROLE_SECTIONS[window.me?.role] || null;
 const canEdit = () => !allowed();
 
@@ -489,7 +489,7 @@ async function api(method, path, body) {
   const r = await fetch('/api/agents' + path, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });
   if (r.status === 401 && window.showLogin) { await window.showLogin(); return api(method, path, body); }   // /static/users.js
   const data = await r.json();
-  if (!r.ok) throw new Error(data.error || r.status);
+  if (!r.ok) throw Object.assign(new Error(data.error || r.status), { status: r.status, data });   // 409 al publicar trae las pruebas
   return data;
 }
 function touch() {                       // algo cambió: se guarda solo; las frases y entidades además piden entrenar
@@ -753,7 +753,7 @@ async function home() {
 }
 async function openAgent(id, start) {
   agent = await api('GET', '/' + id);
-  agent.classifications ||= []; agent.functions ||= [];
+  agent.classifications ||= []; agent.functions ||= []; agent.tests ||= [];
   section = /^[a-z]+$/.test(start || '') ? start : 'intents';     // al recargar (F5) vuelve a la sección que estaba
   sel = { intents: 0, flows: 0, functions: 0, system: null }; query.slots = query.entities = query.flows = ''; testEnv = 'draft'; chat = []; lastSlots = {}; lastTrace = []; session = newSession(); testMode = '';
   editLang = null; if (callView) hangUp(); stopHandoff(); lastLang = null;
@@ -788,10 +788,10 @@ function render() {
       ['classifications', 'bookmark', 'Clasificaciones', agent.classifications.length], ['settings', 'sliders', 'Ajustes']]],
     ['Inteligencia', [['knowledge', 'book', 'Conocimiento', (agent.knowledge || []).length], ['ai', 'spark', 'IA']]],
     ['Operar', [['inbox', 'inbox', 'Bandeja'], ['sessions', 'history', 'Conversaciones'], ['improve', 'lightbulb', 'Para enseñar'], ['reports', 'chart', 'Reportes']]],
-    ['Publicar', [['releases', 'layers', 'Versiones'], ['widget', 'globe', 'Widget web'], ['channels', 'phone', 'Canales'], ['secrets', 'key', 'Claves'], ['api', 'code', 'API']]],
+    ['Publicar', [['tests', 'check', 'Tests', agent.tests.length], ['releases', 'layers', 'Versiones'], ['widget', 'globe', 'Widget web'], ['channels', 'phone', 'Canales'], ['secrets', 'key', 'Claves'], ['api', 'code', 'API']]],
   ].map(([name, items]) => [name, items.filter(([id]) => !allowed() || allowed().includes(id))]).filter(([, items]) => items.length);
   if (allowed() && !allowed().includes(section)) section = allowed()[0];     // cada rol ve solo lo suyo
-  if (!['intents','entities','slots','flows','functions','classifications','settings','knowledge','ai','inbox','sessions','improve','reports','releases','widget','channels','secrets','api'].includes(section)) section = 'intents';
+  if (!['intents','entities','slots','flows','functions','classifications','settings','knowledge','ai','inbox','sessions','improve','reports','tests','releases','widget','channels','secrets','api'].includes(section)) section = 'intents';
   history.replaceState(null, '', '#/' + agent.id + '/' + section);           // F5 vuelve acá, no a «Tus agentes»
   $('#nav').replaceChildren(...groups.flatMap(([name, items]) => [groups.length > 1 ? h('div', { class: 'nav-group', role: 'presentation' }, name) : null,
     ...items.map(([id, ic, text, n]) => h('button', {
@@ -800,7 +800,7 @@ function render() {
   const c = $('#center'), y = c.scrollTop;
   // Conversaciones, Clasificaciones y API viven en /static/sessions.js, /static/classifications.js y /static/apidocs.js
   const fn = { intents: intentsView, entities: entitiesView, slots: slotsView, flows: flowsView, settings: settingsView,
-    sessions: () => window.sessionsView(), reports: () => window.reportsView(), releases: () => window.releasesView(), classifications: () => window.classificationsView(), functions: () => window.functionsView(), api: () => window.apiDocsView(),
+    sessions: () => window.sessionsView(), reports: () => window.reportsView(), releases: () => window.releasesView(), tests: () => window.testsView(), classifications: () => window.classificationsView(), functions: () => window.functionsView(), api: () => window.apiDocsView(),
     knowledge: () => window.knowledgeView(), ai: () => window.aiView(), inbox: () => window.inboxView(), improve: () => window.improveView(),
     widget: () => window.widgetView(), channels: () => window.channelsView(), secrets: () => window.secretsView() }[section];
   let view;
@@ -1629,6 +1629,14 @@ function chatItem(m, i) {
   if (m.who === 'user') out.push(readLine(m));
   return out;
 }
+async function saveChatAsTest() {       // la charla del panel de prueba ya quedó guardada: se lee y pasa a Pruebas (tests.js)
+  try {
+    const r = await fetch('/api/v1/bots/' + encodeURIComponent(agent.id) + '/sessions/' + encodeURIComponent(session));
+    const s = await r.json();
+    if (!r.ok) throw new Error(s.error || r.status);
+    window.testFromHistory(s.history, s.slots, 'Prueba del chat');
+  } catch (e) { chat.push({ who: 'problem', text: 'No se pudo guardar como test: ' + e.message }); renderChat(); }
+}
 function renderChat() {
   const old = $('#chat form input'), hadFocus = !document.activeElement || document.activeElement === document.body || $('#chat')?.contains(document.activeElement);
   const input = h('input', { placeholder: handoff ? 'Escribile como cliente: le llega a la persona…' : 'Escribile al bot…', 'aria-label': 'Mensaje', autocomplete: 'off', value: old?.value || '' });
@@ -1653,6 +1661,7 @@ function renderChat() {
   $('#chat').replaceChildren(...[
     h('div', { class: 'chat-head', style: 'flex-wrap:wrap;gap:8px' }, h('h2', { class: 'grow' }, 'Probar'), envPick ? h('span', { class: 'row', style: 'gap:6px;font-size:13px;color:var(--muted)' }, envPick) : null,
       agent && lastLang && (langs().length > 1 || lastLang !== langs()[0]) ? h('span', { class: 'chip', title: 'El idioma en que está respondiendo el bot' }, 'Idioma: ' + (LANGS[lastLang] || lastLang)) : null,
+      agent && canEdit() && chat.some((m) => m.who === 'user') ? h('button', { class: 'btn quiet small', title: 'Guarda esta charla en Tests, con lo que respondió el bot como lo esperado', onclick: saveChatAsTest }, icon('check'), 'Guardar como test') : null,
       h('button', { class: 'btn quiet small', onclick: reset }, icon('redo'), 'Empezar de nuevo'), iconBtn('x', 'Cerrar el panel de prueba', () => setChat(false))),
     testEnv !== 'draft' ? h('p', { class: 'help', style: 'font-size:13px;padding:0 16px 8px' }, 'Estás probando la v' + envs[testEnv] + ' de ' + ENVS[testEnv] + ', tal como la usa la API. Lo que cambies en el borrador no se ve acá hasta que publiques.') : null,
     agent && !callView ? startBox() : null,
@@ -1689,6 +1698,7 @@ addEventListener('DOMContentLoaded', () => {     // después de cargar /static/u
 <script src="/static/apidocs.js"></script>
 <script src="/static/connect.js"></script>
 <script src="/static/releases.js"></script>
+<script src="/static/tests.js"></script>
 <script src="/static/reports.js"></script>
 <script src="/static/knowledge.js"></script>
 <script src="/static/ai.js"></script>

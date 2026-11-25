@@ -356,7 +356,9 @@ def guard(handler, method, url, data):
     if role in ("owner", "editor"):
         return None
     if role == "analyst":
-        return None if method == "GET" else (403, {"error": "Tu usuario es de solo lectura: podés mirar, pero no cambiar nada."})
+        # correr las pruebas no cambia nada: el analista también puede
+        readonly = method == "GET" or (method == "POST" and re.fullmatch(r"/api/agents/[0-9a-f]{8}/tests/run", url))
+        return None if readonly else (403, {"error": "Tu usuario es de solo lectura: podés mirar, pero no cambiar nada."})
     if any(re.fullmatch(m, method) and re.fullmatch(p, url) for m, p in AGENT_ROUTES):
         return None
     return 403, {"error": "Tu usuario es de atención: solo podés usar la Bandeja para leer y responder conversaciones."}

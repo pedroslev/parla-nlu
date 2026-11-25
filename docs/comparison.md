@@ -18,7 +18,7 @@ nearest neighbour (`google/embeddinggemma-300m` via fastembed), a CRF for entiti
 rules. Flows have many step types (questions, HTTP requests, conditions, subflows, file sending, functions,
 handoff, AI steps). An LLM is optional (local Ollama by default, or any OpenAI-compatible endpoint, self-hosted or hosted), and so is local voice
 (faster-whisper for speech-to-text, piper for text-to-speech), including an interruptible voice call in the test
-chat. It ships an MCP server with 25 tools, versions with `staging` / `production` and rollback, users, roles and
+chat. It ships an MCP server with 27 tools, versions with `staging` / `production` and rollback, users, roles and
 API keys, a per-agent secret vault, an inbox for human handoff, analytics, a "to teach" queue for unrecognized
 phrases and conversation replay against another version. Channels today are the HTTP API (`/api/v1`) and an
 embeddable web widget. It can be deployed with Docker, docker-compose, Kubernetes or k3s. The interface is in
@@ -34,7 +34,7 @@ Spanish (i18n is planned). Parla has a **no-open-core pledge**: every feature st
 | Local / offline models | Yes: embeddings, CRF and optional LLM all run locally | Configurable LLM providers; self-hosted models possible [2] | Not publicly documented as fully offline | Not publicly documented as fully offline | No (Google models) | No (Microsoft / Azure models) | No | No |
 | Voice | Local STT/TTS, interruptible voice call in test chat; no telephony yet | Yes, via AudioCodes, Jambonz, browser [1] | Yes, Voice Gateway [3] | Yes | Yes (audio billed per second) [7] | Yes, real-time voice [10] | Voice channel on enterprise plan, per third-party guide [12] | Yes (voice and chat) [13] |
 | Channels | HTTP API, web widget, WhatsApp, Telegram | Many connectors | Many | Many | Many integrations | Teams, web and Microsoft channels | Many | Many |
-| MCP | MCP server (25 tools) to build/test/publish bots | MCP tools server for IDEs (beta, 3.16) [1] | MCP tools in agents; MCP server endpoint (experimental) [4] | Not verified in official docs | Not verified in official docs | MCP tools in agents (GA) [10] | MCP in the ADK CLI, per third-party sources [12] | MCP tools in agents + hosted MCP server [14] |
+| MCP | MCP server (27 tools) to build/test/publish bots | MCP tools server for IDEs (beta, 3.16) [1] | MCP tools in agents; MCP server endpoint (experimental) [4] | Not verified in official docs | Not verified in official docs | MCP tools in agents (GA) [10] | MCP in the ADK CLI, per third-party sources [12] | MCP tools in agents + hosted MCP server [14] |
 | Analytics | Containment, handoffs, fallbacks, CSAT, drop-off | Built-in dashboard in Studio 1.16 [1] | Yes | Yes | Yes (Google Cloud) | Yes | Yes | Yes (observability) [13] |
 | Testing | Self-evaluation, confusion matrix, test chat, replay against another version | Yes (E2E tests) | Simulator [3] | Yes | Yes | Yes | Yes | Yes |
 

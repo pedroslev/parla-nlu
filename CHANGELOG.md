@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter. API key from the agent's vault (`ai.api_key_secret`), JSON mode
   with a prompt-only fallback, Spanish error messages with the key masked, «Probar conexión» and a privacy warning
   for non-local URLs ([docs/ai-and-voice.md](docs/ai-and-voice.md#openai-compatible-endpoints)).
+- Conversation test suites («Tests»): expected conversations stored in the agent (`tests`), run from the UI, the
+  API (`POST /api/agents/{id}/tests/run`), the MCP (`run_tests`) and the command line
+  (`python -m parla.bottests`, with GitHub Actions annotations); «Guardar como test» from a conversation or the
+  test chat; publishing to production runs the suite first and stops on failures unless forced
+  ([docs/testing-bots.md](docs/testing-bots.md)).
 - Rasa 3.x project importer (classic and CALM) from the UI, API, CLI and MCP, with a warnings report
   ([docs/migrate-from-rasa.md](docs/migrate-from-rasa.md)).
 - WhatsApp (Cloud API) and Telegram channels: signed webhooks, native buttons, file uploads, Inbox replies

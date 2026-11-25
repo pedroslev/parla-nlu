@@ -19,13 +19,14 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 - **OpenAI-compatible model endpoints**: the AI features can use any OpenAI-compatible API (vLLM, llama.cpp,
   LM Studio, OpenAI, Azure OpenAI, Groq, OpenRouter), with the key in the vault. Ollama stays the default. See
   [ai-and-voice.md](ai-and-voice.md#openai-compatible-endpoints).
+- **Conversation test suites**: expected conversations stored in the bot, run from the UI, the API, the MCP and the
+  command line (GitHub Actions included), and before every publish to production. See
+  [testing-bots.md](testing-bots.md).
 
 ## Now (in progress)
 
 - **Database persistence**: SQLite and Postgres as an alternative to JSON files, with **session retention**
   policies and an **audit log** of who changed what.
-- **Conversation test suites in CI**: write expected conversations and run them on every change (command line and
-  GitHub Actions).
 - **PII redaction**: mask personal data (emails, phone numbers, IDs, cards) in saved conversations and logs.
 - **English UI** (interface internationalization).
 

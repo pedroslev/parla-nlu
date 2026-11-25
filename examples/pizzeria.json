@@ -241,6 +241,65 @@
         "enabled": false,
         "text": "¿Cómo te atendí? Del 1 al 5."
       }
-    }
+    },
+    "tests": [
+      {
+        "name": "Pedido completo",
+        "turns": [
+          {
+            "user": "hola",
+            "intent": "Saludar",
+            "flow": "Tomar pedido",
+            "says": "¿Cuál es tu nombre?"
+          },
+          {
+            "user": "Juan",
+            "slots": {
+              "nombre": "Juan"
+            },
+            "says": "¿Y tu apellido?"
+          },
+          {
+            "user": "Pérez",
+            "slots": {
+              "apellido": "Pérez"
+            },
+            "says": "dirección"
+          },
+          {
+            "user": "Corrientes 1234",
+            "slots": {
+              "direccion": "Corrientes 1234"
+            },
+            "says": "/(?i)de qué gusto/"
+          },
+          {
+            "user": "napo",
+            "slots": {
+              "gusto": "napolitana"
+            },
+            "says": "¿Cuántas pizzas de napolitana querés?"
+          },
+          {
+            "user": "2",
+            "says": "/^Listo, Juan Pérez: 2 de napolitana para enviar a Corrientes 1234/"
+          }
+        ]
+      },
+      {
+        "name": "Pedido directo con el nombre precargado",
+        "start": {
+          "nombre": "Ana"
+        },
+        "turns": [
+          {
+            "user": "dame una de muzza",
+            "intent": "Pedir pizza",
+            "flow": "Tomar pedido",
+            "says": "Gracias, Ana. ¿Y tu apellido?"
+          }
+        ]
+      }
+    ]
   }
 }

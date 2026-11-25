@@ -22,6 +22,7 @@ Un **agente** (o bot) es un archivo JSON con todo lo que lo define. Los campos p
 | `widget` | `{"enabled", "origins", "title", "color", "greeting", "position", "voice"}`. |
 | `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id"}, "telegram": {"enabled"}}`. Los tokens van en la bóveda, ver [channels_es.md](channels_es.md). |
 | `ignored_phrases` | Frases que «Para enseñar» ya no muestra. |
+| `tests` | Pruebas de conversación: conversaciones esperadas que corren antes de publicar a producción (ver [testing-bots_es.md](testing-bots_es.md)). |
 
 Exportar un agente baja ese JSON; importarlo crea un agente nuevo. No viajan las versiones, los entornos, el
 entrenamiento, las claves ni los archivos subidos (se entrena al abrirlo).
@@ -309,3 +310,7 @@ queda atada a la versión con la que empezó: publicar no cambia los pasos a mit
 apuntar el entorno a otra versión. «Restaurar» vuelve el borrador a lo que tenía una versión.
 
 Lo que no es de una versión sino del bot: las claves, los archivos y las conversaciones.
+
+Las **pruebas** de conversación (sección «Tests») son parte de la definición, así que cada versión tiene las suyas.
+Publicar a `production` las corre antes contra el borrador y frena si falla alguna; publicar a `staging` y `deploy`
+no. Ver [testing-bots_es.md](testing-bots_es.md).

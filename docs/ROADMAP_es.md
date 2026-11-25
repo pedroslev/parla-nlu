@@ -19,13 +19,14 @@ una edición paga que se guarde funciones.
 - **Endpoints de modelos compatibles con OpenAI**: las funciones de IA pueden usar cualquier API compatible con
   OpenAI (vLLM, llama.cpp, LM Studio, OpenAI, Azure OpenAI, Groq, OpenRouter), con la key en Claves. Ollama sigue
   siendo lo que viene por defecto. Ver [ai-and-voice_es.md](ai-and-voice_es.md#endpoints-compatibles-con-openai).
+- **Suites de pruebas de conversación**: conversaciones esperadas guardadas en el bot, que se corren desde la
+  interfaz, la API, el MCP y la línea de comandos (también en GitHub Actions), y antes de cada publicación a
+  producción. Ver [testing-bots_es.md](testing-bots_es.md).
 
 ## Ahora (en curso)
 
 - **Persistencia en base de datos**: SQLite y Postgres como alternativa a los archivos JSON, con políticas de
   **retención de sesiones** y un **registro de auditoría** de quién cambió qué.
-- **Suites de pruebas de conversación en CI**: escribir conversaciones esperadas y correrlas en cada cambio (línea
-  de comandos y GitHub Actions).
 - **Enmascarado de datos personales (PII)**: tapar emails, teléfonos, documentos y tarjetas en las conversaciones
   guardadas y en los registros.
 - **Interfaz en inglés** (internacionalización de la interfaz).

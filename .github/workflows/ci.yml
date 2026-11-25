@@ -54,3 +54,5 @@ jobs:
           # Same model for every Python version; a new MODEL in parla/server.py downloads it once again.
           key: embed-${{ steps.model.outputs.name }}
       - run: python tests/run_all.py
+      - name: Conversation tests of the example bot
+        run: python -m parla.bottests examples/pizzeria.json

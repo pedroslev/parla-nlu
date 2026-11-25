@@ -4,8 +4,8 @@
 
 Parla trae un servidor [MCP](https://modelcontextprotocol.io) que le da a un asistente (Claude Code, Codex, Claude
 Desktop, Cursor o claude.ai) herramientas para armar bots: leer la guía del formato, validar, crear, entrenar,
-probar conversaciones, publicar y revisar conversaciones reales. Así le podés pedir «armame un bot que tome turnos
-para la peluquería» y lo diseña, lo crea, lo prueba y lo corrige.
+probar conversaciones, correr suites de pruebas, publicar y revisar conversaciones reales. Así le podés pedir
+«armame un bot que tome turnos para la peluquería» y lo diseña, lo crea, lo prueba y lo corrige.
 
 Parla tiene que estar corriendo mientras lo usás.
 
@@ -92,12 +92,12 @@ en el proxy (ver [security.md](security_es.md)).
 | Variable | Por defecto | Qué es |
 |---|---|---|
 | `PARLA_URL` | `http://127.0.0.1:8000` | Dónde está Parla. |
-| `PARLA_TOKEN` | vacío | Se manda como `Authorization: Bearer <token>`. Hace falta si Parla tiene usuarios: rol `owner` o `editor` para armar y probar bots; con `analyst` solo andan las herramientas que leen (`list_*`, `get_*`, `diff_agent`, `agent_format_guide`, `validate_agent`). La clave solo ve los bots que ve su usuario. |
+| `PARLA_TOKEN` | vacío | Se manda como `Authorization: Bearer <token>`. Hace falta si Parla tiene usuarios: rol `owner` o `editor` para armar y probar bots; con `analyst` solo andan las herramientas que leen (`list_*`, `get_*`, `diff_agent`, `agent_format_guide`, `validate_agent`) y `run_tests`. La clave solo ve los bots que ve su usuario. |
 | `PARLA_MCP_ALLOWED_HOSTS` | vacío | Solo con `--http` detrás de un proxy: dominios públicos separados por coma (el SDK rechaza Host desconocidos para evitar DNS rebinding). |
 
 ## Herramientas
 
-26 herramientas, un recurso (`parla://format-guide`) y un prompt (`build_bot`). En todas, `agent` puede ser el id,
+27 herramientas, un recurso (`parla://format-guide`) y un prompt (`build_bot`). En todas, `agent` puede ser el id,
 el nombre exacto o el slug. Las que cambian algo trabajan sobre el **borrador**.
 
 **Armar**
@@ -107,9 +107,9 @@ el nombre exacto o el slug. Las que cambian algo trabajan sobre el **borrador**.
 | `list_agents()` | Lista los bots: id, nombre, slug, cuándo se entrenó, intenciones y qué versión tiene cada entorno. |
 | `get_agent(agent)` | La definición completa del borrador. |
 | `agent_format_guide()` | La guía del formato de agente con ejemplos completos (también como recurso `parla://format-guide`). |
-| `validate_agent(agent_json)` | Valida sin guardar y devuelve `{ok, errors, warnings}`: tipos de paso, slots usados en pasos, `{{ }}` y condiciones, triggers, flujos de `goto`/`call`, entidades de las marcas, regex, `interrupts`, `also`, funciones (lenguaje, `run()`, sintaxis Python, entradas), slots y funciones del paso `agent`, botones con label, idiomas de `translations`, `{{ secret.X }}` fuera de un `http`. |
+| `validate_agent(agent_json)` | Valida sin guardar y devuelve `{ok, errors, warnings}`: tipos de paso, slots usados en pasos, `{{ }}` y condiciones, triggers, flujos de `goto`/`call`, entidades de las marcas, regex, `interrupts`, `also`, funciones (lenguaje, `run()`, sintaxis Python, entradas), slots y funciones del paso `agent`, botones con label, idiomas de `translations`, `{{ secret.X }}` fuera de un `http`, y las pruebas de conversación (`tests`: claves de turno desconocidas, un turno sin `user`, una regex mal escrita, intenciones, slots o flujos que no existen son errores). |
 | `create_agent(agent_json)` | Valida, crea y entrena un bot nuevo. Completa la regex de las entidades `number`, `email`, `phone` y `dni` si falta. Devuelve `{id, name, slug, trained, warnings}` (`trained.log` trae la autoevaluación). |
-| `update_agent(agent, agent_json)` | Reemplaza el borrador entero (lo que no mandes vuelve a vacío) y reentrena. Valida antes, también que existan los archivos de los pasos `file`. Producción y staging no cambian. |
+| `update_agent(agent, agent_json)` | Reemplaza el borrador entero (lo que no mandes vuelve a vacío, `tests` incluido) y reentrena. Valida antes, también que existan los archivos de los pasos `file`. Producción y staging no cambian. |
 | `train_agent(agent)` | Reentrena el borrador. |
 | `import_rasa_project(path, name=None)` | Lee los `.yml` de la carpeta de un proyecto de Rasa 3.x en tu compu (clásico o CALM), crea un agente nuevo entrenado y devuelve `{id, name, slug, warnings, validation}`: `warnings` es lo que no se pudo pasar tal cual. Ver [migrate-from-rasa_es.md](migrate-from-rasa_es.md). |
 | `delete_agent(agent, confirm)` | Borra el bot con sus conversaciones; pide `confirm=True`. |
@@ -119,13 +119,14 @@ el nombre exacto o el slug. Las que cambian algo trabajan sobre el **borrador**.
 | Herramienta | Qué hace |
 |---|---|
 | `test_conversation(agent, messages, start_data=None, keep=False, environment="draft")` | Empieza una conversación por la API (canal `mcp`) con `start_data` y manda cada mensaje. Devuelve por turno intención, confianza, entidades, `answer_to`, respuestas, flujo, slot que espera, clasificaciones, `language`, `handoff` y, si hay, `buttons`, `via`, `sources` y `files` (nombres de archivos enviados); al final, los slots, la versión usada y `problems` (los mensajes «⚠»). La conversación se borra salvo con `keep=True`. Para tocar un botón, mandá su `value`; para otro idioma, `start_data={"idioma": "pt"}`. |
+| `run_tests(agent, environment=None, names=None)` | Corre la suite de pruebas de conversación del agente (todas, o las de `names`; `environment` pisa el de cada prueba) y devuelve `{passed, total, failed, tests}` con las revisiones que fallaron en cada turno. No guarda nada. Ver [testing-bots_es.md](testing-bots_es.md). |
 | `test_function(agent, function, inputs=None)` | Corre una función (por nombre, o con la definición completa antes de guardarla) con solo las entradas que declara: `ok`, `result`/`error`, `traceback`, `logs`, `ms`, `sent` e `ignored_inputs`. |
 
 **Versiones**
 
 | Herramienta | Qué hace |
 |---|---|
-| `publish_agent(agent, note, environment=None, confirm=False)` | Congela el borrador como versión nueva; opcionalmente la pone en `staging` o `production` (esta con `confirm=True`). |
+| `publish_agent(agent, note, environment=None, confirm=False, force=False)` | Congela el borrador como versión nueva; opcionalmente la pone en `staging` o `production` (esta con `confirm=True`). Publicar a production corre antes la suite de pruebas: si falla alguna, falla con el resumen de las fallas y no publica nada, salvo con `force=True` (solo con el OK de la persona). |
 | `deploy_version(agent, environment, version, confirm=False)` | Apunta un entorno a una versión (`None` lo vacía). A production pide `confirm=True`. |
 | `list_versions(agent)` | Versiones, entornos y registro de despliegues (con `previous` para volver atrás). |
 | `diff_agent(agent, from_ref="production", to_ref="draft")` | Qué cambia entre `production`, `staging`, `draft` o un número de versión. |
@@ -162,7 +163,8 @@ OK de la persona.
 `create_agent` y `update_agent` solo cambian el **borrador**: los usuarios reales no ven nada hasta que se
 publica.
 
-1. Editar el borrador → `test_conversation` (borrador).
+1. Editar el borrador → `test_conversation` (borrador). Guardar las conversaciones importantes como `tests` (con
+   `update_agent`) y revisarlas con `run_tests`.
 2. `diff_agent` → `publish_agent(note, environment="staging")` → `test_conversation(environment="staging")`.
 3. Con el visto bueno de la persona: `deploy_version(environment="production", version=N, confirm=True)`.
 4. Rollback: `deploy_version` a production con la versión anterior (`list_versions` muestra `previous`).

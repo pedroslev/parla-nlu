@@ -375,6 +375,18 @@ try:
     assert m.diff_agent(agent_id)["changes"] == 0
     print("versiones: ok (publicar, staging, diff, deploy con confirm, conversación atada, rollback, restore)")
 
+    # ---------- pruebas de conversación: run_tests y la traba al publicar ----------
+    tested = m.get_agent(agent_id)
+    tested["tests"] = [{"name": "rota", "turns": [{"user": "asdf qwerty", "says": "nunca dice esto"}]}]
+    assert "no conozco say" in fails(m.update_agent, agent_id, dict(tested, tests=[{"name": "x", "turns": [{"user": "a", "say": "b"}]}]))
+    m.update_agent(agent_id, tested)
+    r = m.run_tests(agent_id)
+    assert not r["passed"] and r["tests"][0]["turns"][0]["failures"][0]["check"] == "says", r
+    blocked = fails(m.publish_agent, agent_id, "con pruebas", environment="production", confirm=True)
+    assert "409" in blocked and "«rota»" in blocked, blocked
+    assert m.publish_agent(agent_id, "igual", environment="production", confirm=True, force=True)["environments"] == ["production"]
+    print("pruebas: ok (run_tests, validación, publicar trabado y con force)")
+
     for call, args in ((m.create_agent, ({"name": "roto", "flows": [{"name": "f", "trigger": "nada", "steps": []}]},)),
                        (m.get_agent, ("no-existe-este-bot",)), (m.delete_agent, (created["id"],))):
         try:
