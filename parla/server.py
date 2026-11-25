@@ -19,7 +19,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import DATA, ROOT, write_json, auth, brain, channels, connect, dates, files, insights, knowledge, llm, rasa_import, runner, vault, voice
+from . import DATA, ROOT, write_json, auth, db, pii, brain, channels, connect, dates, files, insights, knowledge, llm, rasa_import, runner, vault, voice
 
 import celpy
 import pycrfsuite
@@ -483,7 +483,7 @@ def training_warnings(agent, data):
 # con la que empezó, así una publicación no cambia los pasos a mitad de una charla.
 
 ENVIRONMENTS = {"production": "Producción", "staging": "Pruebas"}
-EDITABLE_ONLY = ("id", "trained", "environments", "deployments")   # no son parte de la definición del bot
+EDITABLE_ONLY = ("id", "trained", "environments", "deployments", "retention_days", "pii_redaction")   # no son parte de la definición del bot
 
 
 def definition(agent):
@@ -1291,11 +1291,10 @@ BLANK = {"name": "Nuevo agente", "threshold": 0.75, "fallback": "No entendí, ¿
 # "auto_save": true} la ejecuta (runner.py: proceso aparte con tiempo máximo).
 # classifications: [{"name", "color", "description"}]. Un paso {"type": "classify", "classification": name} marca la
 # conversación; cada conversación guarda [{"name", "at"}] y con eso salen los reportes.
-# Conversaciones: una por archivo en agents/<agente>.sessions/<sessionId>.json, así se pueden revisar
-# después y siguen vivas si el servidor se reinicia.
-# ponytail: nunca se borran solas; sumar una limpieza por antigüedad si se acumulan miles.
+# Conversaciones: una fila por conversación en DATA/parla.db (db.py), así se pueden revisar después y siguen vivas
+# si el servidor se reinicia. retention_days del agente (o PARLA_RETENTION_DAYS) borra las viejas: ver cleanup().
 MAX_HISTORY = 500            # mensajes guardados por conversación
-SESSION_ID = re.compile(r"[A-Za-z0-9_@+-][A-Za-z0-9_.@+-]{0,99}")   # sirve tal cual como nombre de archivo
+SESSION_ID = re.compile(r"[A-Za-z0-9_@+-][A-Za-z0-9_.@+-]{0,99}")
 
 
 def path(agent_id, ext=".json"):
@@ -1417,20 +1416,33 @@ def now():
     return time.strftime("%Y-%m-%dT%H:%M:%S")
 
 
-def session_path(agent_id, sid):
-    return os.path.join(AGENTS, agent_id + ".sessions", sid + ".json")
+def settings_of(agent_id):
+    """El borrador del agente para leer sus ajustes de guardado (retention_days, pii_redaction); {} si no existe."""
+    try:
+        return load(agent_id)
+    except Exception:  # noqa: BLE001 - agente borrado o corrupto: sin ajustes
+        return {}
 
 
 def load_session(agent_id, sid):
-    if not SESSION_ID.fullmatch(sid or "") or not os.path.exists(session_path(agent_id, sid)):
+    if not SESSION_ID.fullmatch(sid or ""):
         return None
-    with open(session_path(agent_id, sid), encoding="utf-8") as f:
-        return json.load(f)
+    rows = db.q("SELECT record FROM sessions WHERE agent_id = ? AND session_id = ?", (agent_id, sid))
+    return json.loads(rows[0][0]) if rows else None
 
 
 def save_session(agent_id, record):
-    os.makedirs(os.path.dirname(session_path(agent_id, record["sessionId"])), exist_ok=True)
-    write_json(session_path(agent_id, record["sessionId"]), record)
+    """Guarda la conversación. Con pii_redaction, lo guardado va con los datos personales tapados; el registro en
+    memoria (el turno que está corriendo) no se toca."""
+    cats = pii.categories(settings_of(agent_id).get("pii_redaction"))
+    stored = pii.record(record, cats) if cats else record
+    db.q("INSERT OR REPLACE INTO sessions (agent_id, session_id, channel, started, updated, handoff, record) VALUES (?, ?, ?, ?, ?, ?, ?)",
+         (agent_id, record["sessionId"], record.get("channel"), record.get("started"), record.get("updated") or now(),
+          int(bool((record.get("handoff") or {}).get("active"))), json.dumps(stored, ensure_ascii=False)))
+
+
+def delete_session(agent_id, sid):
+    db.q("DELETE FROM sessions WHERE agent_id = ? AND session_id = ?", (agent_id, sid))
 
 
 def open_session(agent_id, sid, channel, environment="production"):
@@ -1539,39 +1551,26 @@ def session_summary(record):
             "environment": record.get("environment", "production"), "version": record.get("version")}
 
 
-_sessions = {}   # archivo -> ((mtime, tamaño), registro): la Bandeja pide la lista cada 3 s. Los que llaman solo leen.
-# ponytail: no se purga al borrar conversaciones; limpiar si se borran miles
-
-
 def sessions_of(agent_id, query):
-    """Conversaciones guardadas, filtradas por channel, classification ("__none__" = sin clasificar) y
-    fechas from/to (YYYY-MM-DD, por el día en que empezaron)."""
-    folder = os.path.join(AGENTS, agent_id + ".sessions")
-    names = sorted(os.listdir(folder)) if os.path.isdir(folder) else []
-    records = []
-    for name in names:
-        file = os.path.join(folder, name)
-        if not name.endswith(".json") or not os.path.isfile(file):
-            continue
-        stat = os.stat(file)
-        stamp = (stat.st_mtime_ns, stat.st_size)
-        hit = _sessions.get(file)
-        if hit is None or hit[0] != stamp:
-            hit = _sessions[file] = (stamp, load_session(agent_id, name[:-5]))
-        if hit[1]:
-            records.append(hit[1])
-    marks = lambda r: [m["name"] for m in r.get("classifications", [])]
+    """Conversaciones guardadas, la más reciente primero, filtradas por channel, classification ("__none__" = sin
+    clasificar), fechas from/to (YYYY-MM-DD, por el día en que empezaron) y handoff (solo las de la Bandeja)."""
+    sql, args = "SELECT record FROM sessions WHERE agent_id = ?", [agent_id]
     if query.get("channel"):
-        records = [r for r in records if r["channel"] == query["channel"]]
+        sql, args = sql + " AND channel = ?", args + [query["channel"]]
+    if query.get("from"):
+        sql, args = sql + " AND substr(started, 1, 10) >= ?", args + [query["from"]]
+    if query.get("to"):
+        sql, args = sql + " AND substr(started, 1, 10) <= ?", args + [query["to"]]
+    if query.get("handoff"):
+        sql += " AND handoff = 1"
+    # ponytail: lee y decodifica todas las del agente (reportes y analítica las recorren igual); paginar si son cientos de miles
+    records = [json.loads(row[0]) for row in db.q(sql + " ORDER BY updated DESC", args)]
+    marks = lambda r: [m["name"] for m in r.get("classifications", [])]
     if query.get("classification") == "__none__":
         records = [r for r in records if not marks(r)]
     elif query.get("classification"):
         records = [r for r in records if query["classification"] in marks(r)]
-    if query.get("from"):
-        records = [r for r in records if r["started"][:10] >= query["from"]]
-    if query.get("to"):
-        records = [r for r in records if r["started"][:10] <= query["to"]]
-    return sorted(records, key=lambda r: r["updated"], reverse=True)
+    return records
 
 
 def report(agent, query):
@@ -1686,7 +1685,7 @@ def api_v1(method, parts, data, query=None, user=None, public=False):
         if method == "GET":
             return 200, dict(session_info(agent, record), history=record["history"])
         if method == "DELETE":
-            os.remove(session_path(agent["id"], sid))
+            delete_session(agent["id"], sid)
             return 200, {"sessionId": sid, "deleted": True}
     return 405, {"error": "método no permitido acá. Mirá la documentación en la sección API de Parla"}
 
@@ -1745,8 +1744,7 @@ def audio_event(agent, data, public=False):
 
 def inbox(agent_id):
     """Conversaciones que atiende (o espera) una persona, la más reciente primero."""
-    return {"sessions": [dict(session_summary(r), handoff=r["handoff"]) for r in sessions_of(agent_id, {})
-                         if (r.get("handoff") or {}).get("active")]}
+    return {"sessions": [dict(session_summary(r), handoff=r["handoff"]) for r in sessions_of(agent_id, {"handoff": True})]}
 
 
 def human(agent_id, sid, action, text, who):
@@ -1814,10 +1812,28 @@ CODE_ONLY_OWNER = "Solo el dueño puede crear, cambiar o probar el código de la
 NOT_JSON = {"error": "mandá el pedido como JSON (Content-Type: application/json)"}
 
 
+A = r"/api/agents/([0-9a-f]{8})"
+AUDIT = (     # (método, ruta, acción): lo que queda en la auditoría cuando sale bien (Handler.audit arma el detalle)
+    ("POST", r"/api/auth/login", "login"), ("POST", r"/api/auth/logout", "logout"),
+    ("POST", r"/api/users", "user.create"), ("PUT", r"/api/users/([^/]+)", "user.update"), ("DELETE", r"/api/users/([^/]+)", "user.delete"),
+    ("POST", r"/api/users/([^/]+)/keys", "key.create"), ("DELETE", r"/api/users/([^/]+)/keys/([^/]+)", "key.revoke"),
+    ("POST", r"/api/connect", "key.create"),
+    ("POST", r"/api/agents", "agent.create"), ("POST", r"/api/agents/import/rasa", "agent.import"),
+    ("PUT", A, "agent.save"), ("DELETE", A, "agent.delete"), ("POST", A + "/train", "agent.train"),
+    ("POST", A + "/versions", "agent.publish"), ("POST", A + "/deploy", "agent.deploy"), ("POST", A + r"/versions/(\d+)/restore", "agent.restore"),
+    ("PUT", A + "/secrets", "secret.set"), ("DELETE", A + "/secrets", "secret.delete"),
+    ("POST", A + "/files", "file.upload"), ("DELETE", A + "/files/([A-Za-z0-9_-]{22})", "file.delete"),
+    ("POST", A + "/channels/telegram", "channel.telegram"),
+    ("POST", A + r"/sessions/([A-Za-z0-9_.@+-]+)/(take|release|reply)", "/inbox"),
+    ("DELETE", r"/api/v1/bots/([^/]+)/sessions/([^/]+)", "session.delete"),
+)
+
+
 class Handler(BaseHTTPRequestHandler):
     timeout = 30        # segundos sin datos y se corta la conexión (slowloris)
 
     def reply(self, data, status=200, ctype="application/json"):
+        self.status, self.sent = status, data if isinstance(data, dict) else {}       # para la auditoría (safely)
         body = data if isinstance(data, bytes) else json.dumps(data, ensure_ascii=False).encode()
         self.send_response(status)
         self.send_header("Content-Type", ctype)
@@ -1892,11 +1908,22 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply({"error": "el cuerpo tiene que ser un JSON válido"}, 400)
         if not isinstance(data, dict):
             return self.reply({"error": "el cuerpo tiene que ser un objeto JSON"}, 400)
+        self.body = data
+        if mine:
+            self.user = auth.current(self)               # para la auditoría: quién maneja usuarios o cierra sesión
         own = auth.handle(self, method, url, data)       # /api/auth/* y /api/users*
         if own is not None:
             status, body, headers = own
             self.extra_headers = headers
             return self.reply(body, status)
+        if url == "/api/audit" and method == "GET":
+            if self.user and self.user["role"] != "owner":
+                return self.reply({"error": "Solo el dueño puede ver la auditoría."}, 403)
+            try:
+                limit = min(1000, max(1, int(query.get("limit") or 200)))
+            except ValueError:
+                return self.reply({"error": "«limit» tiene que ser un número"}, 400)
+            return self.reply({"entries": db.audit_list(query.get("agent"), query.get("user"), query.get("since"), limit)})
         if url == "/api/ai/status" and method == "POST" and data.get("agent") and not auth.allowed_bot(self.user, str(data["agent"])):
             return self.reply({"error": "no existe ese agente"}, 404)
         if url == "/api/ai/status" and method == "POST":       # {"ai": config} o {"agent": id}
@@ -2069,12 +2096,14 @@ class Handler(BaseHTTPRequestHandler):
             if self.code_blocked(current.get("functions"), data.get("functions")):
                 return self.reply({"error": CODE_ONLY_OWNER}, 403)
             keep = {k: current[k] for k in ("environments", "deployments") if k in current}
+            if (current.get("channels") or {}) != (data.get("channels") or {}):
+                self.audit_action = "channel.update"     # la configuración de WhatsApp/Telegram vive en el agente
             return self.reply(store({**BLANK, **data, **keep, "id": agent_id}))
         elif action is None and method == "DELETE":
             for ext in (".json", ".model.json", ".crfsuite", ".secrets.json"):
                 if os.path.exists(path(agent_id, ext)):
                     os.remove(path(agent_id, ext))
-            shutil.rmtree(os.path.join(AGENTS, agent_id + ".sessions"), ignore_errors=True)
+            db.q("DELETE FROM sessions WHERE agent_id = ?", (agent_id,))
             shutil.rmtree(os.path.join(AGENTS, agent_id + ".versions"), ignore_errors=True)
             shutil.rmtree(os.path.join(AGENTS, agent_id + ".files"), ignore_errors=True)
             for key in [k for k in MODELS if k.startswith(agent_id + "@")]:
@@ -2084,6 +2113,44 @@ class Handler(BaseHTTPRequestHandler):
             MODELS.pop(agent_id, None)
             return self.reply({})
         return self.reply({"error": "método no permitido"}, 405)
+
+    def audit(self, method):
+        """Deja en la auditoría las escrituras que salieron bien (y los intentos de login, salgan o no). Ver AUDIT."""
+        url = urllib.parse.urlsplit(self.path).path
+        found = next(((action, m) for verb, rx, action in AUDIT if verb == method and (m := re.fullmatch(rx, url))), None)
+        if not found or (self.status is None or self.status >= 400) and found[0] != "login":
+            return
+        action, match = found
+        data, sent, groups = self.body, self.sent, match.groups()
+        agent_id = groups[0] if url.startswith("/api/agents/") and groups else None
+        user, role = (self.user or {}).get("name"), (self.user or {}).get("role")
+        if action in ("agent.create", "agent.import"):                 # el id nuevo viene en la respuesta
+            agent_id = (sent.get("agent") or sent).get("id")
+            action = "agent.import" if "import" in data or "rasa" in url else action
+        if action == "user.update" and "role" in data:
+            action = "user.role"
+        action = self.audit_action or action
+        if action.startswith("/"):                                  # bandeja: take | release | reply
+            action = "inbox." + groups[-1]
+        if action == "login":
+            user, role = str(data.get("name") or "")[:40], (sent.get("user") or {}).get("role")
+            detail = ("ok" if self.status == 200 else "falló (%s)" % self.status) + " desde " + self.client_address[0]
+        elif action.startswith(("user.", "key.")) and url.startswith("/api/users"):
+            target = urllib.parse.unquote(groups[0]) if groups else str(data.get("name") or "")
+            changes = ", ".join(("rol: %s" % data["role"]) if k == "role" else k for k in ("role", "bots", "password") if k in data)
+            detail = target + (" (%s)" % changes if changes and action in ("user.update", "user.role") else "") + \
+                (" · rol %s" % sent.get("role") if action == "user.create" else "") + \
+                (" · clave «%s»" % (sent.get("label") or groups[-1]) if action.startswith("key.") else "")
+        elif action.startswith("secret."):
+            detail = str(data.get("name") or "")[:60]                # el nombre; el valor nunca
+        else:
+            detail = {"agent.publish": "versión %s" % sent.get("version"), "agent.deploy": "%s → versión %s" % (data.get("environment"), data.get("version")),
+                      "agent.restore": "versión %s" % (groups[1] if len(groups) > 1 else ""), "file.upload": str(data.get("name") or "")[:80],
+                      "key.create": "Conectar con %s" % str(data.get("client") or "")[:30], "channel.telegram": "conectar" if data.get("connect", True) is not False else "desconectar",
+                      "session.delete": urllib.parse.unquote(groups[-1])}.get(action, groups[1] if action.startswith("inbox.") else "")
+        if url.startswith("/api/v1/bots/"):
+            agent_id = (find_bot(urllib.parse.unquote(groups[0])) or {}).get("id") or urllib.parse.unquote(groups[0])
+        db.audit(user, role, agent_id, action, detail)
 
     def code_blocked(self, before, after):
         """Con funciones prendidas, escribir su código es correr código en esta compu: solo el dueño (o sin usuarios).
@@ -2109,14 +2176,20 @@ class Handler(BaseHTTPRequestHandler):
         return origin if origin in allowed or "*" in allowed else None
 
     def safely(self, method):
+        self.status, self.sent, self.body, self.audit_action = None, {}, {}, None
         try:
             self.route(method)
         except (ValueError, llm.LLMError) as error:      # mensajes pensados para la persona
-            self.reply({"error": str(error)}, 400)
+            return self.reply({"error": str(error)}, 400)
         except Exception:  # noqa: BLE001 - agente corrupto, disco: responder sin mostrar rutas ni detalles internos
             import traceback
             traceback.print_exc(file=sys.stderr)
-            self.reply({"error": "Algo falló en el servidor. El detalle quedó en la consola de Parla."}, 500)
+            return self.reply({"error": "Algo falló en el servidor. El detalle quedó en la consola de Parla."}, 500)
+        try:
+            self.audit(method)
+        except Exception:  # noqa: BLE001 - la respuesta ya salió: que la auditoría rota no la tape, solo a la consola
+            import traceback
+            traceback.print_exc(file=sys.stderr)
 
     def do_GET(self): self.safely("GET")
     def do_POST(self): self.safely("POST")
@@ -2138,11 +2211,85 @@ def migrate():
             print("movido %s -> %s" % (old, new), flush=True)
 
 
+def migrate_sessions():
+    """Instalaciones de antes de parla.db: pasa cada agents/<id>.sessions/*.json a la base y deja la carpeta como
+    <id>.sessions.migrated (no se borra). Se puede correr de nuevo: lo que ya está en la base no se pisa."""
+    for name in sorted(os.listdir(AGENTS)):
+        folder = os.path.join(AGENTS, name)
+        if not (re.fullmatch(r"[0-9a-f]{8}\.sessions", name) and os.path.isdir(folder)):
+            continue
+        rows = []
+        for file in sorted(os.listdir(folder)):
+            try:
+                with open(os.path.join(folder, file), encoding="utf-8") as f:
+                    record = json.load(f)
+                rows.append((name[:8], record["sessionId"], record.get("channel"), record.get("started"), record.get("updated") or now(),
+                             int(bool((record.get("handoff") or {}).get("active"))), json.dumps(record, ensure_ascii=False)))
+            except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+                print("no pude migrar %s: %s (queda en la carpeta .migrated)" % (os.path.join(folder, file), error), flush=True)
+        with db.connect() as conn:
+            conn.executemany("INSERT OR IGNORE INTO sessions (agent_id, session_id, channel, started, updated, handoff, record) "
+                             "VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
+        done = folder + ".migrated"
+        os.replace(folder, done if not os.path.exists(done) else done + "-" + time.strftime("%Y%m%d%H%M%S"))
+        print("conversaciones migradas a parla.db: %s (%d)" % (name, len(rows)), flush=True)
+
+
+def _days(value):
+    """Días de retención: un entero >= 0, o None si no está puesto (o no es un número)."""
+    try:
+        return max(0, int(value)) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
+
+
+def ago(days):
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(time.time() - days * 86400))
+
+
+PII_IDLE_HOURS = 24      # con pii_redaction: una charla quieta tanto tiempo se cierra y su estado (con los datos reales) se borra
+
+
+def cleanup():
+    """Retención, al arrancar y cada hora: conversaciones sin movimiento en retention_days del agente (si no lo
+    tiene, PARLA_RETENTION_DAYS; 0 o nada = para siempre), logins vencidos y auditoría de más de PARLA_AUDIT_DAYS (365).
+    Los archivos del paso «Enviar un archivo» son del agente, no de cada conversación: no se tocan."""
+    default = _days(os.environ.get("PARLA_RETENTION_DAYS"))
+    for (agent_id,) in db.q("SELECT DISTINCT agent_id FROM sessions"):
+        agent = settings_of(agent_id)
+        days = _days(agent.get("retention_days"))
+        days = default if days is None else days
+        if days:
+            db.q("DELETE FROM sessions WHERE agent_id = ? AND updated < ?", (agent_id, ago(days)))
+        if pii.categories(agent.get("pii_redaction")):
+            idle = db.q("SELECT record FROM sessions WHERE agent_id = ? AND updated < ? AND handoff = 0 AND json_extract(record, '$.ended') = 0",
+                        (agent_id, ago(PII_IDLE_HOURS / 24)))
+            for (raw,) in idle:
+                record = json.loads(raw)
+                record.update(ended=True, state={})      # sin tocar «updated»: la retención sigue contando desde la última charla
+                save_session(agent_id, record)
+    db.q("DELETE FROM logins WHERE expires < ?", (time.time(),))
+    db.q("DELETE FROM audit WHERE at < ?", (ago(_days(os.environ.get("PARLA_AUDIT_DAYS")) or 365),))
+
+
+def _hourly():
+    while True:
+        time.sleep(3600)
+        try:
+            cleanup()
+        except Exception:  # noqa: BLE001 - que la limpieza no se muera: lo intenta de nuevo en una hora
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+
+
 def main():
     migrate()
     os.makedirs(AGENTS, exist_ok=True)
+    migrate_sessions()
     if not os.listdir(AGENTS):
         create(DEMO)
+    cleanup()
+    threading.Thread(target=_hourly, daemon=True).start()
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     print("Listo: http://127.0.0.1:%d  (Ctrl+C para salir)" % port, flush=True)
     # ponytail: un hilo por pedido (la IA y la voz tardan segundos); dos mensajes a la vez en la MISMA conversación

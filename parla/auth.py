@@ -17,12 +17,11 @@ import threading
 import time
 import urllib.parse
 
-from . import DATA, agents_dir, write_json
+from . import DATA, agents_dir, db, write_json
 ROLES = ("owner", "editor", "analyst", "agent")
 SESSION_HOURS = 12
 LOCK = threading.Lock()
-# ponytail: sesiones en memoria (se pierden al reiniciar el servidor: hay que volver a entrar); a disco si molesta
-SESSIONS = {}      # token -> (nombre, vence)
+# sesiones de login: tabla logins de parla.db (db.py), con el SHA-256 del token: sobreviven a un reinicio
 FAILURES = {}      # (nombre, ip) -> [instantes de intentos fallidos]
 NAME = re.compile(r"[\w.@+ -]{1,40}")
 
@@ -136,11 +135,11 @@ def current(handler, users=None):
         except http.cookies.CookieError:
             pass
         token = cookie["parla_session"].value if "parla_session" in cookie else None
-        found = SESSIONS.get(token) if token else None
-        if found and found[1] > time.time():
-            name = found[0]
+        found = db.q("SELECT name, expires FROM logins WHERE token = ?", (_digest(token),)) if token else None
+        if found and found[0][1] > time.time():
+            name = found[0][0]
         elif found:
-            SESSIONS.pop(token, None)
+            db.q("DELETE FROM logins WHERE token = ?", (_digest(token),))
     user = _find(users, name) if name else None
     return {"name": user["name"], "role": user["role"], "bots": _scope(user)} if user else None
 
@@ -164,15 +163,18 @@ def _cookie(handler, token, age):
     return {"Set-Cookie": "parla_session=%s; HttpOnly; SameSite=Strict; Path=/; Max-Age=%d%s" % (token, age, secure)}
 
 
+def _digest(token):
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 def _login(handler, name):
     token = secrets.token_urlsafe(32)
-    SESSIONS[token] = (name, time.time() + SESSION_HOURS * 3600)
+    db.q("INSERT INTO logins (token, name, expires) VALUES (?, ?, ?)", (_digest(token), name, time.time() + SESSION_HOURS * 3600))
     return _cookie(handler, token, SESSION_HOURS * 3600)
 
 
 def _drop_sessions(name):
-    for token in [t for t, (n, _) in SESSIONS.items() if n.lower() == name.lower()]:
-        SESSIONS.pop(token, None)
+    db.q("DELETE FROM logins WHERE name = ?", (name,))       # siempre el user["name"] exacto, como en _login
 
 
 def handle(handler, method, url, data):
@@ -215,7 +217,7 @@ def _handle(handler, method, url, data):
         except http.cookies.CookieError:
             pass
         if "parla_session" in cookie:
-            SESSIONS.pop(cookie["parla_session"].value, None)
+            db.q("DELETE FROM logins WHERE token = ?", (_digest(cookie["parla_session"].value),))
         return 200, {"enabled": bool(users), "user": None}, _cookie(handler, "", 0)
     if url.startswith("/api/auth/"):
         return 404, {"error": "no existe"}, {}
