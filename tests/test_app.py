@@ -293,8 +293,12 @@ res = runner.run_function(py, {"cantidad": "2", "gusto": "muzza"})
 assert res["ok"] and res["result"] == {"total": 19000, "extra": 1} and res["logs"] == "calculando", res
 js = {"name": "saludo", "language": "javascript", "inputs": ["nombre"],
       "code": "async function run(inputs) { console.log('hola log'); return { saludo: 'Hola ' + inputs.nombre.toUpperCase() } }"}
-res = runner.run_function(js, {"nombre": "ana"})
-assert res["ok"] and res["result"] == {"saludo": "Hola ANA"} and "hola log" in res["logs"], res
+import shutil
+if shutil.which("node"):   # sin Node.js las funciones en JavaScript no corren (lo prueba el mensaje de abajo)
+    res = runner.run_function(js, {"nombre": "ana"})
+    assert res["ok"] and res["result"] == {"saludo": "Hola ANA"} and "hola log" in res["logs"], res
+else:
+    assert "Node.js" in runner.run_function(js, {"nombre": "ana"})["error"]
 for code, expected in [("def run(i):\n    return 1/0", "ZeroDivisionError"), ("x = 1", "run(inputs)"),
                        ("def run(i):\n    while True: pass", "segundos"), ("def run(i):\n  return {'a': 1", "SyntaxError")]:
     res = runner.run_function({"language": "python", "code": code}, {})

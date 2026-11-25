@@ -19,6 +19,9 @@ for name in names:
     print("%-8s %-10s %5.1fs  %s" % (state, name, time.time() - t, skipped))
     if r.returncode:
         failed += 1
-        print("\n".join("    " + line for line in out.strip().splitlines()[-15:]))
+        tail = out.strip().splitlines()[-15:]
+        print("\n".join("    " + line for line in tail))
+        if os.environ.get("GITHUB_ACTIONS"):   # anotación visible en GitHub sin abrir el log
+            print("::error title=test_%s::%s" % (name, "%0A".join(tail).replace("\r", "")))
 print("\n%d de %d pasaron%s" % (len(names) - failed, len(names), "" if not failed else ", %d fallaron" % failed))
 sys.exit(1 if failed else 0)
