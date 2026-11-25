@@ -1,0 +1,65 @@
+name: Bug report / Reportar un error
+description: Something doesn't work as documented. / Algo no funciona como dice la documentación.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! English or Spanish are both fine. **Security problems: don't open an issue**, use
+        https://github.com/pedroslev/parla-nlu/security/advisories/new (see SECURITY.md).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / ¿Qué pasó?
+      description: What you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / Pasos para reproducirlo
+      description: If it's about a bot, attach a minimal exported agent JSON (remove secrets and personal data).
+      placeholder: |
+        1. Import examples/pizzeria.json
+        2. Train
+        3. Write "..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Parla version or commit / Versión o commit
+      placeholder: "0.9.0 or a1b2c3d"
+    validations:
+      required: true
+  - type: dropdown
+    id: run
+    attributes:
+      label: How do you run it? / ¿Cómo lo corrés?
+      options:
+        - Local (app.py)
+        - Docker / Docker Compose
+        - Kubernetes / k3s
+        - Other / Otro
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: OS, Python version, browser / Sistema, Python, navegador
+      placeholder: "Ubuntu 24.04, Python 3.12, Firefox 140"
+  - type: checkboxes
+    id: optional
+    attributes:
+      label: Optional features involved / Funciones opcionales
+      options:
+        - label: Local AI (Ollama / OpenAI-compatible)
+        - label: Voice (faster-whisper / piper)
+        - label: MCP server
+        - label: Functions (Python / JavaScript)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Registros
+      description: Server output or browser console. Remove secrets and personal data.
+      render: text
