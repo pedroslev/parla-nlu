@@ -76,4 +76,5 @@ Sí, cualquier servidor local compatible con OpenAI (LM Studio, llama.cpp server
 Con el selector de la interfaz: Claro, Oscuro o Colorido. Se recuerda en ese navegador.
 
 **¿Cuál es la licencia?**
-Todavía no está definida.
+[Apache-2.0](../LICENSE). Todas las funciones están en el proyecto open source; no hay una edición paga que se
+guarde funciones (ver el [README](../README_es.md#licencia)).

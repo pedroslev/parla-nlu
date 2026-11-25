@@ -243,5 +243,6 @@ protegelo en el proxy y configurá `PARLA_MCP_ALLOWED_HOSTS` (los `Host` aceptad
 
 ## Reportar una vulnerabilidad
 
-No abras un issue público. Abrí un aviso de seguridad privado (**Security → Report a vulnerability**, «GitHub
-security advisory») en el repositorio de Parla, con los pasos para reproducirlo. <!-- TODO: link al repositorio -->
+No abras un issue público. Abrí un aviso de seguridad privado en
+<https://github.com/pedroslev/parla-nlu/security/advisories/new> (**Security → Report a vulnerability** en el
+repositorio), con los pasos para reproducirlo. La política completa está en [SECURITY.md](../SECURITY.md).

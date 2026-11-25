@@ -83,4 +83,5 @@ With the interface's selector: Claro (Light), Oscuro (Dark) or Colorido (Colorfu
 browser.
 
 **What's the license?**
-To be defined.
+[Apache-2.0](../LICENSE). Every feature is in the open-source project; there is no paid edition that holds
+features back (see the [README](../README.md#license)).
