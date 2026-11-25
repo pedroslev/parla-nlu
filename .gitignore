@@ -12,3 +12,6 @@ users.json
 *.secrets.json
 
 .impeccable/
+
+# Claude Code worktrees and local settings
+.claude/
