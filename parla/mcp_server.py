@@ -283,12 +283,13 @@ def validate(data, files=None):
     # canales (WhatsApp, Telegram): acá solo lo que no es secreto; los tokens van en «Claves»
     chans = agent.get("channels")
     if chans is not None:
-        if not isinstance(chans, dict) or set(chans) - {"public_url", "whatsapp", "telegram"}:
-            errors.append("«channels» tiene que ser {public_url, whatsapp: {enabled, phone_number_id}, telegram: {enabled}}")
+        if not isinstance(chans, dict) or set(chans) - {"public_url", "whatsapp", "telegram", "phone"}:
+            errors.append("«channels» tiene que ser {public_url, whatsapp: {enabled, phone_number_id}, telegram: {enabled}, phone: {…}}")
         else:
             if chans.get("public_url") not in (None, "") and not re.fullmatch(r"https://[^/\s]+(/[^\s]*)?", str(chans["public_url"])):
                 errors.append("channels: «public_url» tiene que ser https://dominio")
-            for name, keys in (("whatsapp", {"enabled", "phone_number_id"}), ("telegram", {"enabled"})):
+            for name, keys in (("whatsapp", {"enabled", "phone_number_id"}), ("telegram", {"enabled"}),
+                               ("phone", {"enabled", "provider", "language", "voice", "handoff_to", "tts", "finish_on_key", "greeting"})):
                 conf = chans.get(name)
                 if conf is None:
                     continue
@@ -297,6 +298,13 @@ def validate(data, files=None):
                     continue
                 if "enabled" in conf and not isinstance(conf["enabled"], bool):
                     errors.append("channels: «%s.enabled» tiene que ser true o false" % name)
+            tel = chans.get("phone") if isinstance(chans.get("phone"), dict) else {}
+            if tel.get("provider") not in (None, "twilio", "jambonz"):
+                errors.append("channels: «phone.provider» tiene que ser twilio o jambonz")
+            if tel.get("tts") not in (None, "provider", "parla"):
+                errors.append("channels: «phone.tts» tiene que ser provider (la voz de Twilio/jambonz) o parla (piper, local)")
+            if tel.get("handoff_to") not in (None, "") and not re.fullmatch(r"\+?[0-9]{3,20}|sips?:\S+", str(tel["handoff_to"])):
+                errors.append("channels: «phone.handoff_to» tiene que ser un número (+5491112345678) o sip:usuario@dominio")
             wa = chans.get("whatsapp") if isinstance(chans.get("whatsapp"), dict) else {}
             if wa.get("phone_number_id") not in (None, "") and not re.fullmatch(r"\d{1,30}", str(wa["phone_number_id"])):
                 errors.append("channels: «whatsapp.phone_number_id» son solo números (el «Phone number ID» de Meta)")
@@ -1194,6 +1202,12 @@ propias para cancelar o pedir un humano: ya están.
 - Solo lo que no es secreto. Los tokens (WHATSAPP_TOKEN, WHATSAPP_APP_SECRET, WHATSAPP_VERIFY_TOKEN, TELEGRAM_TOKEN)
   los carga la persona en «Claves»; vos nunca. Contesta lo publicado en Producción; sesiones wa-<teléfono> / tg-<chat>.
   Botones: WhatsApp muestra hasta 3 como botones (título ≤20 letras) y hasta 10 como lista.
+
+## Teléfono: channels.phone {enabled, provider: "twilio"|"jambonz", language, voice, handoff_to, tts: "provider"|"parla", finish_on_key, greeting}
+- Llamadas por Twilio o jambonz. Claves en «Claves»: TWILIO_AUTH_TOKEN, o JAMBONZ_WEBHOOK_SECRET y/o
+  JAMBONZ_BASIC_USER + JAMBONZ_BASIC_PASSWORD. Sesiones call-<CallSid>, canal phone. Botones: se anuncian
+  «Marcá 1 para…» (hasta 9). Un paso «end» corta la llamada; pasar a una persona transfiere a handoff_to.
+  Textos cortos y sin emojis ni links: se leen en voz alta.
 
 ## Plantillas {{ }} y CEL
 - En textos: {{ slot }} o {{ expresión CEL }}. Un slot vacío se muestra como "". Si la expresión usa algo que no

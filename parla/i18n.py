@@ -108,6 +108,7 @@ EN = {
     "falta la dirección pública con https:// (PARLA_PUBLIC_URL o «Dirección pública» acá arriba)": "missing the public https:// address (PARLA_PUBLIC_URL or “Public address” above)",
     "el canal está apagado: la respuesta de la Bandeja no se envió": "the channel is off: the reply from the Inbox wasn't sent",
     "Telegram: %s": "Telegram: %s",
+    "falta «handoff_to»: no hay a dónde transferir la llamada": "missing “handoff_to”: there's nowhere to transfer the call",
     "sin respuesta: %s": "no response: %s",
     # ---------- asistentes de IA (connect.py) ----------
     "%s no es un JSON válido; no lo toqué para no romperlo. Arreglalo o agregá Parla a mano.": "%s isn't valid JSON; I left it alone so as not to break it. Fix it or add Parla manually.",
@@ -394,6 +395,7 @@ PT = {
     "falta la dirección pública con https:// (PARLA_PUBLIC_URL o «Dirección pública» acá arriba)": "falta o endereço público com https:// (PARLA_PUBLIC_URL ou “Endereço público” aqui em cima)",
     "el canal está apagado: la respuesta de la Bandeja no se envió": "o canal está desativado: a resposta da Caixa de entrada não foi enviada",
     "Telegram: %s": "Telegram: %s",
+    "falta «handoff_to»: no hay a dónde transferir la llamada": "falta “handoff_to”: não há para onde transferir a ligação",
     "sin respuesta: %s": "sem resposta: %s",
     # ---------- asistentes de IA (connect.py) ----------
     "%s no es un JSON válido; no lo toqué para no romperlo. Arreglalo o agregá Parla a mano.": "%s não é um JSON válido; não mexi para não quebrá-lo. Corrija-o ou adicione o Parla manualmente.",
