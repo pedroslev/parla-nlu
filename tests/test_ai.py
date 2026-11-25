@@ -63,6 +63,19 @@ DOWN = {"ai": {"enabled": True, "url": "http://127.0.0.1:9"}, **OFF}
 s = llm.status(DOWN["ai"])
 assert not s["ok"] and "Ollama" in s["hint"], s
 assert brain.rescue_intent(DOWN, "hola", NLU) is NLU and brain.fallback(DOWN, {}, "x") is None
+
+# una pregunta en medio de una pregunta: sin IA, solo si la base de conocimiento la contesta
+knowledge.search = lambda agent, q, k=3: [{"text": "P: ¿Qué es una cita presencial?\nR: Es la que se atiende en la sede.",
+                                           "title": "Citas", "doc": "k1", "score": 0.8}]
+r = brain.side_question(OFF, {}, "que es presencial?", "¿Presencial o virtual?")
+assert r and r["text"] == "Es la que se atiende en la sede." and r["via"] == "knowledge", r
+assert brain.side_question(OFF, {}, "presencial", "¿Presencial o virtual?") is None          # no parece pregunta
+knowledge.search = lambda agent, q, k=3: []
+assert brain.side_question(OFF, {}, "¿qué es eso?", "¿Presencial o virtual?") is None          # sin datos ni IA: sigue el flujo
+assert brain.side_question(DOWN, {}, "¿qué es eso?", "x") is None                             # IA caída: igual
+# opción dicha con otras palabras: sin IA (o caída) no adivina
+SI_NO = {"name": "si_no", "values": ["si", "no"]}
+assert brain.understand(OFF, {}, "dale nomás", "¿Te sirve?", SI_NO) is None and brain.understand(DOWN, {}, "dale", "x", SI_NO) is None
 knowledge.search = real_search
 
 # ---------- con el modelo local de verdad ----------
@@ -96,7 +109,7 @@ else:
     assert timed("fill_slot", lambda: brain.fill_slot(ON, name, "hola, me llamo Juan Pérez", {})) == "Juan Pérez"
     assert brain.fill_slot(ON, name, "quiero un turno", {}) is None
     assert brain.fill_slot(ON, {"name": "fecha", "entity": "fecha"}, "el jueves a la tarde", {}).endswith("T16:00")
-    knowledge.search = lambda agent, q, k=3: [{"text": "Los envíos a domicilio cuestan $1500 en CABA.", "title": "Envíos", "doc": "k2", "score": 0.7}]
+    knowledge.search = lambda agent, q, k=3: [{"text": "Los envíos a domicilio cuestan $1500 en CABA.", "title": "Envíos", "doc": "k2", "score": 0.85}]   # por encima del umbral por defecto (0.75 con embeddinggemma)
     r = timed("fallback_knowledge", lambda: brain.fallback(ON, {}, "cuánto sale el envío?"))
     assert r["via"] == "knowledge" and "1500" in r["text"] and r["sources"][0]["doc"] == "k2", r
     knowledge.search = lambda agent, q, k=3: []

@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import sys
+import threading
 import time
 import unicodedata
 import urllib.error
@@ -17,14 +18,20 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import DATA, ROOT, auth, brain, connect, dates, insights, knowledge, llm, runner, vault, voice
+from . import DATA, ROOT, auth, brain, connect, dates, files, insights, knowledge, llm, runner, vault, voice
 
 import celpy
 import pycrfsuite
 
 HERE = os.path.join(ROOT, "web")              # index.html y static/
 AGENTS = os.path.join(DATA, "agents")
-MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+# Embeddings para intenciones, respuestas por significado y base de conocimiento. Elegido midiendo con el bot de citas
+# (50 respuestas y 41 pedidos escritos a mano): embeddinggemma con prefijo de similitud dio 44/50 sin errores en ~10 ms,
+# contra 40/50 con 2 errores de paraphrase-multilingual-MiniLM y 43/50 con 2 de mpnet.
+MODEL = "google/embeddinggemma-300m"
+EMBED_PREFIX = "task: sentence similarity | query: "     # embeddinggemma rinde mejor con el prefijo de la tarea
+# Fijo al repo (no a PARLA_DATA): las pruebas usan datos temporales y no deben bajar 1,2 GB cada vez.
+EMBED_CACHE = os.environ.get("PARLA_EMBED_CACHE") or os.path.join(ROOT, "data", "models", "embeddings")
 ANNOT = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")      # "[1234](pedido)" dentro de una frase
 TEMPLATE = re.compile(r"\{\{(.+?)\}\}", re.S)        # "{{ slot }}" o "{{ expresión CEL }}" dentro de un texto
 MAX_STEPS = 200                                      # corta flujos que se quedan en loop
@@ -32,7 +39,7 @@ STEP_NAMES = {"message": "Enviar un mensaje", "ask": "Hacer una pregunta", "set"
               "http": "Consultar un servicio", "if": "Tomar un camino", "goto": "Seguir con otro flujo",
               "classify": "Clasificar la conversación",
               "function": "Ejecutar una función", "handoff": "Pasar con una persona", "call": "Llamar a otro flujo",
-              "agent": "Dejar que la IA converse"}
+              "agent": "Dejar que la IA converse", "file": "Enviar un archivo"}
 MAX_DEPTH = 5                                        # flujos apilados: subflujos e interrupciones
 # "flujos del sistema": reparaciones de la charla que el dueño puede editar (agent["system"])
 SYSTEM_DEFAULTS = {
@@ -86,8 +93,8 @@ def _encode(texts):
     import numpy as np
     if _model is None:
         from fastembed import TextEmbedding
-        _model = TextEmbedding(MODEL)
-    return [v / np.linalg.norm(v) for v in _model.embed(texts)]
+        _model = TextEmbedding(MODEL, cache_dir=EMBED_CACHE)
+    return [v / np.linalg.norm(v) for v in _model.embed([EMBED_PREFIX + t for t in texts])]
 
 
 knowledge.encode = _encode   # la base de conocimiento usa el mismo modelo, cargado una sola vez
@@ -109,6 +116,61 @@ def classify(agent, text):
         sim = float(_vectors[phrase] @ query)
         best[intent] = max(sim, best.get(intent, -1.0))
     return sorted(best.items(), key=lambda kv: -kv[1])
+
+
+# ---------- Entender una respuesta por significado (sin IA generativa) ----------
+# Cuando la respuesta no trae literalmente una opción («la quiero desde mi casa» a «¿presencial o virtual?»), se compara
+# por significado con: las formas de decir cada opción (entity["phrasings"], más valores y sinónimos), las acciones
+# que pueden interrumpir (sus frases de ejemplo) y la charla que no contesta nada (saludar, agradecer). Mismo modelo y
+# misma caché que classify: unos milisegundos. Solo decide si está claro; si no, None (sigue la IA o el «No reconocí»).
+SMALL_TALK = {"es": ["gracias", "muchas gracias", "hola", "buenas", "jaja", "ok gracias", "un momento", "espera",
+                     "dame un segundo", "ya te digo", "mmm", "a ver"],
+              "pt": ["obrigado", "olá", "um momento", "espera"], "en": ["thanks", "hello", "one moment", "wait"]}
+READ_MIN, READ_MARGIN, READ_ACTION_MARGIN = 0.60, 0.04, 0.10   # medidos con embeddinggemma y el bot de citas (44/50, 0 errores)
+
+
+def read_answer(agent, entity, text, current_flow=None, lang="es"):
+    """{"tipo": "responde"|"accion"|"nada", "opcion", "accion", "score", "por"} o None si no está claro.
+    Solo para entidades con «phrasings» (el armador enseñó qué significa cada opción): comparar palabras sueltas contra
+    una lista cerrada llenaba valores que la persona no dijo («el domingo» -> «sábado»)."""
+    text = (text or "").strip().lower()
+    if not text or not (entity or {}).get("phrasings"):
+        return None
+    flows = {f.get("trigger"): f for f in agent["flows"] if f.get("trigger")}
+    current = next((f.get("trigger") for f in agent["flows"] if f.get("name") == current_flow), None)
+    labeled = []
+    for v in (entity or {}).get("values") or []:
+        ways = [v] + ((entity.get("synonyms") or {}).get(v) or []) + ((entity.get("phrasings") or {}).get(v) or [])
+        labeled += [(w, ("responde", v)) for w in ways]
+    for i in agent["intents"]:
+        flow = flows.get(i["name"])
+        if not flow or i["name"] == current:
+            continue
+        kind = "nada" if flow.get("interrupts", True) is False else "accion"     # saludar o agradecer no interrumpe
+        labeled += [(ANNOT.sub(r"\1", e).strip(), (kind, i["name"] if kind == "accion" else None)) for e in i["examples"]]
+    labeled += [(w, ("nada", None)) for w in SMALL_TALK.get(lang, SMALL_TALK["es"])]
+    labeled = [(w.lower(), label) for w, label in labeled if w and w.strip()]
+    missing = sorted({w for w, _ in labeled if w not in _vectors})
+    if missing:
+        _vectors.update(zip(missing, _encode(missing)))
+    query = _encode([text])[0]
+    best = {}
+    for phrase, label in labeled:
+        sim = float(_vectors[phrase] @ query)
+        if sim > best.get(label, (-1.0, ""))[0]:
+            best[label] = (sim, phrase)
+    ranked = sorted(best.items(), key=lambda kv: -kv[1][0])
+    if not ranked:
+        return None
+    (kind, value), (score, phrase) = ranked[0]
+    second = ranked[1][1][0] if len(ranked) > 1 else -1.0
+    if score < READ_MIN or score - second < READ_MARGIN:
+        return None
+    answer = max((v[0] for (k, _), v in best.items() if k == "responde"), default=-1.0)
+    if kind == "accion" and score - answer < READ_ACTION_MARGIN:
+        return None          # se esperaba una respuesta: una acción solo gana si se despega claro (si no, que decida la IA)
+    return {"tipo": kind, "opcion": value if kind == "responde" else None, "accion": value if kind == "accion" else None,
+            "score": round(score, 3), "por": phrase}
 
 
 # ---------- Entidades aprendidas: un CRF, como el CRFEntityExtractor de Rasa ----------
@@ -818,6 +880,12 @@ def run(agent, st, nlu, text, out, trace):
                 start_handoff(st, step.get("reason") or "lo pasó el flujo «%s»" % flow["name"])
                 trace.append("pasa con una persona")
                 return "handoff"
+            elif kind == "file":
+                sent = files.find(agent.get("id"), step.get("file")) if step.get("file") else None
+                if not sent:
+                    raise ValueError("no existe el archivo «%s»: subilo de nuevo" % step["file"] if step.get("file") else "elegí qué archivo enviar")
+                out.append({"text": render(localized(step, st), ctx).strip() or sent["name"], "buttons": [], "file": sent})
+                trace.append("envía el archivo «%s»" % sent["name"])
             elif kind == "agent":
                 if agent_step(agent, st, step, text, ctx, out, trace):
                     return "wait"
@@ -937,17 +1005,30 @@ def handle(agent, st, text, parse=parse):
     entities = {e["entity"]: e["value"] for e in reversed(nlu["entities"])}
     waiting = st.pop("waiting", None)
     busy = waiting is not None and st.get("flow")
+    before = slots.get(waiting) if waiting else None    # si resulta que era otra pregunta, el slot vuelve a esto
+    hint = st.pop("hint", None)     # opción que el bot acaba de explicar: un «ah, entonces sí» la elige
+    asked = ((st.get("last_bot") or [{}])[-1] or {}).get("text") or ""
     for slot in agent["slots"]:
         # El slot se llena solo con su entidad. Mientras se espera una respuesta, solo el slot preguntado:
         # si no, el número de una dirección terminaría guardado como cantidad.
         if slot.get("entity") in entities and waiting in (None, slot["name"]):
             slots[slot["name"]] = entities[slot["entity"]]
+    waited_entity = next((s.get("entity") for s in agent["slots"] if s["name"] == waiting), None) if busy else None
+    said_values = {e["value"] for e in nlu["entities"] if waited_entity and e["entity"] == waited_entity}
+    if len(said_values) > 1:
+        # «hablar DE UNA urgencia, NO PUEDO respirar»: trae un «sí» y un «no». No se elige por la palabra que aparece primero
+        slots[waiting] = before
+        entities.pop(waited_entity, None)
+        trace.append("respuesta ambigua: %s" % " y ".join(sorted(map(str, said_values))))
     if busy and button is not None and waiting:
         slots[waiting] = button                          # tocó un botón de la pregunta
     # Mientras espera una respuesta, "30.123.456" o "Pedro" pueden parecerse a «repetí» o «cancelar»: ahí los comportamientos
     # del sistema (y las interrupciones) piden más seguridad, y no cuentan si el mensaje ya trajo el dato que se pedía.
     strict = max(threshold, 0.75) if busy else threshold
     floor = max(strict, 0.65)        # «repetí», «cancelar»: frases cortas que se parecen a cualquier cosa
+    spec_waiting = next((s for s in agent["slots"] if s["name"] == waiting), {}) if busy else {}
+    if busy and not spec_waiting.get("entity") and spec_waiting.get("fill") != "ai":
+        floor = max(floor, 0.92)     # pregunta de texto libre: «jiménez» es una respuesta, no «repetí»
     answered = busy and waiting and any(s["name"] == waiting and s.get("entity") in entities for s in agent["slots"])
     system = (nlu["intent"] if nlu["intent"] in RESERVED.values() and nlu["confidence"] >= floor and button is None
               and not answered else None)
@@ -960,17 +1041,35 @@ def handle(agent, st, text, parse=parse):
     if system == "__handoff__":
         start_handoff(st, "pidió hablar con una persona")
         return turn(agent, st, [localized(conf["handoff"], st)], nlu, ["pasa con una persona"])
-    answer_to, rejected, via = waiting, False, None
+    answer_to, rejected, via, sources = waiting, False, None, []
+    urgent = flow_for(agent, nlu, strict) if busy and button is None else None
+    if urgent and urgent.get("interrupts") == "always" and urgent["name"] != st["flow"]:
+        slots[waiting] = before
+        st["flow"], st["pc"], st["stack"] = urgent["name"], 0, []    # no vuelve: lo urgente reemplaza lo que se hacía
+        trace.append("«%s» corta todo (interrupts: always)" % urgent["name"])
+        busy, answer_to = None, None
     if st.get("agent") and st.get("flow"):              # la charla está en un paso de IA: le toca a ella
         answer_to = None
     elif busy:
-        fixed = corrections(agent, st, waiting, entities) if conf["correction"].get("enabled") else None
-        if fixed:
+        # «¿qué es presencial?» a «¿presencial o virtual?»: se contesta (base de conocimiento) y se vuelve a preguntar
+        side = hook(brain.side_question, agent, st, text, asked) if button is None else None
+        fixed = None if side else corrections(agent, st, waiting, entities) if conf["correction"].get("enabled") else None
+        if side:
+            asked_about = slots.get(waiting)            # «¿qué es presencial?» trajo «presencial»
+            slots[waiting] = before
+            if asked_about not in (None, ""):
+                st["hint"] = {"slot": waiting, "value": asked_about}
+            out.append(side["text"])
+            st["pc"] -= 1
+            trace.append("pregunta otra cosa: la contesta y vuelve a preguntar")
+            answer_to, via, sources = None, side.get("via"), side.get("sources") or []
+        elif fixed:
             st["pc"] = fixed[0] + 1                     # sigue desde después de esa pregunta: se recalcula lo que sigue
             out.append(localized(conf["correction"], st))
             trace.append("corrige " + ", ".join(fixed[1]))
             answer_to = None
         elif slots.get(waiting) in (None, ""):
+            read = None                                 # lo que entendió la IA del turno (si se le preguntó)
             spec = next((s for s in agent["slots"] if s["name"] == waiting), {})
             entity = next((e for e in agent["entities"] if e["name"] == spec.get("entity")), None)
             if spec.get("fill") == "ai":
@@ -980,10 +1079,51 @@ def handle(agent, st, text, parse=parse):
                 else:
                     slots[waiting], via = value, "ia"
             elif entity and (entity.get("regex") or entity.get("values") or entity.get("kind") == "date"):
-                rejected = True                          # se esperaba un formato u opción
+                # Se esperaba un formato u opción y no vino. En este orden:
+                # 1. una contrapropuesta que el paso acepta («also»): «jueves» a «¿te sirve?». El slot queda vacío y el
+                #    flujo sigue: los pasos que vienen leen `entities` y deciden (buscar ese día, cambiar de médico…).
+                #    Va antes que la IA: la IA leyó «jueves» como «sí» y confirmó una cita.
+                # 2. con IA, el turno entero con la charla reciente: contesta (con otras palabras, o «entonces sí»
+                #    después de una explicación), pregunta otra cosa, pide otra acción, o nada (saludar o agradecer
+                #    con una pregunta pendiente no interrumpe). Sin IA: interrumpe una intención clara, si no «No reconocí».
+                _, steps = steps_of(agent, st["flow"])
+                ask = steps[st["pc"] - 1] if 0 < st["pc"] <= len(steps) else {}
+                also = [e for e in ask.get("also") or [] if e in entities] if ask.get("type") == "ask" else []
+                agreed = not also and hint and hint.get("slot") == waiting and brain.affirmative(text)
+                # por significado primero (milisegundos); la IA generativa solo si eso no está seguro
+                read = None if also or agreed else hook(read_answer, agent, entity, text, st["flow"], st.get("lang") or "es")
+                how = "por significado" if read else "la IA"
+                if read is None and not (also or agreed):
+                    read = hook(brain.understand, agent, st, text, asked, entity, st["flow"])
+                if also:
+                    trace.append("contestó con otro dato: %s" % ", ".join(also))
+                elif agreed:
+                    slots[waiting] = hint["value"]
+                    trace.append("asintió a la opción que se le explicó: «%s»" % hint["value"])
+                elif read and read["tipo"] == "responde" and read["opcion"]:
+                    slots[waiting], via = read["opcion"], ("significado" if how == "por significado" else "ia")
+                    trace.append("entendió %s «%s» como «%s»%s" % (how, text, read["opcion"],
+                                                                 " (parecido a «%s»)" % read["por"] if read.get("por") else ""))
+                elif read and read["tipo"] == "pregunta":
+                    side = hook(brain.answer, agent, st, text) or {}
+                    slots[waiting] = before
+                    out.append(side.get("text") or REJECT.get(st["lang"], REJECT["es"]))
+                    st["pc"] -= 1
+                    trace.append("la IA vio una pregunta: la contesta y vuelve a preguntar")
+                    answer_to, via, sources = None, side.get("via"), side.get("sources") or []
+                else:
+                    rejected = True
+                    if read:
+                        trace.append("%s lo entendió como «%s»" % (how, read["accion"] or read["tipo"]))
             else:
                 slots[waiting] = text
-            other = flow_for(agent, nlu, strict) if rejected else None
+            if rejected and read is not None:   # con IA, interrumpe solo lo que la IA vio como otra acción
+                other = next((f for f in agent["flows"] if read.get("accion") and f.get("trigger") == read["accion"]), None)
+            else:
+                other = flow_for(agent, nlu, strict) if rejected else None
+                if other and other.get("interrupts", True) is False:
+                    trace.append("«%s» no interrumpe una pregunta" % other["name"])
+                    other = None
             if other and other["name"] != st["flow"] and len(st.get("stack") or []) < MAX_DEPTH:
                 # ponytail: solo interrumpe una respuesta inválida; una pregunta de texto libre toma cualquier cosa
                 st.setdefault("stack", []).append({"flow": st["flow"], "pc": st["pc"] - 1, "kind": "interrupt", "waiting": waiting})
@@ -991,7 +1131,9 @@ def handle(agent, st, text, parse=parse):
                 trace.append("interrumpe con «%s»; después vuelve a «%s»" % (other["name"], st["stack"][-1]["flow"]))
                 answer_to, rejected = None, False
             elif rejected:
-                out.append(REJECT.get(st["lang"], REJECT["es"]))
+                small_talk = read is not None and read.get("tipo") == "nada"
+                if not small_talk:                           # a un «gracias» no se le dice «No reconocí ese dato»
+                    out.append(REJECT.get(st["lang"], REJECT["es"]))
                 st["pc"] -= 1
     else:
         unsure = None if picked else doubt(agent, nlu, threshold)
@@ -1022,7 +1164,7 @@ def handle(agent, st, text, parse=parse):
         elif conf["anything_else"].get("enabled"):
             out.append(localized(conf["anything_else"], st))
     # answer_to: el mensaje se tomó como respuesta a la pregunta por ese slot, no como una intención nueva
-    return turn(agent, st, out, nlu, trace, answer_to=answer_to, rejected=rejected, via=via)
+    return turn(agent, st, out, nlu, trace, answer_to=answer_to, rejected=rejected, via=via, sources=sources)
 
 
 START = "__start__"   # trigger de un flujo que corre apenas empieza la conversación
@@ -1057,7 +1199,7 @@ def begin(agent, st, data=None):
 # ---------- Agentes en disco + HTTP ----------
 
 DEMO = {
-    "name": "Seguimiento de pedidos", "threshold": 0.55, "fallback": "No entendí, ¿me lo decís de otra forma?",
+    "name": "Seguimiento de pedidos", "threshold": 0.75, "fallback": "No entendí, ¿me lo decís de otra forma?",
     "intents": [
         {"name": "Saludar", "examples": ["hola", "buen día", "buenas tardes", "qué tal"]},
         {"name": "Consultar pedido", "examples": [
@@ -1085,7 +1227,7 @@ DEMO = {
             {"type": "set", "slot": "numero_pedido", "mode": "clear"}]},
     ],
 }
-BLANK = {"name": "Nuevo agente", "threshold": 0.55, "fallback": "No entendí, ¿me lo decís de otra forma?",
+BLANK = {"name": "Nuevo agente", "threshold": 0.75, "fallback": "No entendí, ¿me lo decís de otra forma?",
          "intents": [], "entities": [], "slots": [], "flows": [], "classifications": [], "functions": []}
 # functions: [{"name", "description", "language": "python"|"javascript", "inputs": [slot...], "code"}]; el código
 # define run(inputs) y devuelve un objeto. Un paso {"type": "function", "function": name, "saves": [...],
@@ -1113,7 +1255,24 @@ def load(agent_id):
 def store(agent):
     with open(path(agent["id"]), "w", encoding="utf-8") as f:
         json.dump(agent, f, ensure_ascii=False, indent=2)
+    if any(voice.PIPER_DIR.glob("*.onnx")):       # con voz instalada: las frases fijas quedan listas para las llamadas
+        threading.Thread(target=voice.prewarm, args=(spoken_texts(agent), languages(agent)[0]), daemon=True).start()
     return agent
+
+
+def spoken_texts(agent):
+    """Todo lo que el bot puede decir tal cual: mensajes, preguntas, pasar a una persona, el «no entendí» y el
+    «No reconocí ese dato». voice.prewarm se saltea las frases con {{ }}."""
+    out = [fallback for fallback in ([agent.get("fallback")] if isinstance(agent.get("fallback"), str) else agent.get("fallback") or [])]
+    out.append(REJECT.get(languages(agent)[0], REJECT["es"]))
+    def walk(steps):
+        for s in steps or []:
+            if s.get("type") in ("message", "ask", "handoff", "file") and isinstance(s.get("text"), str):
+                out.append(s["text"])
+            walk(s.get("then")); walk(s.get("else"))
+    for flow in agent.get("flows") or []:
+        walk(flow.get("steps"))
+    return [t for t in out if isinstance(t, str) and t.strip()]
 
 
 def imported(data):
@@ -1129,8 +1288,9 @@ def imported(data):
 
 
 def all_agents():
+    # solo <id>.json: al lado viven <id>.model.json, <id>.secrets.json, etc., que no son agentes
     return [load(name[:-5]) for name in sorted(os.listdir(AGENTS))
-            if name.endswith(".json") and not name.endswith(".model.json")]
+            if re.fullmatch(r"[0-9a-f]{8}\.json", name)]
 
 
 def slug(text):
@@ -1211,8 +1371,8 @@ def collect(record):
 
 
 def bot_entries(result, at):
-    return [dict({"from": "bot", "text": r["text"], "at": at}, **({"buttons": r["buttons"]} if r["buttons"] else {}))
-            for r in result["replies"]]
+    return [dict({"from": "bot", "text": r["text"], "at": at}, **({"buttons": r["buttons"]} if r["buttons"] else {}),
+                 **({"file": r["file"]} if r.get("file") else {})) for r in result["replies"]]
 
 
 def sync(record):
@@ -1263,7 +1423,7 @@ def session_info(agent, record):
 
 def turn_fields(result, record):
     """Lo nuevo de cada turno en la API: botones, persona humana, idioma y quién respondió."""
-    return {"buttons": result["buttons"], "handoff": result["handoff"], "language": result["language"],
+    return {"buttons": result["buttons"], "replies": result["replies"], "handoff": result["handoff"], "language": result["language"],
             "via": result["via"], "sources": result["sources"], "next": len(record["history"])}
 
 
@@ -1505,6 +1665,13 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and self.path == "/":
             with open(os.path.join(HERE, "index.html"), "rb") as f:
                 return self.reply(f.read(), ctype="text/html; charset=utf-8")
+        served = method == "GET" and re.fullmatch(r"/files/([0-9a-f]{8})/([A-Za-z0-9_-]{22})", urllib.parse.urlsplit(self.path).path)
+        if served:      # archivos de un paso «Enviar un archivo»: públicos para el widget y la API, el id aleatorio es la llave
+            found = files.read(*served.groups())
+            if not found:
+                return self.reply({"error": "no existe"}, 404)
+            self.extra_headers = dict(found[1])
+            return self.reply(found[0], ctype=self.extra_headers.pop("Content-Type"))
         static = re.fullmatch(r"/static/([a-z-]+\.js)", urllib.parse.urlsplit(self.path).path)
         if method == "GET" and static and os.path.exists(os.path.join(HERE, "static", static.group(1))):
             with open(os.path.join(HERE, "static", static.group(1)), "rb") as f:
@@ -1573,7 +1740,7 @@ class Handler(BaseHTTPRequestHandler):
             query = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(self.path).query))
             return self.reply(*reversed(api_v1(method, [p for p in url[len("/api/v1/"):].split("/") if p], data, query, self.user)))
         match = re.fullmatch(r"/api/agents(?:/([0-9a-f]{8})(?:/(chat|reset|http|train|versions|deploy|diff|versions/\d+|versions/\d+/restore|functions/test"
-                             r"|knowledge/extract|knowledge/search|voice/transcribe|secrets|insights/unrecognized|insights/analytics"
+                             r"|knowledge/extract|knowledge/search|voice/transcribe|secrets|files|files/[A-Za-z0-9_-]{22}|insights/unrecognized|insights/analytics"
                              r"|inbox|sessions/[A-Za-z0-9_.@+-]+/(?:reply|release|take)))?)?", url)
         if not match:
             return self.reply({"error": "no existe"}, 404)
@@ -1644,6 +1811,13 @@ class Handler(BaseHTTPRequestHandler):
             import base64
             return self.reply(voice.transcribe(base64.b64decode(str(data.get("audio") or "")), str(data.get("mime") or "audio/webm"),
                                                str(data.get("language") or "es"), vocabulary(load(agent_id))))
+        elif action == "files" and method == "GET":                  # archivos para el paso «Enviar un archivo»
+            return self.reply({"files": files.listing(agent_id)})
+        elif action == "files" and method == "POST":                 # {"name": "precios.pdf", "data": base64}
+            return self.reply(dict(files.save(agent_id, data.get("name"), data.get("data")), files=files.listing(agent_id)))
+        elif action and action.startswith("files/") and method == "DELETE":
+            files.delete(agent_id, action[6:])
+            return self.reply({"files": files.listing(agent_id)})
         elif action == "secrets" and method == "GET":                # solo los nombres: los valores nunca vuelven
             return self.reply({"secrets": vault.names(agent_id)})
         elif action == "secrets" and method == "PUT":
@@ -1691,6 +1865,7 @@ class Handler(BaseHTTPRequestHandler):
                     os.remove(path(agent_id, ext))
             shutil.rmtree(os.path.join(AGENTS, agent_id + ".sessions"), ignore_errors=True)
             shutil.rmtree(os.path.join(AGENTS, agent_id + ".versions"), ignore_errors=True)
+            shutil.rmtree(os.path.join(AGENTS, agent_id + ".files"), ignore_errors=True)
             for key in [k for k in MODELS if k.startswith(agent_id + "@")]:
                 MODELS.pop(key)
             MODELS.pop(agent_id, None)

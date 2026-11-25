@@ -116,6 +116,116 @@ def fill_slot(agent, slot, text, ctx=None):
         return None
 
 
+# ---------- una pregunta en medio de una pregunta ----------
+# «¿qué es presencial?» mientras el bot pregunta «¿presencial o virtual?»: trae el valor, pero no es una respuesta.
+# «que sea más tarde» o «que quede en Bogotá» contestan: «que» solo cuenta en «qué es», «qué significa», etc.
+QUESTION = re.compile(r"\?|^\s*(que\s+(es|son|significa|quiere\s+decir|incluye|pasa|tengo|necesito|debo|hago|llevo)"
+                      r"|cual|cuales|como|donde|cuando|cuanto|cuantos|cuanta|por\s*que|para\s*que|quien|quienes"
+                      r"|tienen|se\s+puede|necesito\s+saber)\b")
+# «sí» corto y claro, para tomar la opción que el bot acaba de explicar («¿qué es presencial?» … «ah, entonces sí»):
+# todas las palabras son de asentir o de relleno, y al menos una asiente.
+YES_WORDS = {"si", "sii", "siii", "sip", "dale", "claro", "ok", "okey", "listo", "perfecto", "vale", "una", "sim", "yes", "bueno"}
+FILLERS = {"ah", "ahh", "aa", "ahi", "entonces", "pues", "ya", "de", "esa", "ese", "eso", "porfa", "por", "favor", "gracias", "que"}
+
+
+def affirmative(text):
+    words = re.findall(r"\w+", _plain(text))
+    return bool(words) and len(words) <= 6 and all(w in YES_WORDS | FILLERS for w in words) and any(w in YES_WORDS for w in words)
+
+
+DONT_KNOW = {"es": "Esa consulta no la puedo responder por acá.", "pt": "Essa dúvida eu não consigo responder por aqui.",
+             "en": "I can't answer that here."}   # neutro: lo dice cualquier bot, de cualquier país
+
+
+def answer(agent, st, text):
+    """Respuesta a una consulta suelta: la base de conocimiento, o un «no lo sé» honesto (nunca inventa)."""
+    return _from_knowledge(agent, st, text) or {"text": DONT_KNOW.get((st or {}).get("lang") or "es", DONT_KNOW["es"]),
+                                                "sources": [], "via": "ia"}
+
+
+def side_question(agent, st, text, asked):
+    """Si la persona, en vez de contestar `asked`, hace otra pregunta: {"text", "sources", "via"} con la respuesta
+    (de la base de conocimiento; sin datos, un «no lo sé» honesto). None si el mensaje parece una respuesta.
+    Sin IA solo cuenta como pregunta lo que la base de conocimiento sabe contestar."""
+    try:
+        if not QUESTION.search(_plain(text)):
+            return None
+        found = _from_knowledge(agent, st, text)
+        if found:
+            return found
+        cfg = _on(agent)
+        if not cfg:
+            return None
+        out = llm.chat(cfg, [
+            {"role": "system", "content": (
+                'Clasificás mensajes de clientes de un chat. El bot hizo una pregunta y el cliente escribió algo.\n'
+                '"contesta": el cliente responde o elige, aunque lo haga con signos de pregunta, con dudas, proponiendo otra '
+                'opción, un día, una hora, un lugar, o pidiendo algo distinto a lo ofrecido.\n'
+                '"pregunta": el cliente pide información que no responde la pregunta del bot (qué significa algo, cuánto '
+                'cuesta, dónde queda, qué tiene que llevar, cómo funciona).\n'
+                'Ejemplos:\nBot: "¿Te sirve el lunes a las 9?" Cliente: "¿y el jueves hay algo?" -> contesta\n'
+                'Bot: "¿Te sirve el lunes a las 9?" Cliente: "¿no tenés más tarde?" -> contesta\n'
+                'Bot: "¿Presencial o virtual?" Cliente: "¿qué es virtual?" -> pregunta\n'
+                'Bot: "¿En qué ciudad?" Cliente: "¿puede ser en Cali?" -> contesta\n'
+                'Bot: "¿En qué ciudad?" Cliente: "¿cuánto sale la consulta?" -> pregunta')},
+            {"role": "user", "content": 'Bot: "%s" Cliente: "%s" ->' % (asked, text)}], timeout=20, max_tokens=15,
+            schema={"type": "object", "properties": {"tipo": {"type": "string", "enum": ["contesta", "pregunta"]}}, "required": ["tipo"]})
+        if out.get("tipo") != "pregunta":
+            return None
+        return {"text": DONT_KNOW.get((st or {}).get("lang") or "es", DONT_KNOW["es"]), "sources": [], "via": "ia"}
+    except Exception:
+        return None
+
+
+# ---------- entender un turno mientras el bot espera una respuesta ----------
+def _actions(agent, current_flow):
+    """Lo que la persona puede pedir en cualquier momento: intenciones con flujo, menos la del flujo en curso."""
+    flows = {f.get("trigger"): f for f in agent.get("flows") or [] if f.get("trigger")}
+    current = next((f.get("trigger") for f in agent.get("flows") or [] if f.get("name") == current_flow), None)
+    # los flujos con "interrupts": false (saludar, agradecer) no cortan una pregunta pendiente: no son acciones
+    return [i for i in agent.get("intents") or [] if i.get("name") in flows and i.get("name") != current
+            and flows[i["name"]].get("interrupts", True) is not False]
+
+
+def understand(agent, st, text, asked, entity=None, current_flow=None):
+    """Qué hizo la persona con la pregunta `asked`, mirando la charla reciente (no solo el último mensaje):
+    {"tipo": "responde" | "pregunta" | "accion" | "nada", "opcion": valor de la lista o None, "accion": intención o None}.
+    None sin IA o si el modelo no es consistente (se pregunta dos veces, con las listas al revés: una mala lectura
+    puede confirmar una cita). Los saludos y agradecimientos con una pregunta pendiente no son acciones."""
+    try:
+        cfg = _on(agent)
+        if not cfg or not str(text or "").strip():
+            return None
+        values = [v for v in (entity or {}).get("values") or [] if isinstance(v, str)]
+        yes_no = "si" in values and "no" in values
+        # una sola lista plana de elecciones con letra: es lo que mejor siguen los modelos chicos
+        choices = ([("responde", v, 'contesta "%s"' % ({"si": "sí, acepta", "no": "no, rechaza o pone una objeción"}.get(v, v)
+                                                         if yes_no else v)) for v in values]
+                   or [("responde", None, "contesta la pregunta")])
+        choices += [("pregunta", None, "pregunta algo (pide información en vez de contestar)")]
+        choices += [("accion", a["name"], "quiere otra cosa: %s" % a["name"].lower()) for a in _actions(agent, current_flow)]
+
+        def ask(order):
+            letters = "ABCDEFGHIJKLMNOPQRSTUVWXY"[:len(order)]
+            menu = "\n".join("%s) %s" % (l, c[2]) for l, c in zip(letters, order))
+            out = llm.chat(cfg, [{"role": "user", "content": (
+                'Conversación de un chat de atención:\n%s\n\nEl bot espera respuesta a: "%s"\nEl cliente escribió: "%s"\n\n'
+                '¿Qué hizo el cliente? "sí", "esa", "dale", "entonces sí" se refieren a lo último que el bot explicó u ofreció. '
+                'Saludar o agradecer no es contestar ni pedir otra cosa: eso es Z.\n%s\nZ) nada de eso (saluda, agradece o no se entiende)\n'
+                'Respondé con la letra.' % (_recent(st, 4), asked, text, menu))}],
+                timeout=25, max_tokens=10,
+                schema={"type": "object", "properties": {"letra": {"type": "string", "enum": list(letters) + ["Z"]}}, "required": ["letra"]})
+            letter = out.get("letra")
+            kind, value, _ = order[letters.index(letter)] if letter in letters else ("nada", None, "")
+            return {"tipo": kind, "opcion": value if kind == "responde" else None, "accion": value if kind == "accion" else None}
+
+        first = ask(choices)
+        risky = first["tipo"] == "accion" or first["opcion"] == "si"   # interrumpe o confirma: se pregunta de nuevo
+        return first if not risky or ask(choices[::-1]) == first else None
+    except Exception:
+        return None
+
+
 # ---------- antes del «no entendí» ----------
 def _snippet(text, limit=600):
     text = re.sub(r"^(p|pregunta|q)\s*[:.)-]\s*[^\n]*\?\s*\n", "", str(text).strip(), flags=re.I)   # sin repetir la pregunta
@@ -147,35 +257,45 @@ def _capabilities(agent):
     return [i["name"].replace("_", " ") for i in agent.get("intents") or [] if i.get("name")][:8]
 
 
+def _from_knowledge(agent, st, text):
+    """Respuesta de la base de conocimiento ({"text", "sources", "via"}) o None si nada pasa el umbral.
+    Sin IA devuelve el fragmento; con IA (use_knowledge) lo redacta, y si la redacción no se sostiene, el fragmento."""
+    try:
+        hits = knowledge.search(agent, text, 3) or []
+    except Exception:
+        hits = []
+    threshold = float(agent.get("knowledge_threshold", 0.75))
+    good = [h for h in hits if float(h.get("score") or 0) >= threshold]
+    if not good:
+        return None
+    sources = [{"title": h.get("title"), "doc": h.get("doc"), "score": round(float(h.get("score") or 0), 3)} for h in good]
+    cfg = _on(agent, "use_knowledge")
+    if cfg:
+        try:
+            context = "\n\n".join(h["text"] for h in good[:2])
+            persona = (cfg.get("persona") or "").strip()
+            answer = llm.chat(cfg, [{"role": "user", "content": (
+                '%sTexto:\n"""\n%s\n"""\n\nPregunta del cliente: %s\n\nRespondé la pregunta en una o dos oraciones '
+                'completas, en %s, usando solo datos del texto.' % (("Así habla el bot: " + persona + "\n") if persona else "",
+                                                                  context, text, _lang(st)))}], timeout=40, max_tokens=140)
+            answer = re.sub(r"^\s*¿[^?]{3,120}\?\s*", "", answer or "")      # sin repetir la pregunta («¿Qué es…? Es…»)
+            leaked = re.search(r"(?im)^\s*(p|r|pregunta|respuesta|texto)\s*:|pregunta del cliente|\"\"\"", answer or "")
+            if answer and not leaked and len(answer) <= 400 and _supported(answer, context, text):
+                return {"text": answer, "sources": sources, "via": "knowledge"}
+        except Exception:
+            pass
+    return {"text": _snippet(good[0]["text"]), "sources": sources[:1], "via": "knowledge"}
+
+
 def fallback(agent, st, text):
     """{"text", "sources", "via"} o None. Base de conocimiento primero (funciona sin IA, de forma extractiva);
     si no hay nada, con IA una repregunta corta que dice qué sabe hacer el bot."""
     try:
         if not str(text or "").strip():
             return None
-        try:
-            hits = knowledge.search(agent, text, 3) or []
-        except Exception:
-            hits = []
-        threshold = float(agent.get("knowledge_threshold", 0.55))
-        good = [h for h in hits if float(h.get("score") or 0) >= threshold]
-        if good:
-            sources = [{"title": h.get("title"), "doc": h.get("doc"), "score": round(float(h.get("score") or 0), 3)} for h in good]
-            cfg = _on(agent, "use_knowledge")
-            if cfg:
-                try:
-                    context = "\n\n".join(h["text"] for h in good[:2])
-                    persona = (cfg.get("persona") or "").strip()
-                    answer = llm.chat(cfg, [{"role": "user", "content": (
-                        '%sTexto:\n"""\n%s\n"""\n\nPregunta del cliente: %s\n\nRespondé la pregunta en una o dos oraciones '
-                        'completas, en %s, usando solo datos del texto.' % (("Así habla el bot: " + persona + "\n") if persona else "",
-                                                                          context, text, _lang(st)))}], timeout=40, max_tokens=140)
-                    leaked = re.search(r"(?im)^\s*(p|r|pregunta|respuesta|texto)\s*:|pregunta del cliente|\"\"\"", answer or "")
-                    if answer and not leaked and len(answer) <= 400 and _supported(answer, context, text):
-                        return {"text": answer, "sources": sources, "via": "knowledge"}
-                except Exception:
-                    pass
-            return {"text": _snippet(good[0]["text"]), "sources": sources[:1], "via": "knowledge"}
+        found = _from_knowledge(agent, st, text)
+        if found:
+            return found
         cfg = _on(agent, "generative_fallback")
         if not cfg:
             return None
@@ -240,7 +360,7 @@ def agent_turn(agent, step, st, text, ctx, call_function):
             parts.append("Resultados de funciones que ya usaste: " + "; ".join(mem["facts"]))
         if step.get("knowledge"):
             try:
-                hits = [h for h in knowledge.search(agent, text, 3) or [] if float(h.get("score") or 0) >= float(agent.get("knowledge_threshold", 0.55)) * 0.8]
+                hits = [h for h in knowledge.search(agent, text, 3) or [] if float(h.get("score") or 0) >= float(agent.get("knowledge_threshold", 0.75)) * 0.8]
             except Exception:
                 hits = []
             if hits:

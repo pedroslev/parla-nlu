@@ -7,14 +7,14 @@ Un **agente** (o bot) es un archivo JSON con todo lo que lo define. Los campos p
 | Campo | Qué es |
 |---|---|
 | `name` | Nombre. Su versión en minúsculas y sin tildes (*slug*) sirve en las URLs: «Pizzería Don Luis» → `pizzeria-don-luis`. |
-| `threshold` | Confianza mínima (0 a 1) para aceptar una intención. Por defecto `0.55`. |
+| `threshold` | Confianza mínima (0 a 1) para aceptar una intención. Por defecto `0.75`. |
 | `fallback` | Qué dice cuando no entiende. Texto o lista (elige al azar sin repetir la anterior). |
 | `languages` | Idiomas, el primero es el de por defecto. Ej. `["es", "pt", "en"]`. |
 | `fallback_translations` | `{"pt": "...", "en": "..."}`. |
 | `intents`, `entities`, `slots`, `flows` | Ver abajo. |
 | `classifications` | `[{"name", "color", "description"}]` para marcar conversaciones y sacar reportes. |
 | `functions` | Código Python o JavaScript que corre un paso `function`. |
-| `knowledge`, `knowledge_threshold` | Base de conocimiento y su puntaje mínimo (`0.55`). |
+| `knowledge`, `knowledge_threshold` | Base de conocimiento y su puntaje mínimo (`0.75`). |
 | `system` | Flujos del sistema (ver abajo). |
 | `ai` | IA local (ver [ai-and-voice.md](ai-and-voice.md)). |
 | `widget` | `{"enabled", "origins", "title", "color", "greeting", "position", "voice"}`. |
@@ -26,7 +26,7 @@ no viajan: se entrena al abrirlo).
 
 Lo que la persona quiere hacer: `{"name": "Pedir pizza", "examples": ["quiero una pizza", "una de [muzza](gusto)"]}`.
 
-Parla convierte cada frase en un vector (modelo `paraphrase-multilingual-MiniLM-L12-v2` con fastembed) y compara el
+Parla convierte cada frase en un vector (modelo `google/embeddinggemma-300m` con fastembed, con el prefijo de similitud) y compara el
 mensaje con todas: gana la intención de la frase más parecida (vecino más cercano). Por eso sumar una frase es
 inmediato y funciona en varios idiomas. La confianza es la similitud coseno con esa frase.
 
@@ -130,6 +130,16 @@ En un subflujo, vuelve al que lo llamó.
 {"type": "classify", "classification": "Venta"}
 ```
 Queda marcada y cuenta en los reportes.
+
+### `file`: enviar un archivo
+```json
+{"type": "file", "file": "Lista de precios.pdf", "text": "Acá tenés la lista, {{ nombre }}"}
+```
+Manda un archivo que subiste al bot desde el mismo paso (PDF, imagen, Word, Excel, PowerPoint, CSV, TXT o ZIP, hasta 10 MB).
+`file` es el id o el nombre; `text` es opcional (sin texto, el mensaje es el nombre del archivo). En la API el mensaje
+llega en `messages` como siempre y `replies[i].file` trae `{id, name, mime, size, url}`; `url` (`/files/<agente>/<id>`)
+se abre sin sesión: el id es aleatorio y hace de llave, así que no subas nada privado. Los archivos son del bot, no de
+una versión: si borrás uno, el paso falla también en lo publicado. Exportar el bot no lleva los archivos.
 
 ### `function`: ejecutar una función
 ```json

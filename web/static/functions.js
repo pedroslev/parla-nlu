@@ -13,8 +13,19 @@ document.head.append(h('style', {}, `
   .fn-code { display: flex; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); overflow: hidden; }
   .fn-code:focus-within { border-color: var(--brand); }
   .fn-code pre, .fn-code textarea, .fn-json { font: 13.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; tab-size: 4; }
-  .fn-code pre { margin: 0; padding: 10px 8px 10px 10px; text-align: right; color: var(--muted); user-select: none; border-right: 1px solid var(--line); min-width: 36px; opacity: .7; }
-  .fn-code textarea { flex: 1; min-width: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); padding: 10px 12px; resize: none; white-space: pre; overflow-x: auto; overflow-y: hidden; min-height: 140px; outline: none; }
+  .fn-code .fn-gutter { margin: 0; padding: 10px 8px 10px 10px; text-align: right; color: var(--muted); user-select: none; border-right: 1px solid var(--line); min-width: 36px; opacity: .7; }
+  .fn-edit { flex: 1; min-width: 0; display: grid; }
+  .fn-edit > * { grid-area: 1 / 1; }
+  .fn-code .fn-hl { margin: 0; padding: 10px 12px; white-space: pre; overflow: hidden; color: var(--ink); pointer-events: none; }
+  .fn-code textarea { min-width: 0; border: 0; border-radius: 0; background: transparent; color: transparent; caret-color: var(--ink); padding: 10px 12px; resize: none; white-space: pre; overflow-x: auto; overflow-y: hidden; min-height: 140px; outline: none; }
+  .fn-code textarea::selection { background: color-mix(in srgb, var(--brand) 28%, transparent); }
+  :root { --code-fn: #8A3FC0; }
+  :root[data-theme="dark"] { --code-fn: #D7A2FF; }
+  .tk-k { color: var(--brand); }   /* sin negrita: cambiaría el ancho y el cursor quedaría corrido */
+  .tk-s { color: var(--ok); }
+  .tk-c { color: var(--muted); font-style: italic; }
+  .tk-n { color: var(--warn); }
+  .tk-b, .tk-f { color: var(--code-fn); }
   .fn-test { display: flex; flex-direction: column; gap: 10px; }
   .fn-ok { color: var(--ok); font-weight: 600; }
   .fn-bad { color: var(--warn); font-weight: 600; }
@@ -124,10 +135,12 @@ const fnOpenFlow = (f) => { section = 'flows'; sel.flows = agent.flows.indexOf(f
 
 // ---------- editor de código ----------
 function codeEditor(fn, onRun) {
-  const gutter = h('pre', { 'aria-hidden': 'true' });
+  const gutter = h('pre', { class: 'fn-gutter', 'aria-hidden': 'true' });
+  const hl = h('pre', { class: 'fn-hl', 'aria-hidden': 'true' });
   const lines = () => { gutter.textContent = Array.from({ length: ta.value.split('\n').length }, (_, i) => i + 1).join('\n'); };
+  const paint = () => { hl.innerHTML = highlightCode(ta.value, fn.language); };
   const ta = h('textarea', { spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', wrap: 'off', 'aria-label': 'Código de la función',
-    ...bind(fn, 'code', (e) => { grow(e.target); lines(); }) });
+    ...bind(fn, 'code', (e) => { grow(e.target); lines(); paint(); }) });
   const put = (text) => {        // inserta como si se tipeara: así Cmd/Ctrl+Z lo deshace
     if (!document.execCommand('insertText', false, text)) { ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, 'end'); ta.dispatchEvent(new Event('input')); }
   };
@@ -148,8 +161,35 @@ function codeEditor(fn, onRun) {
       put('\n' + line.match(/^\s*/)[0] + (/[:{[(]\s*$/.test(line) ? unit : ''));
     }
   };
-  lines();
-  return h('div', { class: 'fn-code' }, gutter, ta);
+  ta.addEventListener('scroll', () => { hl.scrollLeft = ta.scrollLeft; });
+  lines(); paint();
+  return h('div', { class: 'fn-code' }, gutter, h('div', { class: 'fn-edit' }, hl, ta));
+}
+
+// Colores del código: un <pre> pintado debajo de un textarea transparente (el textarea sigue siendo el editor).
+const CODE_WORDS = {
+  python: ['False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield',
+    'print len int str float bool dict list set tuple range sorted min max sum abs round enumerate zip isinstance type any all map filter self'],
+  javascript: ['async await break case catch class const continue default delete do else export extends false finally for function if import in instanceof let new null of return switch this throw true try typeof undefined var void while yield',
+    'console Math JSON Object Array String Number Boolean Date Promise require module exports parseInt parseFloat'],
+};
+const CODE_TOKENS = {   // 1 comentario, 2 texto, 3 número, 4 palabra
+  python: /(#.*)|([rRbBfFuU]{0,2}(?:'''[\s\S]*?(?:'''|$)|"""[\s\S]*?(?:"""|$)|'(?:\\.|[^'\\\n])*'?|"(?:\\.|[^"\\\n])*"?))|(\b\d+(?:\.\d+)?\b)|([A-Za-z_]\w*)/g,
+  javascript: /(\/\/.*|\/\*[\s\S]*?(?:\*\/|$))|(`(?:\\[\s\S]|[^`\\])*`?|'(?:\\.|[^'\\\n])*'?|"(?:\\.|[^"\\\n])*"?)|(\b\d+(?:\.\d+)?\b)|([A-Za-z_$][\w$]*)/g,
+};
+function highlightCode(code, language) {
+  const lang = CODE_TOKENS[language] ? language : 'python';
+  const [kw, bi] = CODE_WORDS[lang].map((w) => new Set(w.split(' ')));
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]);
+  let out = '', last = 0;
+  for (const m of code.matchAll(CODE_TOKENS[lang])) {
+    const [t, comment, text, number, word] = m;
+    const cls = comment ? 'c' : text ? 's' : number ? 'n' : kw.has(word) ? 'k' : bi.has(word) ? 'b'
+      : /^\s*\(/.test(code.slice(m.index + t.length, m.index + t.length + 40)) ? 'f' : '';
+    out += esc(code.slice(last, m.index)) + (cls ? '<span class="tk-' + cls + '">' + esc(t) + '</span>' : esc(t));
+    last = m.index + t.length;
+  }
+  return out + esc(code.slice(last)) + '\n';     // el \n final: que la última línea vacía también ocupe lugar
 }
 
 // ---------- probar ----------
@@ -218,9 +258,10 @@ window.functionsView = function () {
   sel.functions = Math.min(sel.functions || 0, fns.length - 1);
   const fn = fns[sel.functions];
   fn.inputs ||= [];
-  const list = h('div', {}, side('functions', fns, (f) => (f.language === 'javascript' ? 'JavaScript' : 'Python') + ' · ' + ((f.inputs || []).length ? f.inputs.join(', ') : 'sin slots'),
-    'Nueva función', () => ({ name: fnName('mi_funcion'), description: '', language: 'python', inputs: [], code: FN_TEMPLATES.python })),
-    h('button', { class: 'link', style: 'font-size:14px;margin:4px 12px', onclick: examplesMenu }, 'Desde un ejemplo'));
+  // el link va DENTRO de la lista: la lista es sticky y, si queda afuera, se le monta encima al hacer scroll
+  const list = side('functions', fns, (f) => (f.language === 'javascript' ? 'JavaScript' : 'Python') + ' · ' + ((f.inputs || []).length ? f.inputs.join(', ') : 'sin slots'),
+    'Nueva función', () => ({ name: fnName('mi_funcion'), description: '', language: 'python', inputs: [], code: FN_TEMPLATES.python }));
+  list.append(h('button', { class: 'link', style: 'font-size:14px;margin:4px 12px;align-self:flex-start', onclick: examplesMenu }, 'Desde un ejemplo'));
   const rename = (e) => {
     const name = fnName(e.target.value, fn);
     if (!slug(e.target.value) || name === fn.name) return render();

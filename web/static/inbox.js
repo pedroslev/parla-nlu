@@ -101,7 +101,7 @@ window.inboxView = () => {
       log.replaceChildren(...(s.history || []).flatMap((m) => {
         if (m.from === 'user') return [h('div', { class: 'msg user' }, m.text), h('div', { class: 'ib-who user' }, 'Cliente · ' + ibTime(m.at))];
         if (m.from === 'human') return [h('div', { class: 'msg human' }, m.text), h('div', { class: 'ib-who' }, (m.by || 'Persona') + ' · ' + ibTime(m.at))];
-        if (m.from === 'bot') return [h('div', { class: 'msg bot' }, m.text), h('div', { class: 'ib-who' }, 'Bot · ' + ibTime(m.at))];
+        if (m.from === 'bot') return [h('div', { class: 'msg bot' }, m.file && m.text === m.file.name ? null : m.text, m.file ? window.fileCard(m.file) : null), h('div', { class: 'ib-who' }, 'Bot · ' + ibTime(m.at))];
         return h('div', { class: 'msg event' }, m.text + ' · ' + ibTime(m.at));
       }));
       if (stick || !log.dataset.once) { log.scrollTop = log.scrollHeight; log.dataset.once = '1'; }

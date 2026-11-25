@@ -49,6 +49,8 @@
     celular: '+5491122334455', email: 'olivia@ejemplo.com', mail: 'olivia@ejemplo.com', direccion: 'Av. Corrientes 1234',
     cliente: 'C-1042', cantidad: 2, edad: 34, ciudad: 'Rosario' };
   function sampleData() {
+    const initial = agent.slots.filter((s) => s.start).map((s) => s.name);
+    if (initial.length) return Object.fromEntries(initial.map((n) => [n, SAMPLE[n] ?? 'ejemplo']));
     const slots = agent.slots.map((s) => s.name);
     if (!slots.length) return { dni: '30123456' };
     const known = Object.keys(SAMPLE).filter((n) => slots.includes(n));

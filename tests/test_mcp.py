@@ -33,6 +33,14 @@ def has(errors, *needles):
 
 
 # ---------- validación ----------
+FILE_BOT = dict(m.DEMO_IVR, flows=m.DEMO_IVR["flows"] + [{"name": "Precios", "trigger": "", "steps": [
+    {"type": "file", "file": "Lista.pdf", "text": "Acá va, {{ nombre }}"}, {"type": "file"}]}])
+_, errs, warns = m.validate(FILE_BOT)
+assert errs == ["flow «Precios», paso 2 (file): falta «file» con el id o el nombre del archivo (list_files los muestra)"], errs
+assert any("no puedo comprobar" in w and "Lista.pdf" in w for w in warns), warns          # sin saber los archivos: advierte
+FILE_BOT["flows"][-1]["steps"].pop()
+assert m.validate(FILE_BOT, [{"id": "a" * 22, "name": "lista.PDF"}])[1] == []              # por nombre, sin importar mayúsculas
+has(m.validate(FILE_BOT, [])[1], "Lista.pdf", "no está subido", "ninguno")
 good = m.validate_agent(m.DEMO_IVR)
 assert good == {"ok": True, "errors": [], "warnings": []}, good
 assert m.validate_agent(json.dumps(m.DEMO_IVR))["ok"]                      # también como texto JSON
@@ -84,6 +92,10 @@ has(errs, "(classify)", "«Venta» no existe")
 has(errs, "(classify)", "falta «classification»")
 has(errs, "classification «Reclamo» está repetido")
 has(errs, "«Reclamo»", "color")
+# color libre como en las entidades: un hex vale, una palabra no
+_ok = copy.deepcopy(m.DEMO_IVR); _ok["classifications"] = [{"name": "Libre", "color": "#3346d3"}, {"name": "Rojo", "color": "rojo"}]
+_e = errors_of(_ok)
+assert not [x for x in _e if "«Libre»" in x] and [x for x in _e if "«Rojo»" in x and "color" in x], _e
 assert not any("usa «size»" in e or "usa «nombre»" in e for e in errs), errs   # funciones y slots reales no son errores
 
 warn = m.validate_agent({"name": "x", "intents": [{"name": "Hola", "examples": ["hola"]}], "entities": [], "slots": [], "flows": []})
@@ -148,6 +160,7 @@ nbad["system"]["handoff"]["translations"] = {"fr": "Je vous passe..."}
 nbad["widget"]["origins"] = ["https://mitienda.com/", "mitienda.com"]
 nbad["widget"]["position"] = "arriba"
 nbad["slots"].append({"name": "humor", "fill": "magia"})
+nbad["slots"].append({"name": "canal", "start": "si"})
 nbad["ai"]["provider"] = "nube"
 nbad["intents"].append({"name": "__cancel__", "examples": ["a", "b", "c"]})
 nbad["functions"].append({"name": "con_clave", "inputs": ["plan", "secret.API_KEY", "secret.mal-nombre"],
@@ -173,6 +186,8 @@ has(nerrs, "widget", "https://mitienda.com/")
 has(nerrs, "widget", "«mitienda.com»")
 has(nerrs, "widget", "position")
 has(nerrs, "slot «humor»", "fill")
+has(nerrs, "slot «canal»", "start")
+assert m.validate(m.DEMO_IVR)[1] == [] and m.DEMO_IVR["slots"][0]["start"] is True   # el ejemplo del guía usa start
 has(nerrs, "ai", "provider")
 has(nerrs, "intent «__cancel__»", "reservados")
 has(nerrs, "«con_clave»", "secret.mal-nombre")
@@ -213,7 +228,7 @@ print("validación de lo nuevo: ok (%d errores, %d advertencias)" % (len(nerrs),
 # ---------- punta a punta contra Parla ----------
 NAME = "zz MCP test " + m.uuid.uuid4().hex[:6]
 TEST = {
-    "name": NAME, "threshold": 0.5, "fallback": "No entendí.",
+    "name": NAME, "threshold": 0.75, "fallback": "No entendí.",
     "intents": [{"name": "Pedir turno", "examples": [
         "quiero un turno", "necesito sacar turno", "me das un turno para el [lunes](dia)", "turno para el [martes](dia)",
         "quiero reservar", "sacame un turno"]},
@@ -279,8 +294,25 @@ try:
     changed = copy.deepcopy(TEST)
     changed["fallback"] = "Perdón, no te entendí."
     assert m.update_agent(created["id"], changed)["id"] == created["id"]
-    assert m.test_conversation(created["id"], ["asdf qwerty zxcv"])["transcript"][1]["bot"] == ["Perdón, no te entendí."]
+    _t = m.test_conversation(created["id"], ["asdf qwerty zxcv"])["transcript"][1]
+    assert _t["bot"] == ["Perdón, no te entendí."], _t
     assert m.train_agent(NAME)["phrases"] == 10
+    # paso file: el archivo lo sube la persona; list_files lo muestra y update_agent rechaza los que no existen
+    import base64
+    up = m.call("POST", "/api/agents/%s/files" % created["id"], {"name": "Precios.pdf", "data": base64.b64encode(b"%PDF-1.4").decode()})
+    assert m.list_files(NAME) == {"files": [{"id": up["id"], "name": "Precios.pdf", "mime": "application/pdf", "size": 8}]}
+    with_file = copy.deepcopy(changed)
+    with_file["flows"][0]["steps"].append({"type": "file", "file": "precios.pdf", "text": "La lista, {{ cliente }}"})
+    m.update_agent(created["id"], with_file)
+    t = m.test_conversation(created["id"], [], start_data={"cliente": "Ana"})["transcript"][0]
+    assert t["bot"] == ["Hola Ana.", "La lista, Ana"] and t["files"] == ["Precios.pdf"], t
+    with_file["flows"][0]["steps"][-1]["file"] = "otro.pdf"
+    try:
+        m.update_agent(created["id"], with_file)
+        raise AssertionError("update_agent con un archivo que no existe tenía que fallar")
+    except m.ToolError as error:
+        assert "otro.pdf" in str(error) and "Precios.pdf" in str(error), error
+    m.update_agent(created["id"], changed)
 
     # ---------- versiones y entornos ----------
     agent_id, junk = created["id"], ["asdf qwerty zxcv"]
@@ -450,7 +482,7 @@ try:
     k2 = m.add_knowledge(sid_, "Horarios del local", text="P: ¿Abren los feriados?\nR: Los feriados abrimos de 10 a 18.")
     assert k2["replaced"] and k2["id"] == k["id"] and k2["documents"] == 2, k2
     s_ = m.search_knowledge(sid_, "¿abren los feriados?")
-    assert s_["answers"] and "10 a 18" in s_["results"][0]["text"] and s_["threshold"] == 0.55, s_
+    assert s_["answers"] and "10 a 18" in s_["results"][0]["text"] and s_["threshold"] == 0.75, s_
     u = m.add_knowledge(sid_, url="http://127.0.0.1:%d/envios" % page.server_address[1])
     assert u["source"] == "url" and u["title"] == "Envíos y cambios" and "todo el país" in u["preview"] and u["documents"] == 3, u
     doc = [d for d in m.get_agent(sid_)["knowledge"] if d["id"] == u["id"]][0]

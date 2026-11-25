@@ -1,6 +1,8 @@
 """Voz local: transcribir audio (faster-whisper, CPU int8) y leer texto en voz alta (piper). Nada en la nube."""
+import hashlib
 import io
 import os
+import re
 import subprocess
 import threading
 import time
@@ -11,6 +13,8 @@ from . import DATA
 
 MODELS = Path(DATA) / "models"
 PIPER_DIR = MODELS / "piper"
+TTS_CACHE = MODELS / "tts-cache"     # audios ya generados de frases fijas: <idioma>/<sha1 del texto>.wav
+SENTENCES = re.compile(r"\n+|(?<=[.!?…])\s+")    # igual que static/voice.js: así lo pregenerado coincide con lo que pide
 STT_MODEL = os.environ.get("PARLA_WHISPER", "base")   # "tiny" si la máquina es lenta
 MAX_SECONDS = 60
 # primera voz que se pueda bajar/cargar gana (rhasspy/piper-voices en HuggingFace)
@@ -84,8 +88,15 @@ def transcribe(audio_bytes, mime="audio/webm", language="es", hint=None):
             raise ValueError("El audio está vacío o es demasiado corto.")
         if seconds > MAX_SECONDS:
             raise ValueError("El audio es muy largo (máximo %d segundos)." % MAX_SECONDS)
-        segments, info = model.transcribe(samples, language=lang, vad_filter=True, initial_prompt=(hint or None))
-        text = " ".join(s.text.strip() for s in segments).strip()
+        # hotwords y no initial_prompt: con la lista como prompt Whisper imita la lista («sí, sí», «no, no,», «el martes,»)
+        # Sin initial_prompt: con la pregunta del bot como prompt, Whisper la repetía («¿En qué ciudad la quieres?» en
+        # vez de «en Medellín»). Medido con 64 respuestas: hotwords 52/64, prompt 48/64, ambos 53/64 pero repitiendo.
+        segments, info = model.transcribe(samples, language=lang, vad_filter=True, hotwords=(hint or None),
+                                          condition_on_previous_text=False)
+        # Whisper inventa con audio casi mudo («No, no, no, no»): fuera lo que el propio modelo marca como «no es voz»
+        # o como repetición anormal
+        kept = [s for s in segments if not (s.no_speech_prob > 0.6 and s.avg_logprob < -0.8) and s.compression_ratio < 2.4]
+        text = " ".join(s.text.strip() for s in kept).strip()
     return {"text": text, "language": info.language, "ms": int((time.time() - t0) * 1000)}
 
 
@@ -113,11 +124,46 @@ def _voice(lang):
     raise ValueError("La voz no está disponible en este momento (no pude bajar ni cargar el modelo de voz).")
 
 
-def speak(text, language="es"):
+def sentences(text):
+    return [t.strip() for t in SENTENCES.split(text or "") if t.strip()]
+
+
+def _cached(lang, text):
+    return TTS_CACHE / lang / (hashlib.sha1(text.encode()).hexdigest() + ".wav")
+
+
+def prewarm(texts, language="es"):
+    """Genera de antemano el audio de las frases sin variables ({{ }}) para que la llamada las diga al instante.
+    Las frases con variables se generan en el momento y no se guardan (si no, la caché crece con cada charla).
+    Devuelve cuántas generó. No lanza: si no hay voz instalada, no hace nada."""
+    lang = (language or "es").split("-")[0].lower()
+    done = 0
+    try:
+        for text in texts:
+            for sentence in sentences(text):
+                if "{{" in sentence or _cached(lang, sentence).exists():
+                    continue
+                audio = speak(sentence, lang, keep=False)
+                path = _cached(lang, sentence)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                tmp = path.with_suffix(".tmp")
+                tmp.write_bytes(audio)
+                tmp.replace(path)
+                done += 1
+    except Exception as error:  # noqa: BLE001 - sin piper o sin modelo: la llamada genera en el momento
+        _errors["prewarm"] = str(error)
+    return done
+
+
+def speak(text, language="es", keep=True):
     text = (text or "").strip()
     if not text:
         raise ValueError("No hay texto para leer.")
     lang = (language or "es").split("-")[0].lower()
+    if keep:
+        hit = _cached(lang if lang in VOICES else "es", text)
+        if hit.exists():                     # frase fija pregenerada: al instante
+            return hit.read_bytes()
     buf = io.BytesIO()
     with _lock:
         v = _voice(lang if lang in VOICES else "es")

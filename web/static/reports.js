@@ -38,7 +38,7 @@ const RP_GONE = 'var(--muted)';       // clasificaciones que ya no están en el 
 const rpDay = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 const rpAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return rpDay(d); };
 const rpShort = (iso) => { const [, m, d] = iso.split('-'); return Number(d) + '/' + Number(m); };
-const rpColor = (name) => { const c = agent.classifications.find((x) => x.name === name); return c ? COLORS[(c.color ?? 0) % COLORS.length][0] : RP_GONE; };
+const rpColor = (name) => { const c = agent.classifications.find((x) => x.name === name); return c ? colorOf(c)[0] : RP_GONE; };   // como el resto: paleta o libre
 const rpOpenSessions = (classification) => { window.sessionsFilter = { classification }; section = 'sessions'; render(); $('#center').scrollTop = 0; };
 const rpGoClassifications = () => { section = 'classifications'; render(); $('#center').scrollTop = 0; };
 
