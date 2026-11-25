@@ -2,8 +2,9 @@
 
 [English](ai-and-voice.md) · **Español**
 
-Todo es opcional y todo corre en tu compu. Sin IA, Parla funciona igual: el NLU (embeddings + CRF + reglas) no
-necesita un modelo de lenguaje.
+Todo es opcional y, por defecto, todo corre en tu compu. Sin IA, Parla funciona igual: el NLU (embeddings + CRF +
+reglas) no necesita un modelo de lenguaje. Si querés, las funciones de IA también pueden usar cualquier
+[endpoint compatible con OpenAI](#endpoints-compatibles-con-openai) (vLLM, llama.cpp, LM Studio, OpenAI, Azure OpenAI, …).
 
 ## El modelo de vectores (siempre)
 
@@ -27,9 +28,8 @@ No es opcional ni es «IA generativa»: es lo que usa el NLU para comparar frase
    (`scripts/setup.sh --ollama` lo hace por vos.) También se puede bajar desde la sección **IA** con «Descargar».
 3. En el agente, **Inteligencia → IA**: prendela y probá la conexión.
 
-Parla habla con Ollama en `http://127.0.0.1:11434`. También acepta un servidor local compatible con OpenAI (LM
-Studio, llama.cpp server): `provider: "openai"` y su URL (con o sin `/v1` al final). La descarga desde la interfaz
-es solo para Ollama. No usa servicios en la nube.
+Parla habla con Ollama en `http://127.0.0.1:11434`. Ollama es lo que viene por defecto y nada sale de tu máquina.
+Para usar otro servidor, mirá [Endpoints compatibles con OpenAI](#endpoints-compatibles-con-openai).
 
 ## Modelos sugeridos
 
@@ -54,6 +54,59 @@ Los valores por defecto:
 ```
 
 `persona` es cómo habla el bot («Hablás de vos, sos amable y breve.»); se suma a los pedidos que redactan texto.
+
+## Endpoints compatibles con OpenAI
+
+Con `"provider": "openai"` (en la interfaz: **Programa → Compatible con OpenAI**) cada función de IA llama a
+`POST {url}/chat/completions` (`model`, `messages`, `temperature`, `max_tokens`, `stream: false`). Sirve para vLLM,
+llama.cpp server, LM Studio, LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter y cualquier otro que hable esa API.
+
+| Campo | Qué es |
+|---|---|
+| `url` | La dirección base, casi siempre terminada en `/v1` (`http://localhost:8000/v1`). Si no tiene ruta (`http://127.0.0.1:1234`), se le agrega `/v1`. |
+| `model` | El id del modelo que espera el servidor. En la interfaz es texto libre, con sugerencias de `GET {url}/models` cuando el servidor las da. |
+| `api_key_secret` | El **nombre** de una clave de la sección **Claves** del agente, por ejemplo `OPENAI_KEY`. La key nunca se guarda en el JSON del agente. El campo «API key» de la pantalla IA la guarda en Claves por vos (como `AI_API_KEY` si no elegiste otro nombre). |
+| `azure` | `true` para Azure OpenAI: la key va en el encabezado `api-key` en vez de `Authorization: Bearer` y se agrega `?api-version=` (`api_version`, por defecto `2024-10-21`). Se prende solo con direcciones `*.openai.azure.com`. |
+
+Ejemplos (`agent.ai`; sin `api_key_secret` si el servidor no pide key):
+
+```jsonc
+// vLLM (vllm serve Qwen/Qwen2.5-1.5B-Instruct)
+{"enabled": true, "provider": "openai", "url": "http://localhost:8000/v1", "model": "Qwen/Qwen2.5-1.5B-Instruct"}
+// llama.cpp server (llama-server -m modelo.gguf --port 8080)
+{"enabled": true, "provider": "openai", "url": "http://localhost:8080/v1", "model": "local"}
+// LM Studio (pestaña del servidor local)
+{"enabled": true, "provider": "openai", "url": "http://127.0.0.1:1234/v1", "model": "qwen2.5-1.5b-instruct"}
+// OpenAI
+{"enabled": true, "provider": "openai", "url": "https://api.openai.com/v1", "model": "gpt-4o-mini", "api_key_secret": "OPENAI_KEY"}
+// Azure OpenAI: la URL incluye tu deployment; Azure ignora "model"
+{"enabled": true, "provider": "openai", "url": "https://mi-recurso.openai.azure.com/openai/deployments/mi-gpt4o-mini",
+ "model": "gpt-4o-mini", "api_key_secret": "AZURE_OPENAI_KEY", "azure": true}
+// OpenRouter
+{"enabled": true, "provider": "openai", "url": "https://openrouter.ai/api/v1", "model": "meta-llama/llama-3.1-8b-instruct", "api_key_secret": "OPENROUTER_KEY"}
+// Groq
+{"enabled": true, "provider": "openai", "url": "https://api.groq.com/openai/v1", "model": "llama-3.1-8b-instant", "api_key_secret": "GROQ_KEY"}
+```
+
+Cómo se comporta:
+
+- **Respuestas estructuradas:** donde a Ollama se le pasa un JSON schema (`format`), por acá se manda
+  `response_format: {"type": "json_object"}` más el esquema en un mensaje de sistema. Si el servidor rechaza
+  `response_format` con un 400, Parla reintenta sin él (el JSON se pide solo en el prompt y se saca de un bloque
+  ```` ```json ```` si hace falta) y lo recuerda para esa URL hasta que se reinicia el servidor.
+- **Estado:** «Volver a mirar» llama a `GET {url}/models`. Los servidores que no lo tienen (404) quedan como
+  «conectado, probalo»: usá **Probar conexión**, que manda un mensaje y muestra la respuesta y cuánto tardó.
+- **Errores** en castellano: 401/403 (key mala o faltante, sin repetir el mensaje del proveedor, que suele incluir
+  parte de la key), 404 (dirección o modelo equivocados), 429 (límite de pedidos o sin crédito), 5xx y timeouts.
+  La key se tapa (`••••`) en todos los errores. Si el proveedor falla, el bot sigue como si la IA estuviera apagada.
+- **Descargar modelos** («Descargar») es solo para Ollama; en los otros servidores el modelo se carga ahí.
+- **Los embeddings siguen siendo locales** (fastembed): las intenciones, el significado y la búsqueda en la base de
+  conocimiento nunca llaman al proveedor.
+
+**Privacidad:** con un proveedor en la nube (OpenAI, Azure, Groq, OpenRouter, …) el texto de las conversaciones,
+los turnos recientes, la persona y los fragmentos de la base de conocimiento que se usan para responder se mandan
+a ese proveedor y quedan sujetos a sus condiciones. La pantalla IA avisa cuando la dirección no es de esta compu ni
+de tu red privada. Si eso no sirve, usá Ollama o un servidor propio (vLLM, llama.cpp, LM Studio).
 
 ## Qué hace cada función y sus guardas
 

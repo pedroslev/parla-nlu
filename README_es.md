@@ -62,8 +62,8 @@ costado, publicás una versión y lo conectás a tu web, a tu sistema o a un IVR
   pasar con una persona, «¿algo más?» y encuesta de satisfacción (CSAT).
 
 ### IA local (opcional)
-- Con Ollama (o un servidor local compatible con OpenAI como LM Studio o llama.cpp). Modelo por defecto
-  `qwen2.5:0.5b`, ~400 MB.
+- Con Ollama por defecto (modelo `qwen2.5:0.5b`, ~400 MB), o cualquier endpoint compatible con OpenAI: vLLM,
+  llama.cpp, LM Studio, LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter ([docs/ai-and-voice_es.md](docs/ai-and-voice_es.md#endpoints-compatibles-con-openai)).
 - Rescata intenciones dudosas, completa slots a partir de una descripción, lee una respuesta con la charla
   reciente (contestó, preguntó otra cosa o pidió otra acción), responde desde la base de conocimiento, repregunta
   cuando no entiende y conversa en un paso `agent` con funciones como herramientas.
@@ -207,7 +207,7 @@ parla/
   server.py             HTTP, motor (handle/run/begin), NLU, versiones, API pública
   auth.py               usuarios, roles, sesiones y claves de API
   brain.py              IA encima del motor (rescate, slots, leer respuestas, fallback, paso agent)
-  llm.py                cliente de modelos locales (Ollama / compatible OpenAI)
+  llm.py                cliente de modelos (Ollama local / cualquier endpoint compatible con OpenAI)
   knowledge.py          base de conocimiento: extraer texto y buscar
   files.py              archivos que manda el paso «Enviar un archivo»
   dates.py              fechas en lenguaje natural, por reglas
@@ -284,7 +284,7 @@ Botpress y Voiceflow, incluido lo que a Parla todavía le falta, está en [docs/
 | Dónde corre | Tu compu (o un contenedor), un proceso Python | Self-hosted | Nube de Google | Nube (también tuvo versión self-hosted) |
 | Interfaz sin código | Sí, incluida | Principalmente archivos YAML y CLI; interfaces visuales en la edición comercial | Sí (consola; flujos visuales en CX) | Sí, editor visual |
 | NLU | Embeddings + kNN, CRF, reglas | Pipeline de ML configurable y enfoques con LLM | Gestionado por Google | Basado en LLM en las versiones actuales |
-| LLM | Opcional, local (Ollama) | Opcional, configurable | Integrado con modelos de Google | Central en la plataforma |
+| LLM | Opcional: local (Ollama) o cualquier endpoint compatible con OpenAI | Opcional, configurable | Integrado con modelos de Google | Central en la plataforma |
 | Escala y ecosistema | Pensado para un servidor chico | Maduro, producción a gran escala | Gestionado, escala de Google | Gran ecosistema de integraciones |
 | Canales | API HTTP, widget web, WhatsApp y Telegram | Muchos conectores | Muchas integraciones | Muchos canales |
 | Costo | Gratis, local | Open source + edición paga | Pago por uso | Plan gratis + planes pagos |

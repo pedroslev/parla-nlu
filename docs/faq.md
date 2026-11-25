@@ -5,7 +5,7 @@
 **Do I need a GPU or internet?**
 No. Everything runs on CPU. Internet is only needed to install and to download the models the first time (the
 embedding model, ~1.2 GB; the Ollama model and the voice models, if you use them). After that, apart from the
-`http` steps you build yourself, nothing leaves your machine.
+`http` steps you build yourself (and a hosted AI provider, if you pick one), nothing leaves your machine.
 
 **Do I need AI for the bot to work?**
 No. Intents, entities, flows and the knowledge base (in extractive mode) work without a language model. AI adds:
@@ -76,7 +76,9 @@ They run isolated from the conversation (if they fail, the bot keeps going), but
 Read [security.md](security.md#functions-not-a-sandbox).
 
 **Can I use a model that isn't from Ollama?**
-Yes, any local OpenAI-compatible server (LM Studio, llama.cpp server) with `provider: "openai"`.
+Yes, any OpenAI-compatible endpoint with `provider: "openai"`: your own (vLLM, llama.cpp server, LM Studio,
+LocalAI) or a hosted one (OpenAI, Azure OpenAI, Groq, OpenRouter), with the API key stored in «Claves». With a hosted
+provider the conversation text leaves your machine. See [ai-and-voice.md](ai-and-voice.md#openai-compatible-endpoints).
 
 **How do I change the theme?**
 With the interface's selector: Claro (Light), Oscuro (Dark) or Colorido (Colorful). It's remembered in that

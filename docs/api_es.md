@@ -346,7 +346,12 @@ nombre ni el slug).
 
 | Ruta | Cuerpo | Respuesta |
 |---|---|---|
-| `POST /api/ai/status` | `{"ai": config}` o `{"agent": id}`; con `ai.prompt`, además prueba el modelo | `{"ok", "models", "recommended", "provider", "model", "model_ready", "error", "hint", "reply"?, "ms"?}` |
+| `POST /api/ai/status` | `{"ai": config}` y/o `{"agent": id}` (con `agent`, la API key que nombra `ai.api_key_secret` sale de las Claves de ese agente); con `ai.prompt`, además prueba el modelo. Dueño o editor. | `{"ok", "models", "recommended", "provider", "model", "model_ready", "local", "models_unknown"?, "error", "hint", "reply"?, "ms"?}`. Nunca devuelve la key. |
+
+La config `ai` (`agent.ai`): `enabled`, `provider` (`"ollama"` por defecto, u `"openai"` para cualquier servidor
+compatible con OpenAI), `url`, `model`, `api_key_secret` (el **nombre** de una clave de Claves; la key nunca va en
+el JSON del agente), `azure` / `api_version` (Azure OpenAI), `temperature`, `rescue_intents`, `use_knowledge`,
+`generative_fallback`, `persona`. Ver [ai-and-voice_es.md](ai-and-voice_es.md#endpoints-compatibles-con-openai).
 | `POST /api/ai/pull` | `{"ai": config, "model"}` | `{"ok", "started", "model"}`. Descarga un modelo de Ollama en segundo plano. |
 | `GET /api/ai/progress` | — | `{modelo: {"status", "completed", "total", "done", "error"}}` |
 | `GET /api/voice/status` | — | `{"stt", "tts", "hint", "errors", "models"}` |

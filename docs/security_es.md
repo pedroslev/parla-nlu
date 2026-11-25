@@ -160,11 +160,23 @@ En **Publicar → Claves** cargás tokens y contraseñas de servicios externos p
 - Nunca están en el JSON del agente: no viajan al exportar ni quedan en las versiones publicadas.
 - La interfaz, la API y el MCP solo ven los **nombres**; los valores nunca vuelven por la API y el MCP no puede
   leerlos ni cargarlos.
-- Solo se resuelven en la URL, los encabezados y el cuerpo de un paso `http` (`{{ secret.NOMBRE }}`) y como
-  entrada `secret.NOMBRE` de una función. En mensajes no se resuelven.
+- Solo se resuelven en la URL, los encabezados y el cuerpo de un paso `http` (`{{ secret.NOMBRE }}`), como
+  entrada `secret.NOMBRE` de una función y como API key del proveedor de IA (`ai.api_key_secret`). En mensajes no
+  se resuelven. `/api/ai/status` nunca devuelve la key de la IA y la tapa en sus errores.
 - Cualquier valor de 4 o más caracteres que aparezca en una traza o en un mensaje de error del flujo se tapa con
   `••••`. **No** se tapa lo que devuelve el servicio o la función: si una respuesta trae la clave y la guardás en
   un slot, queda en la conversación.
+
+## Proveedores de IA en la nube: los datos salen de la máquina
+
+Por defecto la IA corre con Ollama en tu propia máquina. Si un agente usa un endpoint compatible con OpenAI que no
+es tuyo (OpenAI, Azure OpenAI, Groq, OpenRouter, …), **el texto de las conversaciones, los turnos recientes, la
+persona y los fragmentos de la base de conocimiento que se usan para responder se mandan a ese proveedor** y
+quedan sujetos a sus condiciones (retención, entrenamiento, región). La pantalla IA avisa cuando la dirección no
+es de esta compu ni de una red privada. Los embeddings, las intenciones y la búsqueda en la base siguen siendo
+locales. Solo dueños y editores pueden cambiar la dirección de la IA de un agente o probarla con su key; revisá
+los agentes que arme otra persona antes de prenderlos. Ver
+[ai-and-voice_es.md](ai-and-voice_es.md#endpoints-compatibles-con-openai).
 
 ## Pasos HTTP
 

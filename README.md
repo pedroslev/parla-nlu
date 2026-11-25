@@ -68,8 +68,8 @@ Spanish-speaking users.
   off to a person, "anything else?" and a satisfaction survey (CSAT).
 
 ### Local AI (optional)
-- With Ollama (or a local OpenAI-compatible server such as LM Studio or llama.cpp). Default model
-  `qwen2.5:0.5b`, ~400 MB.
+- With Ollama by default (model `qwen2.5:0.5b`, ~400 MB), or any OpenAI-compatible endpoint: vLLM, llama.cpp,
+  LM Studio, LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter ([docs/ai-and-voice.md](docs/ai-and-voice.md#openai-compatible-endpoints)).
 - Rescues uncertain intents, fills slots from a description, reads an answer together with the recent
   conversation (did they answer, ask something else or request a different action), answers from the knowledge
   base, asks again when it doesn't understand, and converses in an `agent` step with functions as tools.
@@ -213,7 +213,7 @@ parla/
   server.py             HTTP, engine (handle/run/begin), NLU, versions, public API
   auth.py               users, roles, sessions and API keys
   brain.py              AI on top of the engine (rescue, slots, reading answers, fallback, agent step)
-  llm.py                client for local models (Ollama / OpenAI-compatible)
+  llm.py                LLM client (local Ollama / any OpenAI-compatible endpoint)
   knowledge.py          knowledge base: text extraction and search
   files.py              files sent by the «Enviar un archivo» (Send a file) step
   dates.py              rule-based natural-language dates
@@ -289,7 +289,7 @@ Parla doesn't have yet, is in [docs/comparison.md](docs/comparison.md).
 | Where it runs | Your computer (or a container), one Python process | Self-hosted | Google Cloud | Cloud (it also had a self-hosted version) |
 | No-code interface | Yes, included | Mainly YAML files and CLI; visual interfaces in the commercial edition | Yes (console; visual flows in CX) | Yes, visual editor |
 | NLU | Embeddings + kNN, CRF, rules | Configurable ML pipeline and LLM-based approaches | Managed by Google | LLM-based in current versions |
-| LLM | Optional, local (Ollama) | Optional, configurable | Integrated with Google models | Central to the platform |
+| LLM | Optional: local (Ollama) or any OpenAI-compatible endpoint | Optional, configurable | Integrated with Google models | Central to the platform |
 | Scale and ecosystem | Designed for a small server | Mature, large-scale production | Managed, Google scale | Large integration ecosystem |
 | Channels | HTTP API, web widget, WhatsApp and Telegram | Many connectors | Many integrations | Many channels |
 | Cost | Free, local | Open source + paid edition | Pay per use | Free plan + paid plans |

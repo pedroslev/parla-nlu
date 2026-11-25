@@ -16,6 +16,9 @@ una edición paga que se guarde funciones.
   desde la Bandeja. Ver [channels_es.md](channels_es.md).
 - **Importador de proyectos Rasa**: los proyectos de Rasa 3.x, clásicos y CALM, pasan a agentes de Parla, con un
   aviso por todo lo que no se convierte. Ver [migrate-from-rasa_es.md](migrate-from-rasa_es.md).
+- **Endpoints de modelos compatibles con OpenAI**: las funciones de IA pueden usar cualquier API compatible con
+  OpenAI (vLLM, llama.cpp, LM Studio, OpenAI, Azure OpenAI, Groq, OpenRouter), con la key en Claves. Ollama sigue
+  siendo lo que viene por defecto. Ver [ai-and-voice_es.md](ai-and-voice_es.md#endpoints-compatibles-con-openai).
 
 ## Ahora (en curso)
 
@@ -25,8 +28,6 @@ una edición paga que se guarde funciones.
   de comandos y GitHub Actions).
 - **Enmascarado de datos personales (PII)**: tapar emails, teléfonos, documentos y tarjetas en las conversaciones
   guardadas y en los registros.
-- **Endpoints de modelos compatibles con OpenAI**: apuntar las funciones de IA a cualquier API compatible con
-  OpenAI, local o en la nube, no solo a servidores locales.
 - **Interfaz en inglés** (internacionalización de la interfaz).
 
 ## Después

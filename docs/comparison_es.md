@@ -18,7 +18,7 @@ solo proceso de Python (servidor HTTP de la biblioteca estándar), archivos JSON
 código en JavaScript puro. Su NLU usa embeddings y vecino más cercano (`google/embeddinggemma-300m` vía
 fastembed), un CRF para entidades y reglas de listas, regex y fechas. Los flujos tienen muchos tipos de paso
 (preguntas, pedidos HTTP, condiciones, subflujos, envío de archivos, funciones, derivación a una persona, pasos
-de IA). El LLM local es opcional (Ollama o un servidor local compatible con OpenAI), igual que la voz local
+de IA). El LLM es opcional (Ollama local por defecto, o cualquier endpoint compatible con OpenAI, propio o en la nube), igual que la voz local
 (faster-whisper para transcribir, piper para sintetizar), incluida una llamada de voz interrumpible en el chat de
 prueba. Incluye un servidor MCP con 25 herramientas, versiones con `staging` / `production` y rollback,
 usuarios, roles y claves de API, una bóveda de secretos por agente, una bandeja para la atención humana,

@@ -16,7 +16,7 @@ Parla is an Apache-2.0 open-source chatbot builder that runs locally on a CPU: o
 server), JSON files on disk and a no-code web interface in vanilla JavaScript. Its NLU uses embeddings and
 nearest neighbour (`google/embeddinggemma-300m` via fastembed), a CRF for entities, and lists, regex and date
 rules. Flows have many step types (questions, HTTP requests, conditions, subflows, file sending, functions,
-handoff, AI steps). A local LLM is optional (Ollama or a local OpenAI-compatible server), and so is local voice
+handoff, AI steps). An LLM is optional (local Ollama by default, or any OpenAI-compatible endpoint, self-hosted or hosted), and so is local voice
 (faster-whisper for speech-to-text, piper for text-to-speech), including an interruptible voice call in the test
 chat. It ships an MCP server with 25 tools, versions with `staging` / `production` and rollback, users, roles and
 API keys, a per-agent secret vault, an inbox for human handoff, analytics, a "to teach" queue for unrecognized

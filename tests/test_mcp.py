@@ -212,6 +212,14 @@ assert not any("(http)" in e for e in nerrs), nerrs                             
 has(nwarns, "(http)", "X-Api-Key", "Claves")
 has(nwarns, "(agent)", "goal")
 assert m.secret_refs(nbad) == {"CRM_TOKEN", "A", "B", "C", "API_KEY", "mal"}, m.secret_refs(nbad)
+hosted = copy.deepcopy(m.SOPORTE_SNIPPET)                                                   # proveedor compatible con OpenAI
+hosted["ai"].update(provider="openai", url="https://api.groq.com/openai/v1", model="llama-3.1-8b-instant", api_key_secret="GROQ_KEY")
+assert m.validate(hosted)[1] == [], m.validate(hosted)[1]
+assert "GROQ_KEY" in m.secret_refs(hosted)                                                   # avisa si falta cargarla
+hosted["ai"].update(api_key="gsk_x", api_key_secret="no vale", url="ftp://x")
+has(m.validate(hosted)[1], "ai", "nunca va en el JSON")
+has(m.validate(hosted)[1], "ai", "api_key_secret")
+has(m.validate(hosted)[1], "ai", "http://")
 off = copy.deepcopy(m.SOPORTE_SNIPPET)
 off["ai"]["enabled"] = False
 offw = m.validate_agent(off)
