@@ -1,0 +1,12 @@
+Parla
+Copyright 2026 The Parla Authors
+
+This product includes software developed by The Parla Authors
+(https://github.com/pedroslev/parla-nlu).
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file.
+
+Third-party dependencies (requirements.txt, requirements-voice.txt) and the
+models Parla downloads at runtime (for example google/embeddinggemma-300m,
+faster-whisper, piper voices and Ollama models) are distributed under their
+own licenses and terms, which apply separately.

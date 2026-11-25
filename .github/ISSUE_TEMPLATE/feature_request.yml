@@ -1,0 +1,33 @@
+name: Feature request / Pedir una función
+description: Propose something new or an improvement. / Proponé algo nuevo o una mejora.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [roadmap](https://github.com/pedroslev/parla-nlu/blob/main/docs/ROADMAP.md) first: it may already
+        be planned. Every feature goes into the open-source project, there is no paid tier.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does it solve? / ¿Qué problema resuelve?
+      description: The use case. "I'm building a bot that... and I can't..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution / Solución propuesta
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and workarounds / Alternativas
+      description: What you tried, or how other tools solve it.
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contributing / Contribuir
+      options:
+        - label: I'd like to work on this. / Me gustaría hacerlo yo.

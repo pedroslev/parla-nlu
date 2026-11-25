@@ -1,6 +1,28 @@
-# Parla
+# Parla: open-source conversational AI you can self-host
 
 **English** · [Español](README_es.md)
+
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![CI](https://github.com/pedroslev/parla-nlu/actions/workflows/ci.yml/badge.svg)](https://github.com/pedroslev/parla-nlu/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
+[![Docker image](https://img.shields.io/badge/docker-ghcr.io%2Fpedroslev%2Fparla--nlu-2496ED.svg?logo=docker&logoColor=white)](https://github.com/pedroslev/parla-nlu/pkgs/container/parla-nlu)
+
+**Build chatbots and voice bots that run on your own servers, on a plain CPU, with no cloud required.**
+
+Parla is a free, open-source chatbot builder and conversational AI platform (Apache-2.0). It combines a no-code
+flow editor, a fast embeddings + CRF NLU, an optional local LLM through Ollama and on-premise voice
+(speech-to-text and text-to-speech) in a single Python process. It is designed as a self-hosted alternative to
+closed platforms such as Rasa Pro, Dialogflow CX, Cognigy, Kore.ai or Copilot Studio: your conversations, models
+and data stay on your infrastructure. It is built Spanish-first and also understands Portuguese and English. See
+the [comparison](docs/comparison.md) and the [roadmap](docs/ROADMAP.md).
+
+### No open core
+
+Every Parla feature is, and will stay, in this open-source repository under Apache-2.0. There is no paid tier,
+"enterprise edition" or license key that withholds features. If companies need support or hosting, that can be
+offered around the project, never by moving features out of it.
+
+## What it is
 
 **Parla** is a conversational bot builder that runs on your computer, with no GPU and no cloud. You build the bot
 from a web interface without writing code: what it has to understand (intents), what data to pull out of a
@@ -8,7 +30,8 @@ message (entities), what to remember (slots) and what to do in each case (flows)
 a side chat panel, publish a version and connect it to your website, your system or an IVR through a simple HTTP
 API.
 
-The interface is in Spanish, and Parla is aimed at bots for Spanish-speaking users.
+The interface is in Spanish (an English UI is [on the roadmap](docs/ROADMAP.md)), and Parla is aimed at bots for
+Spanish-speaking users.
 
 **Who is it for?**
 
@@ -147,6 +170,13 @@ With Docker:
 docker compose up -d              # http://127.0.0.1:8000; with --profile ai it adds Ollama
 ```
 
+Or the prebuilt multi-arch image (`linux/amd64`, `linux/arm64`; published from the first tagged release on, `edge`
+follows `main`, and `-voice` tags include local voice):
+
+```sh
+docker run -d -p 127.0.0.1:8000:8000 -v parla-data:/data ghcr.io/pedroslev/parla-nlu:latest
+```
+
 There are also Kubernetes (and k3s) manifests in `deploy/`. How to use them, the proxy and backups are covered in
 [docs/deployment.md](docs/deployment.md).
 
@@ -235,9 +265,9 @@ the voice extras. Details in [docs/development.md](docs/development.md#tests).
 
 ## Roadmap
 
-What it does **not** do yet:
+The public plan (Now / Next / Later) is in [docs/ROADMAP.md](docs/ROADMAP.md). What it does **not** do yet:
 
-- WhatsApp channel.
+- WhatsApp and Telegram channels (in progress).
 - Built-in public endpoint or tunnel (today you publish it yourself with a proxy).
 - Bot templates and outbound campaigns.
 - Per-user memory across conversations.
@@ -247,7 +277,9 @@ What it does **not** do yet:
 
 ## Comparison
 
-A general overview, not a benchmark. Each tool has many more options than fit here.
+A general overview, not a benchmark. Each tool has many more options than fit here. A detailed, sourced comparison
+with Rasa Pro/Studio, Cognigy, Kore.ai, Dialogflow CX, Copilot Studio, Botpress and Voiceflow, including what
+Parla doesn't have yet, is in [docs/comparison.md](docs/comparison.md).
 
 | | Parla | Rasa | Dialogflow (Google) | Botpress |
 |---|---|---|---|---|
@@ -265,15 +297,19 @@ get a useful bot running in an afternoon, on your machine and without sending da
 ## Documentation
 
 Everything is in [`docs/`](docs/README.md): getting started, concepts, API, MCP, AI and voice, security,
-deployment, development and FAQ.
+deployment, development, FAQ, [comparison](docs/comparison.md) and [roadmap](docs/ROADMAP.md). Release notes are
+in [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
 
-1. Open an issue describing what you want to change.
-2. Follow the code style: small functions, comments in Spanish, the simplest solution that works, and `ponytail:`
-   comments when taking a shortcut with a known limit (see [docs/development.md](docs/development.md)).
-3. Add or adjust a test in `tests/` and run `make test` before submitting the change.
+Contributions are welcome: read [CONTRIBUTING.md](CONTRIBUTING.md) (setup, tests, style, DCO sign-off with
+`git commit -s`) and the [Code of Conduct](CODE_OF_CONDUCT.md). Report security issues privately as described in
+[SECURITY.md](SECURITY.md).
 
 ## License
 
-To be defined.
+[Apache License 2.0](LICENSE). Copyright 2026 The Parla Authors; see [NOTICE](NOTICE). Every feature is open source
+([no open core](#no-open-core)).
+
+Product names mentioned in this repository are trademarks of their respective owners and are used only to
+identify them; Parla is not affiliated with or endorsed by them.

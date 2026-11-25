@@ -1,4 +1,7 @@
-"""Parla: armá bots que entienden. Paquete del servidor, el motor y sus módulos."""
+"""Parla: armá bots que entienden. Paquete del servidor, el motor y sus módulos.
+
+SPDX-License-Identifier: Apache-2.0
+"""
 import json
 import os
 import sys

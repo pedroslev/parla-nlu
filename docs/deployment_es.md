@@ -38,6 +38,22 @@ Escucha en `127.0.0.1` salvo que definas `PARLA_HOST`.
 
 ## Docker
 
+### Imagen publicada
+
+Hay imágenes para `linux/amd64` y `linux/arm64` en el GitHub Container Registry. `latest` y las etiquetas de
+versión (`0.9.0`, `0.9`) aparecen desde la primera versión etiquetada; `edge` sigue a `main`. Cada una tiene su
+variante `-voice` (`latest-voice`, `edge-voice`) con ffmpeg, faster-whisper y piper.
+
+```sh
+docker run -d --name parla --restart unless-stopped \
+  --read-only --tmpfs /tmp \
+  -p 127.0.0.1:8000:8000 -v parla-data:/data ghcr.io/pedroslev/parla-nlu:latest
+```
+
+El modelo de vectores (~1,2 GB) se baja al volumen `parla-data` la primera vez que entrenás.
+
+### Armarla vos
+
 ```sh
 make docker-build                 # imagen parla:local   (VOICE=1 make docker-build: con voz)
 make docker-run                   # http://127.0.0.1:8000, datos en el volumen «parla-data»
@@ -89,6 +105,7 @@ Manifiestos en `deploy/k8s/` sin namespace fijo: ConfigMap, PVC (5 Gi), Deployme
 ```sh
 docker build -t registry.example.com/parla:1.0.0 . && docker push registry.example.com/parla:1.0.0
 # en deploy/k8s/kustomization.yaml descomentá «images:» con ese nombre y versión
+# (o usá la publicada ghcr.io/pedroslev/parla-nlu:<versión>, ver Imagen publicada)
 kubectl create namespace parla
 kubectl apply -n parla -k deploy/k8s
 kubectl -n parla rollout status deploy/parla

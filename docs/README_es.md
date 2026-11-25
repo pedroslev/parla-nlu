@@ -13,3 +13,5 @@
 | [Despliegue](deployment_es.md) | Quien lo instala | Local, Docker, Kubernetes, detrás de un proxy, copias de seguridad. |
 | [Desarrollo](development_es.md) | Desarrolladores | Comandos, variables de entorno, código, internals del motor, cómo sumar un tipo de paso, pruebas, estilo. |
 | [Preguntas frecuentes](faq_es.md) | Todos | Dudas comunes. |
+| [Comparación](comparison_es.md) | Todos | Parla frente a Rasa, Cognigy, Kore.ai, Dialogflow CX, Copilot Studio, Botpress y Voiceflow, con fuentes. |
+| [Hoja de ruta](ROADMAP_es.md) | Todos | Qué se está haciendo ahora, después y más adelante. |

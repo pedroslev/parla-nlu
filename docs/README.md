@@ -13,3 +13,5 @@
 | [Deployment](deployment.md) | Whoever installs it | Local, Docker, Kubernetes, behind a proxy, backups. |
 | [Development](development.md) | Developers | Commands, environment variables, code, engine internals, how to add a step type, tests, style. |
 | [FAQ](faq.md) | Everyone | Common questions. |
+| [Comparison](comparison.md) | Everyone | Parla vs Rasa, Cognigy, Kore.ai, Dialogflow CX, Copilot Studio, Botpress and Voiceflow, with sources. |
+| [Roadmap](ROADMAP.md) | Everyone | What's being built now, next and later. |

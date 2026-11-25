@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python compiles
+        run: python -m compileall -q app.py mcp_server.py parla tests
+      - name: JavaScript parses
+        run: for f in web/static/*.js; do node --check "$f"; done
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    env:
+      # test_knowledge and test_mcp train real agents: they need the embedding model (~1.2 GB), cached below.
+      PARLA_EMBED_CACHE: ${{ github.workspace }}/.cache/embeddings
+      HF_HOME: ${{ github.workspace }}/.cache/hf
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+      # Core only: without requirements-voice.txt and ffmpeg, test_voice prints «saltado» and passes.
+      # There is no Ollama on the runner either: test_ai skips its model part and still tests dates and fallbacks.
+      - run: pip install -r requirements.txt
+      - name: Embedding model name
+        id: model
+        run: echo "name=$(grep -Po '^MODEL = "\K[^"]+' parla/server.py)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: .cache/embeddings
+          # Same model for every Python version; a new MODEL in parla/server.py downloads it once again.
+          key: embed-${{ steps.model.outputs.name }}
+      - run: python tests/run_all.py
