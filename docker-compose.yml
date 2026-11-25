@@ -17,6 +17,7 @@ services:
     environment:
       PARLA_FUNCTIONS: ${PARLA_FUNCTIONS:-0}
       PARLA_WHISPER: ${PARLA_WHISPER:-base}
+      PARLA_LANG: ${PARLA_LANG:-}       # default interface language: en, es or pt (empty = browser's)
     volumes:
       - parla-data:/data
     read_only: true

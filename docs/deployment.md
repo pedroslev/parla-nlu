@@ -20,6 +20,7 @@ file there (`parla.db`). That shapes how it's deployed:
 | `HF_HOME` | `/data/models/hf` | Hugging Face cache (fastembed downloads). |
 | `PARLA_FUNCTIONS` | `0` | «función» (function) steps (the bots' code). Off in the image; `1` to turn them on. |
 | `PARLA_WHISPER` | `base` | Dictation model (`tiny` if the machine is slow). |
+| `PARLA_LANG` | browser's language | Default interface language (`en`, `es` or `pt`) for users who haven't picked one. |
 | `PARLA_HOSTS` | | Domains (`host` or `host:port`, comma-separated) that can also be used to reach the interface and `/api/`. |
 | `PARLA_SECURE_COOKIE` | | `1`: the session cookie always has `Secure` (behind HTTPS). |
 | `PARLA_USERS` | | A different path for `users.json`. |

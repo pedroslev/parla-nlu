@@ -50,6 +50,7 @@ All are optional. Nothing loads `.env` automatically: export them in your shell.
 | `PARLA_PUBLIC_URL` | empty | Public HTTPS address for the WhatsApp/Telegram webhooks (an agent's `channels.public_url` wins). See [channels.md](channels.md). |
 | `PARLA_WHATSAPP_API`, `PARLA_TELEGRAM_API` | `https://graph.facebook.com/v21.0`, `https://api.telegram.org` | Base URL of those APIs. Only for tests (`tests/test_channels.py` points them to a fake server). |
 | `PARLA_WHISPER` | `base` | faster-whisper model (`tiny` if the machine is slow). |
+| `PARLA_LANG` | browser's language | Default interface language (`en`, `es` or `pt`); `scripts/setup.sh --lang` writes it to `.env`. |
 | `PARLA_URL` | `http://127.0.0.1:8000` | (MCP) where Parla is. |
 | `PARLA_TOKEN` | empty | (MCP) API key sent as `Authorization: Bearer`. |
 | `PARLA_MCP_ALLOWED_HOSTS` | empty | (MCP with `--http`) public domains accepted behind a proxy. |

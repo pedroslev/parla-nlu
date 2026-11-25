@@ -7,6 +7,7 @@ metadata:
 data:
   PARLA_FUNCTIONS: "0"      # "function" steps = arbitrary code in the pod; 1 only if you trust every editor
   PARLA_WHISPER: "base"
+  # PARLA_LANG: "en"         # default interface language: en, es or pt (unset = the browser's)
   # PARLA_PUBLIC_URL: "https://bots.example.com"   # for the WhatsApp/Telegram webhooks (docs/channels.md)
 ---
 apiVersion: v1

@@ -9,8 +9,8 @@ setup:          ## create .venv and install the core
 setup-voice:    ## core + voice (faster-whisper, piper-tts)
 	scripts/setup.sh --voice
 
-run:            ## open Parla at http://127.0.0.1:$(PORT)
-	$(PY) app.py $(PORT)
+run:            ## open Parla at http://127.0.0.1:$(PORT) (reads .env if there is one)
+	set -a; [ ! -f .env ] || . ./.env; set +a; $(PY) app.py $(PORT)
 
 test:           ## all tests (voice/AI are skipped if models or Ollama are missing)
 	$(PY) tests/run_all.py

@@ -21,6 +21,7 @@ auditoría van en un archivo SQLite ahí mismo (`parla.db`). Eso define cómo se
 | `HF_HOME` | `/data/models/hf` | Caché de Hugging Face (descargas de fastembed). |
 | `PARLA_FUNCTIONS` | `0` | Pasos «función» (código de los bots). Apagados en la imagen; `1` para prenderlos. |
 | `PARLA_WHISPER` | `base` | Modelo de dictado (`tiny` si la máquina es lenta). |
+| `PARLA_LANG` | el del navegador | Idioma de la interfaz por defecto (`en`, `es` o `pt`) para quien no eligió uno. |
 | `PARLA_HOSTS` | | Dominios (`host` o `host:puerto`, separados por coma) por los que también se entra a la interfaz y a `/api/`. |
 | `PARLA_SECURE_COOKIE` | | `1`: la cookie de sesión siempre con `Secure` (detrás de HTTPS). |
 | `PARLA_USERS` | | Otra ruta para `users.json`. |
