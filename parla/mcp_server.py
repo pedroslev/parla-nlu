@@ -1264,7 +1264,8 @@ mcp = MCPServer("parla", instructions=(
     "los usuarios reales no lo ven hasta publicar. Flujo: probar el borrador → publish_agent a staging → probar staging → "
     "con el OK del usuario, deploy_version a production (confirm=True). Rollback = desplegar la versión anterior. "
     "Preguntas frecuentes: add_knowledge / search_knowledge. Para mejorar un bot en uso: list_unrecognized → "
-    "teach_phrases → train_agent, y get_analytics. Credenciales: solo {{ secret.NOMBRE }}; list_secret_names ve los "
+    "teach_phrases → train_agent, y get_analytics. Para migrar un bot de Rasa: import_rasa_project con la carpeta del "
+    "proyecto, revisá los warnings con la persona y corregí con update_agent. Credenciales: solo {{ secret.NOMBRE }}; list_secret_names ve los "
     "nombres, los valores los carga la persona en Claves (este servidor nunca los ve)."))
 
 
@@ -1336,6 +1337,27 @@ def update_agent(agent: str, agent_json: dict | str) -> dict:
     warnings += secret_warnings(agent_id, data)
     info = call("GET", "/api/v1/bots/" + agent_id)
     return {"id": agent_id, "name": info["name"], "slug": info["slug"], "trained": trained, "warnings": warnings}
+
+
+@mcp.tool()
+def import_rasa_project(path: str, name: str | None = None) -> dict:
+    """Import a Rasa 3.x project (classic NLU/domain/stories/rules/forms or CALM flows) from a LOCAL folder as a NEW
+    agent, already trained. `path` = the project folder (the one with domain.yml and data/). Reads only its .yml/.yaml
+    files. Returns {id, name, slug, warnings}: warnings list everything that could not be migrated (custom actions
+    become placeholder http steps, CALM flows need real example phrases, ...). Review them with the person, then fix
+    the agent with get_agent + update_agent and try it with test_conversation."""
+    from . import rasa_import
+    folder = os.path.abspath(os.path.expanduser(str(path or "")))
+    if not os.path.isdir(folder):
+        raise ToolError("no existe la carpeta %s" % folder)
+    files = rasa_import.read_folder(folder)
+    if not files:
+        raise ToolError("no hay archivos .yml en %s: ¿es la carpeta del proyecto de Rasa?" % folder)
+    made = call("POST", "/api/agents/import/rasa", {"files": files, "name": name or os.path.basename(folder)})
+    info = call("GET", "/api/v1/bots/" + made["agent"]["id"])
+    _, errors, quality = validate(made["agent"])
+    return {"id": info["id"], "name": info["name"], "slug": info["slug"], "warnings": made["warnings"],
+            "validation": {"errors": errors, "warnings": quality}}
 
 
 @mcp.tool()

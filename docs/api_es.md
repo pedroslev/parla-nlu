@@ -13,7 +13,7 @@ Generalidades:
 
 - Base: `http://127.0.0.1:8000` (o el puerto que le pasaste a `app.py`).
 - Cuerpo y respuestas en JSON. El cuerpo tiene que ser un objeto JSON (si no, 400). Tamaño máximo (si no, 413):
-  25 MB para subir archivos, documentos de conocimiento y audios; 2 MB para un audio del widget público; 1 MB para
+  25 MB para subir archivos, documentos de conocimiento, audios y proyectos de Rasa; 2 MB para un audio del widget público; 1 MB para
   lo demás.
 - Errores: `{"error": "mensaje en castellano"}` con 400, 401, 403, 404, 405, 413, 415 o 429. Una excepción adentro
   de una ruta (por ejemplo, pedir una versión que no existe) vuelve como 400 con el mensaje.
@@ -294,6 +294,7 @@ nombre ni el slug).
 |---|---|---|
 | `GET /api/agents` | — | `[{"id", "name", "intents" (cantidad), "flows" (cantidad)}]` |
 | `POST /api/agents` | `{"name", "demo"?: true}` (en blanco o el ejemplo de pedidos) o `{"import": agente}` (acepta el sobre `{"parla": 1, "agent": ...}`) | El agente creado. Quien ve solo algunos bots pasa a ver también este. |
+| `POST /api/agents/import/rasa` | `{"zip": el .zip del proyecto en base64, "name"?}` o `{"files": {"domain.yml": "...", "data/nlu.yml": "..."}, "name"?}` | `{"agent", "warnings"}`: un agente nuevo convertido de un proyecto de Rasa 3.x y ya entrenado; `warnings` dice todo lo que no se pudo pasar tal cual. Mismo rol que crear un agente (dueño o editor). Solo lee `.yml`/`.yaml`; límites del zip: 500 archivos, 20 MB descomprimido, sin rutas absolutas ni `..`. Ver [migrate-from-rasa_es.md](migrate-from-rasa_es.md). |
 | `GET /api/agents/{id}` | — | El JSON completo del agente (borrador), con `system` completo. |
 | `PUT /api/agents/{id}` | El agente entero | El agente guardado. Reemplaza todo (lo que falta vuelve a los valores en blanco); `environments` y `deployments` no se pueden pisar. |
 | `DELETE /api/agents/{id}` | — | `{}`. Borra el agente, su modelo, versiones, conversaciones y archivos. |

@@ -14,5 +14,6 @@
 | [Despliegue](deployment_es.md) | Quien lo instala | Local, Docker, Kubernetes, detrás de un proxy, copias de seguridad. |
 | [Desarrollo](development_es.md) | Desarrolladores | Comandos, variables de entorno, código, internals del motor, cómo sumar un tipo de paso, pruebas, estilo. |
 | [Preguntas frecuentes](faq_es.md) | Todos | Dudas comunes. |
+| [Migrar desde Rasa](migrate-from-rasa_es.md) | Quien viene de Rasa | Importar un proyecto de Rasa 3.x (clásico o CALM): qué pasa a qué, qué no se soporta, interfaz, API, CLI y MCP. |
 | [Comparación](comparison_es.md) | Todos | Parla frente a Rasa, Cognigy, Kore.ai, Dialogflow CX, Copilot Studio, Botpress y Voiceflow, con fuentes. |
 | [Hoja de ruta](ROADMAP_es.md) | Todos | Qué se está haciendo ahora, después y más adelante. |

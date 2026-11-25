@@ -98,7 +98,7 @@ Protect it at the proxy (see [security.md](security.md)).
 
 ## Tools
 
-25 tools, one resource (`parla://format-guide`) and one prompt (`build_bot`). In all of them, `agent` can be the
+26 tools, one resource (`parla://format-guide`) and one prompt (`build_bot`). In all of them, `agent` can be the
 id, the exact name or the slug. The ones that change something work on the **draft**.
 
 **Build**
@@ -112,6 +112,7 @@ id, the exact name or the slug. The ones that change something work on the **dra
 | `create_agent(agent_json)` | Validates, creates and trains a new bot. Fills in the regex of `number`, `email`, `phone` and `dni` entities if missing. Returns `{id, name, slug, trained, warnings}` (`trained.log` includes the self-evaluation). |
 | `update_agent(agent, agent_json)` | Replaces the whole draft (whatever you don't send goes back to empty) and retrains. Validates first, including that the files of `file` steps exist. Production and staging don't change. |
 | `train_agent(agent)` | Retrains the draft. |
+| `import_rasa_project(path, name=None)` | Reads the `.yml` files of a Rasa 3.x project folder on your machine (classic or CALM), creates a new trained agent and returns `{id, name, slug, warnings, validation}`: `warnings` is what couldn't be migrated as is. See [migrate-from-rasa.md](migrate-from-rasa.md). |
 | `delete_agent(agent, confirm)` | Deletes the bot with its conversations; requires `confirm=True`. |
 
 **Test**

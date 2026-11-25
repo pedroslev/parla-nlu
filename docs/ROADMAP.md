@@ -14,24 +14,24 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 - **WhatsApp channel** (WhatsApp Business Cloud API) and **Telegram channel**, with buttons, files and Inbox
   replies. See [channels.md](channels.md).
+- **Rasa project importer**: classic and CALM Rasa 3.x projects become Parla agents, with a warning for anything
+  not converted. See [migrate-from-rasa.md](migrate-from-rasa.md).
 
 ## Now (in progress)
 
-- **Rasa project importer**: bring intents, entities, examples and responses from a Rasa project (`domain.yml`,
-  `nlu.yml`) into a Parla agent.
-
-## Next
-
-- **Telephony**: SIP / phone calls through Jambonz and Twilio, with DTMF input, on top of the existing local voice.
 - **Database persistence**: SQLite and Postgres as an alternative to JSON files, with **session retention**
   policies and an **audit log** of who changed what.
 - **Conversation test suites in CI**: write expected conversations and run them on every change (command line and
   GitHub Actions).
 - **PII redaction**: mask personal data (emails, phone numbers, IDs, cards) in saved conversations and logs.
-- **OIDC single sign-on** (Keycloak, Entra ID, Google, Okta and others).
 - **OpenAI-compatible model endpoints**: point the AI features at any OpenAI-compatible API, local or hosted, not
   only local servers.
 - **English UI** (interface internationalization).
+
+## Next
+
+- **Telephony**: SIP / phone calls through Jambonz and Twilio, with DTMF input, on top of the existing local voice.
+- **OIDC single sign-on** (Keycloak, Entra ID, Google, Okta and others).
 
 ## Later
 

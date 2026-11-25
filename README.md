@@ -101,9 +101,11 @@ Spanish-speaking users.
   authorized for the widget.
 
 ### Integrations
-- MCP server with 25 tools to build, validate, train, test, publish and analyze bots.
+- MCP server with 26 tools to build, validate, train, test, publish and analyze bots.
 - **Conectar con IA** (Connect to AI): one button registers Parla in Claude Code, Codex, Claude Desktop or Cursor.
 - Functions in Python or JavaScript for logic that an HTTP step can't handle.
+- **Import from Rasa**: upload your Rasa 3.x project (classic or CALM) as a .zip and get a Parla agent plus a list of what
+  couldn't be migrated. See [docs/migrate-from-rasa.md](docs/migrate-from-rasa.md).
 
 ## Screenshots
 
@@ -298,8 +300,8 @@ get a useful bot running in an afternoon, on your machine and without sending da
 ## Documentation
 
 Everything is in [`docs/`](docs/README.md): getting started, concepts, API, [WhatsApp and Telegram](docs/channels.md), MCP,
-AI and voice, security, deployment, development, FAQ, [comparison](docs/comparison.md) and
-[roadmap](docs/ROADMAP.md). Release notes are in [CHANGELOG.md](CHANGELOG.md).
+AI and voice, security, deployment, development, FAQ, [migrating from Rasa](docs/migrate-from-rasa.md),
+[comparison](docs/comparison.md) and [roadmap](docs/ROADMAP.md). Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
 

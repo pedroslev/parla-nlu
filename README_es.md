@@ -95,9 +95,11 @@ costado, publicás una versión y lo conectás a tu web, a tu sistema o a un IVR
   autorizados para el widget.
 
 ### Integraciones
-- Servidor MCP con 25 herramientas para armar, validar, entrenar, probar, publicar y analizar bots.
+- Servidor MCP con 26 herramientas para armar, validar, entrenar, probar, publicar y analizar bots.
 - «Conectar con IA»: un botón registra Parla en Claude Code, Codex, Claude Desktop o Cursor.
 - Funciones en Python o JavaScript para la lógica que un paso HTTP no resuelve.
+- **Importar de Rasa**: subís tu proyecto de Rasa 3.x (clásico o CALM) en un .zip y queda un agente de Parla, con la
+  lista de lo que no se pudo pasar. Ver [docs/migrate-from-rasa_es.md](docs/migrate-from-rasa_es.md).
 
 ## Capturas
 
@@ -293,8 +295,8 @@ Parla apunta a que un bot útil quede andando en una tarde, en tu máquina y sin
 ## Documentación
 
 Todo en [`docs/`](docs/README_es.md): primeros pasos, conceptos, API, [WhatsApp y Telegram](docs/channels_es.md), MCP,
-IA y voz, seguridad, despliegue, desarrollo, preguntas frecuentes, [comparación](docs/comparison_es.md) y
-[hoja de ruta](docs/ROADMAP_es.md). Las novedades de cada versión están en [CHANGELOG.md](CHANGELOG.md).
+IA y voz, seguridad, despliegue, desarrollo, preguntas frecuentes, [migrar desde Rasa](docs/migrate-from-rasa_es.md),
+[comparación](docs/comparison_es.md) y [hoja de ruta](docs/ROADMAP_es.md). Las novedades de cada versión están en [CHANGELOG.md](CHANGELOG.md).
 
 ## Contribuir
 

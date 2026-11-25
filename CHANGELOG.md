@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Rasa 3.x project importer (classic and CALM) from the UI, API, CLI and MCP, with a warnings report
+  ([docs/migrate-from-rasa.md](docs/migrate-from-rasa.md)).
 - WhatsApp (Cloud API) and Telegram channels: signed webhooks, native buttons, file uploads, Inbox replies
   delivered to the channel, and a «Canales» screen ([docs/channels.md](docs/channels.md)).
 - Apache-2.0 license, `NOTICE` file and a "no open core" pledge: every feature stays in the open-source project.
