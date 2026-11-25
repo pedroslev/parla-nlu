@@ -686,6 +686,35 @@ function importAgent() {
   };
   input.click();
 }
+function importRasa() {      // el proyecto de Rasa comprimido en .zip: POST /api/agents/import/rasa y se muestran los avisos
+  const input = h('input', { type: 'file', accept: '.zip,application/zip' });
+  input.onchange = () => {
+    const file = input.files[0];
+    if (!file) return;
+    const error = $('.import-error');
+    if (file.size > 18 * 1024 * 1024) { error.textContent = 'El .zip es muy grande (máximo 18 MB). Dejá solo los .yml del proyecto.'; return; }
+    error.textContent = 'Importando «' + file.name + '»… (también lo entrena)';
+    const r = new FileReader();
+    r.onload = async () => {
+      try {
+        const out = await api('POST', '/import/rasa', { zip: String(r.result).split(',')[1], name: file.name.replace(/\.zip$/i, '') });
+        error.textContent = '';
+        const d = h('dialog', {}, h('form', { method: 'dialog' },
+          h('h2', {}, 'Importado de Rasa: ' + out.agent.name),
+          h('p', { class: 'help' }, out.agent.intents.length + ' intenciones, ' + out.agent.entities.length + ' entidades, ' + out.agent.slots.length + ' slots y ' + out.agent.flows.length + ' flujos.'),
+          out.warnings.length ? [h('p', {}, 'Revisá lo que no se pudo pasar tal cual (' + out.warnings.length + '):'),
+            h('ul', { class: 'help', style: 'max-height:45vh;overflow:auto;padding-left:20px' }, out.warnings.map((w) => h('li', {}, w)))]
+            : h('p', { class: 'help' }, 'Se pasó todo sin avisos.'),
+          h('div', { class: 'row' }, h('button', { class: 'btn', value: 'ok' }, 'Abrir agente'))));
+        d.onclose = () => { d.remove(); openAgent(out.agent.id); };
+        document.body.append(d); d.showModal();
+      } catch (e) { error.textContent = 'No se pudo importar «' + file.name + '»: ' + e.message + '.'; }
+    };
+    r.onerror = () => { error.textContent = 'No se pudo leer «' + file.name + '».'; };
+    r.readAsDataURL(file);
+  };
+  input.click();
+}
 
 // ---------- inicio ----------
 async function home() {
@@ -711,7 +740,8 @@ async function home() {
       h('p', { class: 'home-lead' }, 'Armá bots que entienden cómo habla tu gente: intenciones, datos, flujos y respuestas, todo en tu compu.'),
       h('div', { class: 'home-actions' }, h('button', { class: 'btn', onclick: create }, icon('plus'), 'Crear agente'),
         h('button', { class: 'btn quiet', onclick: () => connectView() }, icon('spark'), 'Conectar con IA'),
-        h('button', { class: 'btn quiet', onclick: importAgent }, icon('up'), 'Importar agente')))),
+        h('button', { class: 'btn quiet', onclick: importAgent }, icon('up'), 'Importar agente'),
+        h('button', { class: 'btn quiet', onclick: importRasa, title: 'Subí tu proyecto de Rasa comprimido en .zip' }, icon('up'), 'Importar de Rasa')))),
     h('main', { class: 'home-in home-body' },
       h('h2', {}, 'Tus agentes', h('span', { class: 'count' }, list.length)),
       h('p', { class: 'import-error', role: 'alert' }),

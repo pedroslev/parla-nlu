@@ -19,7 +19,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import DATA, ROOT, write_json, auth, brain, connect, dates, files, insights, knowledge, llm, runner, vault, voice
+from . import DATA, ROOT, write_json, auth, brain, connect, dates, files, insights, knowledge, llm, rasa_import, runner, vault, voice
 
 import celpy
 import pycrfsuite
@@ -1780,6 +1780,32 @@ def create(template, **changes):
     return store({**json.loads(json.dumps(template)), **changes, "id": uuid.uuid4().hex[:8]})
 
 
+def import_rasa(data, user):
+    """POST /api/agents/import/rasa con {"zip": base64, "name"} o {"files": {ruta: texto}, "name"} -> (status, {agent, warnings}).
+    Crea el agente como «Importar agente» y lo entrena. No crea funciones: no hace falta ser dueño."""
+    try:
+        if data.get("zip") is not None:
+            try:
+                raw = base64.b64decode(str(data["zip"]), validate=True)
+            except ValueError:
+                return 400, {"error": "«zip» tiene que ser el .zip en base64"}
+            found, notes = rasa_import.read_zip(raw)
+        elif isinstance(data.get("files"), dict):
+            found, notes = {str(k): str(v) for k, v in data["files"].items()}, []
+        else:
+            return 400, {"error": "mandá {\"zip\": base64} o {\"files\": {ruta: texto}} con el proyecto de Rasa"}
+        agent, warnings = rasa_import.convert(found, data.get("name"))
+        made = create(imported(agent))
+    except ValueError as error:
+        return 400, {"error": str(error)}
+    auth.grant(user, made["id"])
+    try:
+        train(made["id"])
+    except Exception as error:  # noqa: BLE001 - sin modelo igual queda creado: se entrena al abrirlo
+        warnings.append("no se pudo entrenar ahora (%s); se entrena al abrirlo" % error)
+    return 200, {"agent": load(made["id"]), "warnings": notes + warnings}
+
+
 CODE_ONLY_OWNER = "Solo el dueño puede crear, cambiar o probar el código de las funciones (corre en esta compu). Pedíselo al dueño o apagá las funciones con PARLA_FUNCTIONS=0."
 
 
@@ -1849,7 +1875,7 @@ class Handler(BaseHTTPRequestHandler):
             if not (bearer or widget):
                 return self.reply({"error": "pedido rechazado: ese Host no está permitido (sumalo a PARLA_HOSTS)"}, 403)
             self.public = self.public or (widget and not self.user)
-        big = re.fullmatch(r"/api/agents(/[0-9a-f]{8}(/files|/knowledge/extract|/voice/transcribe)?)?|/api/v1/bots/[^/]+/audio", url)
+        big = re.fullmatch(r"/api/agents(/[0-9a-f]{8}(/files|/knowledge/extract|/voice/transcribe)?|/import/rasa)?|/api/v1/bots/[^/]+/audio", url)
         limit = 2_000_000 if self.public and url.endswith("/audio") else 25_000_000 if big else 1_000_000   # PDFs y audios van en base64
         if length > limit:
             return self.reply({"error": "demasiado grande"}, 413)
@@ -1895,6 +1921,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(connect.disconnect(str(data.get("client"))))
             except (ValueError, OSError) as error:
                 return self.reply({"ok": False, "error": str(error)}, 400)
+        if url == "/api/agents/import/rasa":
+            if method != "POST":
+                return self.reply({"error": "método no permitido"}, 405)
+            return self.reply(*reversed(import_rasa(data, self.user)))
         if url.startswith("/api/v1/"):
             return self.reply(*reversed(api_v1(method, [p for p in url[len("/api/v1/"):].split("/") if p], data, query, self.user, self.public)))
         match = re.fullmatch(r"/api/agents(?:/([0-9a-f]{8})(?:/(chat|reset|http|train|versions|deploy|diff|versions/\d+|versions/\d+/restore|functions/test"

@@ -5,3 +5,4 @@ mcp==2.3.0
 numpy==2.4.6
 pypdf==7.1.1
 python-crfsuite==0.9.12
+PyYAML==6.0.3
