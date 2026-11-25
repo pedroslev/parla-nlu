@@ -1,0 +1,18 @@
+# Never in the build: data/ holds users, keys, conversations and models (GBs).
+data/
+agents/
+models/
+users.json
+*.secrets.json
+.env
+.venv/
+.git/
+.impeccable/
+**/__pycache__/
+**/*.pyc
+.DS_Store
+tests/
+docs/
+deploy/
+Dockerfile
+docker-compose.yml

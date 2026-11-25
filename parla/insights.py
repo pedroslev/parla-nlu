@@ -26,9 +26,10 @@ def is_fallback(agent, entry):
     return entry.get("intent") is None or float(entry.get("confidence") or 0) < float(agent.get("threshold") or 0)
 
 
-def _encode(texts):
+def _encode(texts, cache=False):
+    """cache=True solo para textos acotados (ejemplos de intenciones); lo que escribe la gente no se guarda."""
     try:
-        return knowledge.encode(texts) if knowledge.encode and texts else None
+        return (knowledge._vecs(texts) if cache else knowledge.encode(texts)) if knowledge.encode and texts else None
     except Exception:
         return None
 
@@ -61,7 +62,8 @@ def unrecognized(agent, records):
         if suggested is None and v is not None:
             if ex_vecs is None:
                 pairs = [(norm(e), i["name"]) for i in agent.get("intents", []) if i["name"] in intents for e in i.get("examples", []) if norm(e)]
-                ex_vecs = (pairs, _encode([p for p, _ in pairs]) or [])
+                found = _encode([p for p, _ in pairs], cache=True)
+                ex_vecs = (pairs, [] if found is None else found)
             scored = [(float(x @ v), name) for (_, name), x in zip(*ex_vecs)]
             suggested = max(scored)[1] if scored else None
         entries.sort(key=lambda e: e.get("at") or "", reverse=True)

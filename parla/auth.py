@@ -17,7 +17,7 @@ import threading
 import time
 import urllib.parse
 
-from . import DATA
+from . import DATA, agents_dir, write_json
 ROLES = ("owner", "editor", "analyst", "agent")
 SESSION_HOURS = 12
 LOCK = threading.Lock()
@@ -40,12 +40,7 @@ def _load():
 
 
 def _save(users):
-    path = users_path()
-    fd = os.open(path + ".tmp", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump({"users": users}, f, ensure_ascii=False, indent=2)
-    os.replace(path + ".tmp", path)
-    os.chmod(path, 0o600)
+    write_json(users_path(), {"users": users}, mode=0o600, indent=2)
 
 
 def _scrypt(password, salt):
@@ -110,7 +105,7 @@ def _valid_bots(bots):
     if not isinstance(bots, list):
         raise ValueError("«bots» tiene que ser null (todos los agentes) o una lista de ids de agentes.")
     for bot in bots:
-        if not (isinstance(bot, str) and re.fullmatch(r"[0-9a-f]{8}", bot) and os.path.exists(_app().path(bot))):
+        if not (isinstance(bot, str) and re.fullmatch(r"[0-9a-f]{8}", bot) and os.path.exists(os.path.join(agents_dir(), bot + ".json"))):
             raise ValueError("No existe el agente «%s»." % bot)
     return list(dict.fromkeys(bots))
 
@@ -150,14 +145,29 @@ def current(handler, users=None):
     return {"name": user["name"], "role": user["role"], "bots": _scope(user)} if user else None
 
 
-def _cookie(token, age):
-    return {"Set-Cookie": "parla_session=%s; HttpOnly; SameSite=Strict; Path=/; Max-Age=%d" % (token, age)}
+def hosts():
+    """PARLA_HOSTS: nombres (host[:puerto]) por los que también se entra a Parla, p. ej. detrás de un proxy."""
+    return [h.strip().lower() for h in os.environ.get("PARLA_HOSTS", "").split(",") if h.strip()]
 
 
-def _login(name):
+def _secure(handler):
+    """¿El pedido llegó por HTTPS? (PARLA_SECURE_COOKIE=1, o el proxy de un PARLA_HOSTS lo avisa)."""
+    if os.environ.get("PARLA_SECURE_COOKIE") == "1":
+        return True
+    host = (handler.headers.get("Host") or "").lower()
+    return (handler.headers.get("X-Forwarded-Proto") or "").lower() == "https" and (
+        host in hosts() or re.sub(r":\d+$", "", host) in hosts())
+
+
+def _cookie(handler, token, age):
+    secure = "; Secure" if _secure(handler) else ""
+    return {"Set-Cookie": "parla_session=%s; HttpOnly; SameSite=Strict; Path=/; Max-Age=%d%s" % (token, age, secure)}
+
+
+def _login(handler, name):
     token = secrets.token_urlsafe(32)
     SESSIONS[token] = (name, time.time() + SESSION_HOURS * 3600)
-    return _cookie(token, SESSION_HOURS * 3600)
+    return _cookie(handler, token, SESSION_HOURS * 3600)
 
 
 def _drop_sessions(name):
@@ -185,6 +195,8 @@ def _handle(handler, method, url, data):
         name, password = str(data.get("name") or "").strip(), str(data.get("password") or "")
         key = (name.lower(), handler.client_address[0])
         now = time.time()
+        for old in [k for k, times in FAILURES.items() if times[-1] <= now - 60]:     # que no crezca sin fin
+            FAILURES.pop(old, None)
         recent = [t for t in FAILURES.get(key, []) if t > now - 60]
         if len(recent) >= 5:
             FAILURES[key] = recent
@@ -195,7 +207,7 @@ def _handle(handler, method, url, data):
             FAILURES[key] = recent + [now]
             return 401, {"error": "Usuario o contraseña incorrectos."}, {}
         FAILURES.pop(key, None)
-        return 200, {"enabled": True, "user": {"name": user["name"], "role": user["role"], "bots": _scope(user)}}, _login(user["name"])
+        return 200, {"enabled": True, "user": {"name": user["name"], "role": user["role"], "bots": _scope(user)}}, _login(handler, user["name"])
     if url == "/api/auth/logout" and method == "POST":
         cookie = http.cookies.SimpleCookie()
         try:
@@ -204,7 +216,7 @@ def _handle(handler, method, url, data):
             pass
         if "parla_session" in cookie:
             SESSIONS.pop(cookie["parla_session"].value, None)
-        return 200, {"enabled": bool(users), "user": None}, _cookie("", 0)
+        return 200, {"enabled": bool(users), "user": None}, _cookie(handler, "", 0)
     if url.startswith("/api/auth/"):
         return 404, {"error": "no existe"}, {}
 
@@ -214,7 +226,7 @@ def _handle(handler, method, url, data):
         user = {"name": _valid_name(data.get("name"), users), "role": "owner", "keys": []}
         _set_password(user, data.get("password"))
         _save([user])
-        return 200, _public(user), _login(user["name"])
+        return 200, _public(user), _login(handler, user["name"])
     if not users:
         if parts == [] and method == "GET":
             return 200, {"users": []}, {}
@@ -321,17 +333,19 @@ def _bot_of(url, data):
     if match:
         agent = _app().find_bot(urllib.parse.unquote(match.group(1)))
         return agent["id"] if agent else None      # si no existe (o es ambiguo), que conteste server.py
-    return str(data.get("agent") or "") or None if url == "/api/ai/status" else None
+    return None      # /api/ai/status {"agent"}: lo chequea server.py, que es el que lee el cuerpo
 
 
 def guard(handler, method, url, data):
-    """Antes de cada /api/: None si puede seguir, o (status, body) para cortar. Deja handler.user."""
-    handler.user = None
+    """Antes de cada /api/ (sin leer el cuerpo): None si puede seguir, o (status, body) para cortar.
+    Deja handler.user y handler.public (True = chat público del widget sin sesión: server.py lo limita)."""
+    handler.user, handler.public = None, False
     users = _load()
     if not users:
         return None
     handler.user = current(handler, users)
     if _public_widget(method, url):
+        handler.public = not handler.user or not allowed_bot(handler.user, _bot_of(url, data))
         return None
     role = (handler.user or {}).get("role")
     if not role:

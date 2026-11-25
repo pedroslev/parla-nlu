@@ -1,0 +1,29 @@
+# Example: publishes ONLY the public API, the widget and the files bots send (/files/).
+# Administer with kubectl port-forward, or also publish / and /api/ and put the domain in PARLA_HOSTS
+# (ConfigMap) with PARLA_SECURE_COOKIE=1. See docs/deployment.md and docs/security.md.
+# TLS: with cert-manager, add the cert-manager.io/cluster-issuer annotation and the tls block.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: parla
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 25m      # audio and PDFs as base64 (ingress-nginx)
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"  # local AI and voice take seconds
+spec:
+  # ingressClassName: nginx
+  tls:
+    - hosts: [bots.example.com]
+      secretName: parla-tls
+  rules:
+    - host: bots.example.com
+      http:
+        paths:
+          - path: /api/v1/
+            pathType: Prefix
+            backend: {service: {name: parla, port: {name: http}}}
+          - path: /static/widget.js
+            pathType: Exact
+            backend: {service: {name: parla, port: {name: http}}}
+          - path: /files/
+            pathType: Prefix
+            backend: {service: {name: parla, port: {name: http}}}

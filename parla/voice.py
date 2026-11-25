@@ -128,6 +128,12 @@ def sentences(text):
     return [t.strip() for t in SENTENCES.split(text or "") if t.strip()]
 
 
+def _lang(language):
+    """«es-AR» -> «es»; un idioma sin voz habla (y se guarda en la caché) con la de español."""
+    lang = (language or "es").split("-")[0].lower()
+    return lang if lang in VOICES else "es"
+
+
 def _cached(lang, text):
     return TTS_CACHE / lang / (hashlib.sha1(text.encode()).hexdigest() + ".wav")
 
@@ -136,7 +142,7 @@ def prewarm(texts, language="es"):
     """Genera de antemano el audio de las frases sin variables ({{ }}) para que la llamada las diga al instante.
     Las frases con variables se generan en el momento y no se guardan (si no, la caché crece con cada charla).
     Devuelve cuántas generó. No lanza: si no hay voz instalada, no hace nada."""
-    lang = (language or "es").split("-")[0].lower()
+    lang = _lang(language)
     done = 0
     try:
         for text in texts:
@@ -159,14 +165,14 @@ def speak(text, language="es", keep=True):
     text = (text or "").strip()
     if not text:
         raise ValueError("No hay texto para leer.")
-    lang = (language or "es").split("-")[0].lower()
+    lang = _lang(language)
     if keep:
-        hit = _cached(lang if lang in VOICES else "es", text)
+        hit = _cached(lang, text)
         if hit.exists():                     # frase fija pregenerada: al instante
             return hit.read_bytes()
     buf = io.BytesIO()
     with _lock:
-        v = _voice(lang if lang in VOICES else "es")
+        v = _voice(lang)
         with wave.open(buf, "wb") as w:
             v.synthesize_wav(text, w)
     return buf.getvalue()

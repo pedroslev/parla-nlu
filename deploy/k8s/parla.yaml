@@ -1,0 +1,85 @@
+# Parla: a single replica (login sessions in memory, data in files). See docs/deployment.md.
+# kubectl apply -n parla -k deploy/k8s
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: parla
+data:
+  PARLA_FUNCTIONS: "0"      # "function" steps = arbitrary code in the pod; 1 only if you trust every editor
+  PARLA_WHISPER: "base"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: parla-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  # storageClassName: <your cluster's>   # without this it uses the default class (on k3s: local-path)
+  resources:
+    requests:
+      storage: 5Gi           # ~1.2 GB embedding model + ~0.3 GB voice + agents and conversations
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: parla
+  labels: {app: parla}
+spec:
+  replicas: 1                # don't scale up: see docs/deployment.md (one replica per data folder)
+  strategy:
+    type: Recreate           # RWO + files: never two pods on the same volume
+  selector:
+    matchLabels: {app: parla}
+  template:
+    metadata:
+      labels: {app: parla}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: parla
+          image: parla:latest          # change it to your registry: registry.example.com/parla:<version>
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: http, containerPort: 8000}
+          envFrom:
+            - configMapRef: {name: parla}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+          resources:
+            requests: {cpu: 250m, memory: 1536Mi}
+            limits: {memory: 3Gi}      # with voice: 4Gi. No CPU limit: training and transcribing use short bursts
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 4
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: parla-data}
+        - name: tmp
+          emptyDir: {sizeLimit: 1Gi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: parla
+spec:
+  selector: {app: parla}
+  ports:
+    - {name: http, port: 8000, targetPort: http}

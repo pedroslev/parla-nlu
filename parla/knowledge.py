@@ -248,7 +248,7 @@ def search(agent, query, k=3):
                 rows.append((text, title, did, question.lower()))
     if not rows or not query or encode is None:
         return []
-    sims = _vecs([r[3] for r in rows]) @ _vecs([query.lower()])[0]
+    sims = _vecs([r[3] for r in rows]) @ encode([query.lower()])[0]   # la consulta no se cachea: crecería sin fin
     best = {}
     for (text, title, doc, _), score in zip(rows, sims.tolist()):
         if score > best.get((doc, text), (None, -2))[1]:

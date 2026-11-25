@@ -50,6 +50,19 @@ assert knowledge.search(agent, "¿abren el domingo?", 3)[0]["doc"] == "k1"
 big = {"knowledge": [{"id": "b%d" % i, "title": "t", "text": "Párrafo número %d sobre el producto %d." % (i, i)} for i in range(2000)]}
 knowledge.search(big, "producto")                       # calienta el caché de vectores
 t = time.time(); knowledge.search(big, "producto 17"); assert time.time() - t < 0.5, time.time() - t
+assert "producto 17" not in knowledge._vectors          # las consultas no se cachean (crecería sin fin)
+
+# ---- write_json atómico (0600) y vault.mask con caché que se entera de los cambios
+import os  # noqa: E402
+from parla import vault, write_json  # noqa: E402
+app.AGENTS = support.tempfile.mkdtemp()
+write_json(os.path.join(app.AGENTS, "x.json"), {"a": 1}, 0o600)
+assert os.stat(os.path.join(app.AGENTS, "x.json")).st_mode & 0o777 == 0o600 and not os.path.exists(os.path.join(app.AGENTS, "x.json.tmp"))
+vault.put("abcd1234", "token", "secreto-uno")
+assert vault.mask("va secreto-uno", "abcd1234") == "va ••••"
+vault.put("abcd1234", "token", "otro-valor-largo")
+assert vault.mask("secreto-uno y otro-valor-largo", "abcd1234") == "secreto-uno y ••••"
+assert os.stat(vault._path("abcd1234")).st_mode & 0o777 == 0o600
 
 # ---- html: texto legible, sin script/style/nav, títulos como secciones
 html = """<html><head><title>Mi Tienda</title><style>.x{color:red}</style><script>alert(1)</script></head>

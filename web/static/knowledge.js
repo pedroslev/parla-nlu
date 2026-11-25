@@ -117,7 +117,7 @@ function knAddPanel() {
 function knEditor(d) {
   if (kn.edit?.id !== d.id) kn.edit = { id: d.id, pairs: knParse(d.text) };
   const pairs = kn.edit.pairs;
-  const meta = [knSource(d), d.url ? h('a', { class: 'link', href: d.url, target: '_blank', rel: 'noopener' }, d.url) : null, d.text ? d.text.length.toLocaleString('es') + ' letras' : null].filter(Boolean);
+  const meta = [knSource(d), /^https?:\/\//i.test(d.url || '') ? h('a', { class: 'link', href: d.url, target: '_blank', rel: 'noopener' }, d.url) : null, d.text ? d.text.length.toLocaleString('es') + ' letras' : null].filter(Boolean);
   return h('div', { class: 'page' },
     h('div', {}, h('button', { class: 'link', onclick: () => { kn.open = null; render(); } }, '← Todos los documentos')),
     h('div', { class: 'row', style: 'flex-wrap:nowrap' }, h('input', { class: 'title', ...bind(d, 'title'), 'aria-label': 'Título del documento' }), iconBtn('trash', 'Borrar documento', () => knRemove(d))),

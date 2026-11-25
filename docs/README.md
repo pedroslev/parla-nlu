@@ -1,13 +1,15 @@
-# Documentación de Parla
+# Parla documentation
 
-| Documento | Para quién | Qué tiene |
+**English** · [Español](README_es.md)
+
+| Document | Audience | Contents |
 |---|---|---|
-| [Primeros pasos](getting-started.md) | Todos | Tu primer bot, de cero a publicado. |
-| [Conceptos](concepts.md) | Todos | Agente, intención, entidad, slot, flujo, tipos de paso, plantillas, flujos del sistema. |
-| [API HTTP](api.md) | Desarrolladores | La API pública `/api/v1` con ejemplos `curl`. |
-| [MCP y «Conectar con IA»](mcp.md) | Todos | Que Claude, Codex o Cursor te armen el bot. |
-| [IA local y voz](ai-and-voice.md) | Todos | Ollama, modelos, qué hace cada función de IA y sus guardas, voz. |
-| [Seguridad](security.md) | Quien lo instala | Usuarios, roles, claves, funciones, qué hacer antes de exponerlo. |
-| [Despliegue](deployment.md) | Quien lo instala | Local, detrás de un proxy, como servicio, copias de seguridad. |
-| [Desarrollo](development.md) | Desarrolladores | Código, internals del motor, cómo sumar un tipo de paso, pruebas, estilo. |
-| [Preguntas frecuentes](faq.md) | Todos | Dudas comunes. |
+| [Getting started](getting-started.md) | Everyone | Your first bot, from zero to published. |
+| [Concepts](concepts.md) | Everyone | Agent, intent, entity, slot, flow, step types, templates, system flows, what happens while it waits for an answer. |
+| [HTTP API](api.md) | Developers | The public `/api/v1` API with `curl` examples, authentication and roles, and the internal API. |
+| [MCP and «Conectar con IA»](mcp.md) | Everyone | Let Claude, Codex or Cursor build the bot for you. |
+| [Local AI and voice](ai-and-voice.md) | Everyone | Embedding model, Ollama, what each AI feature does and its guardrails, voice and calls. |
+| [Security](security.md) | Whoever installs it | Users, roles, keys, functions, what to do before exposing it. |
+| [Deployment](deployment.md) | Whoever installs it | Local, Docker, Kubernetes, behind a proxy, backups. |
+| [Development](development.md) | Developers | Commands, environment variables, code, engine internals, how to add a step type, tests, style. |
+| [FAQ](faq.md) | Everyone | Common questions. |

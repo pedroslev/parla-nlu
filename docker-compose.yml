@@ -1,0 +1,42 @@
+# docker compose up -d                       -> http://127.0.0.1:8000
+# docker compose --profile ai up -d          -> + Ollama; in the agent, IA → dirección (AI → address) http://ollama:11434
+# Voice: PARLA_VOICE=1 docker compose up -d --build
+name: parla
+services:
+  parla:
+    build:
+      context: .
+      args:
+        INSTALL_VOICE: ${PARLA_VOICE:-0}
+    image: parla:local
+    restart: unless-stopped
+    # Loopback only: until a user exists, Parla doesn't ask for a login. To publish it, put an HTTPS proxy in front.
+    # Outside port = inside port (8000): the Origin guard compares against that number.
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      PARLA_FUNCTIONS: ${PARLA_FUNCTIONS:-0}
+      PARLA_WHISPER: ${PARLA_WHISPER:-base}
+    volumes:
+      - parla-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  ollama:
+    image: ollama/ollama:0.12.3
+    profiles: ["ai"]
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+    # No published ports: only Parla talks to it, over the compose network.
+
+volumes:
+  parla-data:
+  ollama-models:

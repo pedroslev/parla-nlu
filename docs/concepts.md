@@ -1,224 +1,314 @@
-# Conceptos
+# Concepts
 
-## Agente
+**English** · [Español](concepts_es.md)
 
-Un **agente** (o bot) es un archivo JSON con todo lo que lo define. Los campos principales:
+## Agent
 
-| Campo | Qué es |
+An **agent** (or bot) is a JSON file with everything that defines it. The main fields:
+
+| Field | What it is |
 |---|---|
-| `name` | Nombre. Su versión en minúsculas y sin tildes (*slug*) sirve en las URLs: «Pizzería Don Luis» → `pizzeria-don-luis`. |
-| `threshold` | Confianza mínima (0 a 1) para aceptar una intención. Por defecto `0.75`. |
-| `fallback` | Qué dice cuando no entiende. Texto o lista (elige al azar sin repetir la anterior). |
-| `languages` | Idiomas, el primero es el de por defecto. Ej. `["es", "pt", "en"]`. |
-| `fallback_translations` | `{"pt": "...", "en": "..."}`. |
-| `intents`, `entities`, `slots`, `flows` | Ver abajo. |
-| `classifications` | `[{"name", "color", "description"}]` para marcar conversaciones y sacar reportes. |
-| `functions` | Código Python o JavaScript que corre un paso `function`. |
-| `knowledge`, `knowledge_threshold` | Base de conocimiento y su puntaje mínimo (`0.75`). |
-| `system` | Flujos del sistema (ver abajo). |
-| `ai` | IA local (ver [ai-and-voice.md](ai-and-voice.md)). |
+| `name` | Name. Its lowercase, accent-free version (*slug*) is used in URLs: «Pizzería Don Luis» → `pizzeria-don-luis`. |
+| `threshold` | Minimum confidence (0 to 1) to accept an intent. `0.75` in a new agent. |
+| `fallback` | What it says when it doesn't understand. Text or a list (it picks one at random without repeating the previous one). |
+| `languages` | Languages; the first one is the default. E.g. `["es", "pt", "en"]`. Without this field, `["es"]`. |
+| `fallback_translations` | `{"pt": "...", "en": "..."}` (text or list). |
+| `intents`, `entities`, `slots`, `flows` | See below. |
+| `classifications` | `[{"name", "color", "description"}]` to tag conversations and build reports. |
+| `functions` | Python or JavaScript code run by a `function` step. |
+| `knowledge`, `knowledge_threshold` | Knowledge base (`[{"id", "title", "source", "url", "text"}]`) and its minimum score (`0.75` by default). |
+| `system` | System flows (see below). |
+| `ai` | Local AI (see [ai-and-voice.md](ai-and-voice.md)). |
 | `widget` | `{"enabled", "origins", "title", "color", "greeting", "position", "voice"}`. |
+| `ignored_phrases` | Phrases that «Para enseñar» (To teach) no longer shows. |
 
-Exportar un agente baja ese JSON; importarlo crea un agente nuevo (las versiones, entornos y el entrenamiento
-no viajan: se entrena al abrirlo).
+Exporting an agent downloads that JSON; importing it creates a new agent. Versions, environments, training, secrets
+and uploaded files are not included (it is trained when opened).
 
-## Intención
+## Intent
 
-Lo que la persona quiere hacer: `{"name": "Pedir pizza", "examples": ["quiero una pizza", "una de [muzza](gusto)"]}`.
+What the person wants to do: `{"name": "Pedir pizza", "examples": ["quiero una pizza", "una de [muzza](gusto)"]}`.
 
-Parla convierte cada frase en un vector (modelo `google/embeddinggemma-300m` con fastembed, con el prefijo de similitud) y compara el
-mensaje con todas: gana la intención de la frase más parecida (vecino más cercano). Por eso sumar una frase es
-inmediato y funciona en varios idiomas. La confianza es la similitud coseno con esa frase.
+Parla turns each phrase into a vector (model `google/embeddinggemma-300m` via fastembed, with the prefix
+`task: sentence similarity | query: `) and compares the message against all of them: the intent of the most similar
+phrase wins (nearest neighbor). That is why adding a phrase doesn't require training a heavy model, and why it works
+across languages. The confidence is the cosine similarity with that phrase.
 
-## Entidad
+Names starting with `__` are reserved: `__start__` and the intents of the system flows (`__cancel__`, `__repeat__`,
+`__handoff__`).
 
-Un dato dentro del mensaje. Tipos (el `kind` en el JSON):
+## Entity
 
-| `kind` | En la interfaz | Cómo la reconoce |
+A piece of data inside the message. Types (the `kind` in the JSON):
+
+| `kind` | In the UI | How it is recognized |
 |---|---|---|
-| `examples` | Por los ejemplos que marco en las frases | Un CRF (python-crfsuite) aprende del contexto de lo marcado, como el `CRFEntityExtractor` de Rasa. |
-| `list` | De una lista de opciones | `values` y `synonyms` (`{"muzzarella": ["muzza"]}`): guarda el valor canónico. |
-| `number`, `email`, `phone`, `dni` | Número, email, teléfono, DNI | Una regex que pone la interfaz. |
-| `date` | Fecha u hora | Reglas en español rioplatense (`dates.py`): «mañana», «el jueves que viene a la tarde», «15/12 a las 10». Guarda `YYYY-MM-DD` o `YYYY-MM-DDTHH:MM`. |
-| `custom` | Un formato propio (regex) | Tu regex. Si tiene un grupo, guarda el grupo 1. |
+| `examples` | «Por los ejemplos que marco en las frases» (By the examples I mark in the phrases) | A CRF (python-crfsuite) learns from the context of the marked values, like Rasa's `CRFEntityExtractor`. Stores the value as it was written. |
+| `list` | «De una lista de opciones» (From a list of options) | `values` and `synonyms` (`{"muzzarella": ["muzza"]}`): stores the canonical value. |
+| `number`, `email`, `phone`, `dni` | Número, email, teléfono, DNI (number, email, phone, national ID) | A regex set by the UI. |
+| `date` | «Fecha u hora» (Date or time) | Rules for Rioplatense Spanish (`dates.py`): «mañana», «el jueves que viene a la tarde», «15/12 a las 10». Stores `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`. |
+| `custom` | «Un formato propio (regex)» (A custom format) | Your regex (case-insensitive). If it has a group, stores group 1. |
 
-Las marcas en las frases se escriben `[valor](entidad)`. Lo reconocido seguro (formato, lista) tiene prioridad
-sobre lo que adivina el CRF.
+In practice the engine decides by the fields, not by `kind`: if there is a `regex`, it uses the regex; if there are
+`values`, the list; if it is `date`, the date rules; if it has none of those, the CRF learns it. Marks in phrases are
+written `[value](entity)` and also add that value as a known form. What is recognized with certainty (format, list)
+takes priority over what the CRF guesses.
+
+Optional, JSON only (the UI doesn't edit it yet): `phrasings`, other ways of saying each option of a list, used to
+[understand answers by meaning](#understanding-an-answer-by-meaning):
+
+```json
+{"name": "modalidad", "kind": "list", "values": ["presencial", "virtual"],
+ "phrasings": {"virtual": ["desde mi casa", "por videollamada"], "presencial": ["voy al consultorio"]}}
+```
 
 ## Slot
 
-La memoria de la conversación: `{"name": "gusto", "entity": "gusto"}`. Cuando aparece la entidad, se guarda en
-el slot. Mientras el bot espera una respuesta, solo se llena el slot que preguntó (así el número de una dirección
-no termina en `cantidad`).
+The conversation's memory: `{"name": "gusto", "entity": "gusto"}`. When the entity appears, it is stored in the
+slot. While the bot is waiting for an answer, only the slot it asked for is filled (so the number in an address
+doesn't end up in `cantidad`).
 
-Con IA: `{"name": "nombre", "fill": "ai", "description": "el nombre y apellido de la persona"}` deja que la IA
-lea el valor del mensaje (solo si está escrito ahí).
+- Without an entity (or with an `examples` entity), the whole answer to the question is stored.
+- With AI: `{"name": "nombre", "fill": "ai", "description": "el nombre y apellido de la persona"}` lets the AI read
+  the value from the message (only if it is written there).
+- `"start": true` marks it as initial data: «Empezar con datos» (Start with data) in the test chat shows only those.
+  It doesn't change the engine: when a conversation is started through the API, any `data` field named like a slot
+  is stored.
 
-Al empezar una conversación por la API, los datos de `data` se guardan en los slots que se llaman igual.
+## Flow
 
-## Flujo
-
-Una lista de pasos que se dispara con una intención:
+A list of steps triggered by an intent:
 
 ```json
 {"name": "Pedido", "trigger": "Pedir pizza", "steps": [ ... ]}
 ```
 
-`"trigger": "__start__"` corre el flujo apenas empieza la conversación (evento `start`).
+- `"trigger": "__start__"` runs the flow as soon as the conversation starts (`start` event).
+- `"trigger": ""` = only reachable with `goto` or `call`.
+- If two flows have the same trigger, the first one wins.
+- `interrupts` (optional, JSON only): `false` for small-talk flows (greeting, thanking) that never cut off a pending
+  question; `"always"` for urgent ones: it cuts off the question, even if the message carries the requested data, and
+  doesn't come back. Default `true` (see [while waiting for an answer](#while-waiting-for-an-answer)).
 
-## Tipos de paso
+## Step types
 
-### `message`: enviar un mensaje
+### `message`: send a message
 ```json
 {"type": "message", "text": "Hola {{ nombre }}", "translations": {"pt": "Olá {{ nombre }}"},
  "buttons": [{"label": "Ver menú", "value": "quiero ver el menú"}]}
 ```
-Tocar un botón equivale a escribir su `value`.
+Tapping a button is the same as typing its `value` (or the `label` if it has none). Typing the label or the value by
+hand also counts as tapping it. Buttons also accept `translations` for the label.
 
-### `ask`: hacer una pregunta
+### `ask`: ask a question
 ```json
 {"type": "ask", "slot": "gusto", "text": "¿De qué gusto?", "buttons": [{"label": "Muzzarella", "value": "muzzarella"}]}
 ```
-Si el slot ya tiene valor, se saltea. Si el slot espera un formato o una opción y la respuesta no lo tiene, dice
-«No reconocí ese dato» y vuelve a preguntar (o, si el mensaje es otra intención clara, la atiende y después
-vuelve).
+If the slot already has a value, the step is skipped. Tapping a button stores its `value` in the slot. What happens
+with the answer is described in [while waiting for an answer](#while-waiting-for-an-answer).
 
-### `set`: guardar un valor
+`also` (optional, JSON only): other entities that also count as an answer. If the answer doesn't carry the slot's
+entity but does carry one of these («el jueves» to «¿te sirve el lunes?»), the slot stays empty and the flow
+continues: the following steps read `entities` and decide.
+```json
+{"type": "ask", "slot": "confirma", "text": "¿Te sirve el lunes a las 9?", "also": ["fecha"]},
+{"type": "if", "expr": "has(entities.fecha)", "then": [ ... ], "else": [ ... ]}
+```
+
+### `set`: store a value
 ```json
 {"type": "set", "slot": "saludo", "mode": "text", "text": "Hola {{ nombre }}"}
 {"type": "set", "slot": "total", "mode": "cel", "expr": "int(cantidad) * 5000"}
 {"type": "set", "slot": "gusto", "mode": "clear"}
 ```
 
-### `http`: consultar un servicio
+### `http`: call a service
 ```json
 {"type": "http", "method": "GET", "url": "https://api.ejemplo.com/pedidos/{{ numero }}",
  "headers": [{"key": "Authorization", "value": "Bearer {{ secret.API_KEY }}"}], "body": "",
  "saves": [{"expr": "status", "slot": "codigo"}, {"expr": "body.estado", "slot": "estado"}]}
 ```
-Tiempo máximo 10 s. En `saves` las expresiones ven `status` (0 si no se pudo conectar) y `body` (JSON o texto).
-Un dato que no vino queda en `null`.
+Timeout 10 s; up to 1 MB of the response is read. With a `body`, `Content-Type: application/json` is added. In the
+URL, each `{{ }}` is encoded (what the person typed can't change the address), except `{{ secret.X }}`; a header
+with line breaks is an error. In `saves`, expressions see `status` (0 if it couldn't connect) and `body` (JSON or
+text). A value that didn't come back is `null`. A 4xx/5xx doesn't stop the flow: decide with an `if` on the code.
 
-### `if`: tomar un camino
+### `if`: take a branch
 ```json
 {"type": "if", "cond": {"var": "codigo", "op": "eq", "value": "200"},
  "then": [{"type": "message", "text": "Encontrado"}], "else": [{"type": "message", "text": "No existe"}]}
 ```
-Operadores: `eq`, `ne`, `contains`, `gt`, `lt`, `empty`, `filled` (sin distinguir mayúsculas). En vez de `cond`
-se puede usar `"expr"` con una expresión CEL que devuelva `true`.
+Operators: `eq`, `ne`, `contains` (as text, case-insensitive), `gt`, `lt` (as numbers), `empty`, `filled`. Instead
+of `cond` you can use `"expr"` with a CEL expression: the `then` branch runs only if it evaluates to `true`.
 
-### `goto`: seguir con otro flujo
+### `goto`: continue with another flow
 ```json
-{"type": "goto", "goto": "Pedido"}
+{"type": "goto", "flow": "Pedido"}
 ```
-Salta a otro flujo y no vuelve.
+Jumps to the start of another flow and doesn't come back. (It also accepts the name in `"goto"`.)
 
-### `call`: llamar a otro flujo (y volver)
+### `call`: call another flow (and come back)
 ```json
 {"type": "call", "flow": "Pedir dirección"}
 ```
-Al terminar el subflujo sigue con el paso siguiente. Hasta 5 flujos apilados.
+When the subflow finishes, it continues with the next step. Up to 5 stacked flows (subflows and interruptions).
 
-### `end`: terminar
+### `end`: finish
 ```json
 {"type": "end"}
 ```
-En un subflujo, vuelve al que lo llamó.
+In a subflow, returns to the caller.
 
-### `classify`: clasificar la conversación
+### `classify`: classify the conversation
 ```json
 {"type": "classify", "classification": "Venta"}
 ```
-Queda marcada y cuenta en los reportes.
+The conversation is tagged (each classification counts only once per conversation) and shows up in the reports.
 
-### `file`: enviar un archivo
+### `file`: send a file
 ```json
 {"type": "file", "file": "Lista de precios.pdf", "text": "Acá tenés la lista, {{ nombre }}"}
 ```
-Manda un archivo que subiste al bot desde el mismo paso (PDF, imagen, Word, Excel, PowerPoint, CSV, TXT o ZIP, hasta 10 MB).
-`file` es el id o el nombre; `text` es opcional (sin texto, el mensaje es el nombre del archivo). En la API el mensaje
-llega en `messages` como siempre y `replies[i].file` trae `{id, name, mime, size, url}`; `url` (`/files/<agente>/<id>`)
-se abre sin sesión: el id es aleatorio y hace de llave, así que no subas nada privado. Los archivos son del bot, no de
-una versión: si borrás uno, el paso falla también en lo publicado. Exportar el bot no lleva los archivos.
+Sends a file you uploaded to the bot from the step itself (PDF, image, Word, Excel, PowerPoint, CSV, TXT or ZIP, up
+to 10 MB). `file` is the id or the name (with repeated names, the last one uploaded); `text` is optional (without
+text, the message is the file name). In the API the message arrives in `messages` as usual and `replies[i].file`
+carries `{id, name, mime, size, url}`; `url` (`/files/<agent>/<id>`) opens without a session: the id is random and
+acts as the key, so don't upload anything private. Files belong to the bot, not to a version: if you delete one, the
+step also fails in what is published. Exporting the bot doesn't include the files.
 
-### `function`: ejecutar una función
+### `function`: run a function
 ```json
 {"type": "function", "function": "precio", "auto_save": true,
  "saves": [{"expr": "result.total", "slot": "total"}, {"expr": "ok", "slot": "salio_bien"}]}
 ```
-La función se define en `functions`:
+The function is defined in `functions`:
 ```json
 {"name": "precio", "language": "python", "inputs": ["gusto", "cantidad", "secret.API_KEY"],
  "code": "def run(inputs):\n    return {\"total\": int(inputs[\"cantidad\"]) * 5000}"}
 ```
-Recibe los slots que declara en `inputs` (y `inputs["secret"]["API_KEY"]`). Lo que devuelve con el nombre de un
-slot se guarda solo (`auto_save`). Si falla y ningún `saves` mira `ok` o `error`, el flujo se corta con un aviso.
-Tiempo máximo 5 s. JavaScript necesita Node.js. Ver [security.md](security.md): no es un sandbox.
+It receives the slots it declares in `inputs` (and `inputs["secret"]["API_KEY"]`). Whatever it returns under a slot's
+name is stored automatically (`auto_save`, on by default). If it fails and no `saves` looks at `ok` or `error`, the
+flow stops with a warning. Timeout 5 s. JavaScript requires Node.js. The **Funciones** (Functions) section has
+ready-to-use examples and a button to test them. See [security.md](security.md): it is not a sandbox.
 
-### `handoff`: pasar con una persona
+### `handoff`: hand over to a person
 ```json
 {"type": "handoff", "text": "Te paso con alguien del local.", "reason": "reclamo"}
 ```
-El bot se calla y la conversación aparece en la **Bandeja** hasta que una persona la devuelve.
+The bot goes quiet and the conversation appears in the **Bandeja** (Inbox) until a person hands it back. Without
+`text`, it uses the one from `system.handoff`.
 
-### `agent`: dejar que la IA converse
+### `agent`: let the AI converse
 ```json
 {"type": "agent", "instructions": "Ayudá a elegir un gusto y averiguá la dirección.",
  "functions": ["precio"], "knowledge": true, "slots": ["gusto", "direccion"],
  "goal": "cuando tengas el gusto y la dirección", "max_turns": 8}
 ```
-Una isla de IA dentro del flujo: conversa, puede llamar solo a las funciones listadas, llena los slots listados y
-termina cuando cumple el objetivo o agota los turnos. Necesita la IA prendida.
+An AI island inside the flow: it converses, can call only the listed functions, fills the listed slots and finishes
+when it meets the goal or runs out of turns; then it continues with the next step. Requires AI to be enabled.
 
-## Plantillas `{{ }}` y CEL
+## `{{ }}` templates and CEL
 
-Dentro de textos, URLs, headers y bodies, `{{ ... }}` se reemplaza por su valor. Adentro va un nombre de slot o
-una expresión [CEL](https://github.com/google/cel-spec):
+Inside texts, URLs, headers and bodies, `{{ ... }}` is replaced by its value. Inside goes a slot name or a
+[CEL](https://github.com/google/cel-spec) expression:
 
 ```
 Tu pedido de {{ cantidad }} {{ gusto }} sale ${{ int(cantidad) * 5000 }}.
 {{ nombre != null ? nombre : "che" }}
 ```
 
-Variables disponibles: todos los slots, más `intent`, `confidence`, `text` (el último mensaje) y `entities`
-(`{entidad: valor}`). En `saves` de `http` además `status` y `body`; en `saves` de `function`, `result`, `ok` y
-`error`. `{{ secret.NOMBRE }}` solo vale en URL, headers y body de un paso `http`: en un mensaje es un error (el
-validador del MCP lo marca).
+Available variables: all slots, plus `intent`, `confidence`, `text` (the last message) and `entities`
+(`{entity: value}`). In the `saves` of `http`, also `status` and `body`; in the `saves` of `function`, `result`,
+`ok` and `error`. `{{ secret.NAME }}` is only valid in the URL, headers and body of an `http` step (and as a
+function input `secret.NAME`): in a message it is an error (the MCP validator flags it).
 
-Un slot vacío se muestra como texto vacío. Si una expresión falla, el chat muestra qué paso y qué expresión.
+An empty slot renders as empty text. If an expression fails, the chat shows the flow, the step and the expression,
+and the conversation stops.
 
-## Flujos del sistema
+## System flows
 
-Reparaciones de la charla que vienen prendidas (o no) y se editan en `system`:
+Conversation repairs that come enabled (or not) and are edited in `system`:
 
-| Clave | Por defecto | Qué hace |
+| Key | Default | What it does |
 |---|---|---|
-| `cancel` | prendido | «cancelar», «olvidalo»: corta lo que estaba haciendo. |
-| `repeat` | prendido | «¿cómo?», «repetí»: repite lo último. |
-| `clarify` | prendido, `margin: 0.04` | Si las dos mejores intenciones están muy cerca, pregunta «¿Quisiste decir A o B?» con botones. |
-| `anything_else` | apagado | Al terminar un flujo: «¿Te ayudo con algo más?». |
-| `resume` | prendido | Al volver de una interrupción: «Sigamos con lo de antes.». |
-| `correction` | prendido | «mejor de fugazza» mientras pregunta otra cosa: cambia un dato que ya había dado. |
-| `handoff` | prendido | «quiero hablar con una persona»: pasa a la Bandeja. |
-| `csat` | apagado | Al terminar: «¿Cómo te atendí? Del 1 al 5.» con botones. |
+| `cancel` | on | «cancelar», «olvidalo» (cancel, forget it): stops what it was doing. |
+| `repeat` | on | «¿cómo?», «repetí» (what?, repeat): repeats the last thing the bot said. |
+| `clarify` | on, `margin: 0.04` | If the top two intents are above the threshold and less than `margin` apart, asks «¿Quisiste decir A o B?» (Did you mean A or B?) with buttons. |
+| `anything_else` | off | When a flow finishes: «¿Te ayudo con algo más?» (Can I help you with anything else?). |
+| `resume` | on | When returning from an interruption: «Sigamos con lo de antes.» (Let's continue where we left off.). |
+| `correction` | on | «mejor de fugazza» (make it fugazza instead) while it asks something else: changes a value already given (only slots this flow has already asked for) and continues from that question. |
+| `handoff` | on | «quiero hablar con una persona» (I want to talk to a person): hands over to the Bandeja. |
+| `csat` | off | When the conversation's first flow finishes: «¿Cómo te atendí? Del 1 al 5.» (How did I do? From 1 to 5.) with buttons. Accepts `4` or `4/5`. |
 
-Cada uno tiene `enabled`, `text` (y `translations`) y, los que se reconocen por frases, `examples`. Mientras el bot
-espera una respuesta, estos comportamientos piden más seguridad para no confundir «Pedro» con «repetí».
+Each one has `enabled`, `text` (and `translations`) and, for those recognized by phrases (`cancel`, `repeat`,
+`handoff`), `examples`. Those phrases are trained as system intents.
 
-## Qué pasa cuando no entiende
+## While waiting for an answer
 
-1. Si la IA está prendida, intenta rescatar la intención entre las más parecidas.
-2. Busca en la base de conocimiento; si algo supera `knowledge_threshold`, responde con eso (sin IA, con el
-   fragmento tal cual; con IA, una respuesta corta controlada).
-3. Con IA y `generative_fallback`, repregunta y dice qué sabe hacer el bot.
-4. Si no, el `fallback`.
+When an `ask` is waiting, the message is first taken as an answer. In order:
 
-## Versiones y entornos
+1. **System behaviors** (cancel, repeat, hand over to a person): they require more certainty than a normal intent
+   (at least 0.75, or 0.92 if the question is free text) and don't count if the message already carries the
+   requested data or a button was tapped. That way «Pedro» or «30.123.456» aren't mistaken for «repetí».
+2. **Urgent**: a flow with `"interrupts": "always"` whose intent reaches the threshold cuts everything off and
+   doesn't come back.
+3. **A question instead of an answer** («¿qué es presencial?» to «¿presencial o virtual?»): if the knowledge base
+   can answer it, it answers and asks again. With AI, if there is nothing in the base, it says it doesn't know
+   instead of making something up. If the person then says «ah, entonces sí» (oh, then yes), it picks the option
+   that was explained.
+4. **Correction** of an earlier value (if `correction` is on).
+5. **The answer**:
+   - If the slot has an entity with a format, list or date and the answer doesn't carry it: first it checks `also`;
+     then it tries to [understand it by meaning](#understanding-an-answer-by-meaning) and, with AI, asks the model
+     what the person did (answered, asked, asked for something else or just said hi). If none of that works, it says
+     «No reconocí ese dato, probemos de nuevo.» (I didn't recognize that, let's try again.) and asks again. It
+     doesn't reply «No reconocí» to a «gracias».
+   - If the answer carries two different values of the same entity («sí… no puedo»), it picks neither and asks
+     again.
+   - With `fill: "ai"`, the AI reads the value; if it can't find it, it asks again.
+   - If the slot has no entity, it stores the whole text.
+6. **Interruption**: if the answer didn't work and the message is another clear intent (at least 0.75) whose flow
+   interrupts, it handles it and then returns to the question (with `resume`). If the message was read by meaning
+   or with AI, it only interrupts for what that reading saw as a different action. Flows with
+   `"interrupts": false` don't interrupt.
 
-- **Borrador**: lo que editás.
-- **Versión**: una copia numerada e inmutable del borrador, con su propio modelo entrenado.
-- **Entornos**: `staging` (Pruebas) y `production` (Producción) apuntan a una versión.
+### Understanding an answer by meaning
 
-La API habla con `production` por defecto (o con el borrador si todavía no se publicó nada). Cada conversación
-queda atada a la versión con la que empezó: publicar no cambia los pasos a mitad de una charla. Rollback =
-apuntar el entorno a otra versión. «Restaurar» vuelve el borrador a lo que tenía una versión.
+For a list entity with `phrasings`, if the answer doesn't literally contain an option («la quiero desde mi casa»),
+Parla compares it by meaning, with the same vector model, against the ways of saying each option (values, synonyms
+and `phrasings`), against the phrases of the intents that could interrupt, and against small talk that answers
+nothing («gracias», «un momento»). It only decides when it is clear (similarity of at least 0.60 and a 0.04 lead over
+the runner-up; an intent has to beat the best option by 0.10). Otherwise it moves on to the AI or to «No reconocí».
+It doesn't need generative AI. When it decides, the turn carries `via: "significado"`.
+
+## What happens when it doesn't understand
+
+Outside a question:
+
+1. If AI is enabled and the confidence doesn't reach the threshold (or two intents tie), it tries to rescue the
+   intent among the most similar ones.
+2. If two intents are still tied, it asks «¿Quisiste decir…?» (Did you mean…?) (`clarify`).
+3. If there is no intent (or the intent has no flow), it searches the knowledge base: if something reaches
+   `knowledge_threshold`, it answers with that (without AI, with the chunk as is; with AI, a short controlled
+   answer).
+4. With AI and `generative_fallback`, it asks again and says what the bot can do.
+5. Otherwise, the `fallback`.
+
+## Language
+
+The conversation language is the one received at start (`idioma`, `language` or `lang` in the start data) or,
+otherwise, the one guessed from the words of the first message among those in `languages` (on a tie, the first one
+wins). Messages use `translations[language]` if present; otherwise, the original text.
+
+## Versions and environments
+
+- **Borrador** (Draft): what you edit.
+- **Versión** (Version): a numbered, immutable copy of the draft, with its own trained model.
+- **Entornos** (Environments): `staging` (Pruebas) and `production` (Producción) each point to a version.
+
+The API talks to `production` by default (or to the draft if nothing has been published yet). Each conversation
+stays tied to the version it started with: publishing doesn't change the steps in the middle of a conversation.
+Rollback = pointing the environment to another version. «Restaurar» (Restore) brings the draft back to what a
+version had.
+
+What belongs to the bot rather than to a version: secrets, files and conversations.

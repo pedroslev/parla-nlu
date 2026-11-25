@@ -7,11 +7,10 @@ import json
 import os
 import re
 import secrets
-import sys
 import time
 import urllib.parse
 
-from . import DATA
+from . import agents_dir, write_json
 
 MAX_BYTES = 10 * 1024 * 1024
 # el tipo sale de la extensión, nunca de lo que diga el navegador: nada de HTML ni SVG (correrían en este sitio)
@@ -29,8 +28,7 @@ FILE_ID = re.compile(r"[A-Za-z0-9_-]{22}")
 def folder(agent_id):
     if not AGENT_ID.fullmatch(str(agent_id)):
         raise ValueError("agente inválido")
-    main = sys.modules.get("parla.server") or sys.modules.get("__main__")      # sigue a app.AGENTS (los tests lo cambian)
-    return os.path.join(getattr(main, "AGENTS", None) or os.path.join(DATA, "agents"), agent_id + ".files")
+    return os.path.join(agents_dir(), agent_id + ".files")
 
 
 def public(agent_id, meta):
@@ -86,8 +84,7 @@ def save(agent_id, name, data):
     os.makedirs(folder(agent_id), exist_ok=True)
     with open(os.path.join(folder(agent_id), file_id), "wb") as f:
         f.write(body)
-    with open(os.path.join(folder(agent_id), file_id + ".json"), "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False)
+    write_json(os.path.join(folder(agent_id), file_id + ".json"), meta)
     return public(agent_id, meta)
 
 

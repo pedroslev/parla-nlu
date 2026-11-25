@@ -31,6 +31,8 @@ function aiSet(key, value, again) {
   render();
 }
 const aiSize = (n) => !n ? '' : n >= 1e9 ? (n / 1e9).toFixed(1).replace('.', ',') + ' GB' : Math.round(n / 1e6) + ' MB';
+const aiFrac = (p) => (p.total ? p.completed / p.total : 0.02).toFixed(3);
+const aiPullText = (p) => p.total ? aiSize(p.completed) + ' de ' + aiSize(p.total) : p.status;
 async function aiPost(path, body) {
   const r = await fetch('/api/ai/' + path, { method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });
   if (r.status === 401 && window.showLogin) { await window.showLogin(); return aiPost(path, body); }
@@ -59,7 +61,14 @@ function aiWatch() {
     try { aiProgress = await aiPost('progress'); } catch { return; }
     const running = Object.values(aiProgress).some((p) => !p.done);
     if (!running) { clearInterval(aiPoll); aiPoll = null; aiKey = ''; }
-    if (section === 'ai') render();
+    if (section !== 'ai') return;
+    const live = Object.entries(aiProgress).filter(([, p]) => !p.done);
+    const els = live.map(([name]) => [...document.querySelectorAll('[data-pull]')].find((e) => e.dataset.pull === name));
+    if (!running || els.some((e) => !e)) return render();      // terminó o empezó una descarga: redibujar todo
+    live.forEach(([, p], i) => {                                 // solo avanza la barra: tocar nada más que eso
+      els[i].querySelector('.ai-bar span').style.transform = 'scaleX(' + aiFrac(p) + ')';
+      els[i].lastChild.textContent = aiPullText(p);
+    });
   }, 1000);
 }
 async function aiTry() {
@@ -95,9 +104,9 @@ function aiModels(c) {
         ? h('button', { class: 'btn small quiet', disabled: pulling, onclick: () => aiPull(m.name) }, icon('down'), pulling ? 'Descargando…' : 'Descargar' + (m.size ? ' (' + aiSize(m.size) + ')' : ''))
         : h('span', {}, (m.here ? 'En esta compu' : '') + (m.size ? ' · ' + aiSize(m.size) : '')),
       h('small', {}, m.note || ''),
-      pulling || p?.error ? h('small', {}, p.error ? h('span', { class: 'ai-hint' }, 'No se pudo descargar: ' + p.error) : [
-        h('div', { class: 'ai-bar' }, h('span', { style: 'transform:scaleX(' + (p.total ? p.completed / p.total : 0.02).toFixed(3) + ')' })),
-        p.total ? aiSize(p.completed) + ' de ' + aiSize(p.total) : p.status]) : null);
+      pulling || p?.error ? h('small', { 'data-pull': pulling ? m.name : null }, p.error ? h('span', { class: 'ai-hint' }, 'No se pudo descargar: ' + p.error) : [
+        h('div', { class: 'ai-bar' }, h('span', { style: 'transform:scaleX(' + aiFrac(p) + ')' })),
+        h('span', {}, aiPullText(p))]) : null);
   };
   if (c.provider !== 'ollama') return h('div', { class: 'ai-models' },
     lab('Nombre del modelo', h('input', { value: c.model, placeholder: 'el que cargaste en LM Studio o llama.cpp', onchange: (e) => aiSet('model', e.target.value.trim(), true) })),

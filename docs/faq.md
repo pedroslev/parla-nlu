@@ -1,65 +1,86 @@
-# Preguntas frecuentes
+# FAQ
 
-**¿Necesito GPU o internet?**
-No. Todo corre en CPU. Internet solo hace falta para instalar y para bajar los modelos la primera vez (el de
-vectores, el de Ollama y los de voz). Después, salvo los pasos `http` que vos armes, nada sale de tu máquina.
+**English** · [Español](faq_es.md)
 
-**¿Necesito la IA para que el bot funcione?**
-No. Intenciones, entidades, flujos y la base de conocimiento (en modo extractivo) funcionan sin modelo de
-lenguaje. La IA suma: rescatar mensajes dudosos, completar slots, respuestas redactadas y el paso `agent`.
+**Do I need a GPU or internet?**
+No. Everything runs on CPU. Internet is only needed to install and to download the models the first time (the
+embedding model, ~1.2 GB; the Ollama model and the voice models, if you use them). After that, apart from the
+`http` steps you build yourself, nothing leaves your machine.
 
-**¿Cuántas frases pongo por intención?**
-Entre 5 y 10 distintas ya anda bien. Mirá la autoevaluación después de entrenar: si dos intenciones se
-confunden, sumá frases que las diferencien o juntalas.
+**Do I need AI for the bot to work?**
+No. Intents, entities, flows and the knowledge base (in extractive mode) work without a language model. AI adds:
+rescuing uncertain messages, filling slots, written answers and the `agent` step.
 
-**Cambié frases y el chat no lo nota.**
-Tocá **Entrenar**. El chat usa lo último entrenado. Mientras entrena, el bot sigue atendiendo con lo anterior.
+**How many phrases per intent?**
+Between 5 and 10 different ones already work well. Check the self-evaluation after training: if two intents get
+confused, add phrases that tell them apart or merge them.
 
-**Cambié el bot y la API sigue respondiendo lo viejo.**
-La API habla con **Producción**. Publicá una versión y ponela en producción. (Si nunca publicaste nada, la API
-usa el borrador.) Las conversaciones ya empezadas siguen con la versión con la que arrancaron.
+**I changed phrases and the chat doesn't notice.**
+Click **Entrenar** (Train). The chat uses the latest trained model. While it trains, the bot keeps answering with
+the previous one.
 
-**¿Cómo vuelvo atrás?**
-En **Versiones**, apuntá producción a la versión anterior. Para deshacer cambios del borrador, «Restaurar» una
-versión.
+**I changed the bot and the API still answers the old way.**
+The API talks to **Producción** (Production). Publish a version and put it in production. (If you never published
+anything, the API uses the draft.) Conversations already in progress keep the version they started with.
 
-**¿En qué idiomas funciona?**
-El modelo de vectores es multilingüe. La interfaz y las fechas están en español; los mensajes del bot se pueden
-traducir a portugués e inglés y Parla detecta el idioma del primer mensaje (o lo recibe en `data.idioma`).
+**How do I roll back?**
+In **Versiones** (Versions), point production to the previous version. To undo draft changes, use **Restaurar**
+(Restore) on a version.
 
-**¿Cómo lo pongo en mi web?**
-**Publicar → Widget web**: prendelo, agregá la dirección de tu sitio y pegá el `<script>`:
+**Which languages does it work in?**
+The embedding model is multilingual. The interface and dates are in Spanish; the bot's messages can be translated
+to Portuguese and English, and Parla detects the language of the first message (or receives it in
+`data.idioma`).
+
+**How do I put it on my website?**
+**Publicar → Widget web** (Publish → Web widget): turn it on, add your site's address and paste the `<script>`:
 ```html
 <script src="http://127.0.0.1:8000/static/widget.js" data-bot="pizzeria" data-title="Hablá con nosotros"
         data-color="#2f6bff" data-greeting="¡Hola!" data-position="right" data-voice="false" async></script>
 ```
-Para que lo vea gente de afuera, Parla tiene que estar publicado detrás de un proxy (ver
-[deployment.md](deployment.md)) y el `src` tiene que apuntar a esa dirección.
+For outside users to see it, Parla has to be published behind a proxy (see [deployment.md](deployment.md)) and
+the `src` has to point to that address.
 
-**¿Tiene WhatsApp, Telegram o teléfono?**
-Todavía no hay canales integrados. La API HTTP sirve para conectarlo desde tu propio puente o IVR. WhatsApp y
-telefonía están en la hoja de ruta.
+**Can I talk to it by voice?**
+Yes, with the voice extras installed: a microphone in the test chat and in the widget (`data-voice="true"`), and in
+**Probar → Llamada (voz)** (Test → Call (voice)) a full voice conversation, like a phone call, that you can
+interrupt by speaking. See [ai-and-voice.md](ai-and-voice.md#voice).
 
-**¿Cómo paso una conversación a una persona?**
-Con un paso `handoff`, o la persona lo pide («quiero hablar con alguien»). Aparece en la **Bandeja**: ahí se toma,
-se responde y se devuelve al bot. El widget recibe esas respuestas solo.
+**Can the bot send a PDF or a photo?**
+Yes, with the «Enviar un archivo» (Send a file) step (`file`): you upload the file from the step itself (up to
+10 MB). The link is public to whoever receives it, so don't upload anything private. See
+[concepts.md](concepts.md#file-send-a-file).
 
-**¿Dónde veo lo que el bot no entendió?**
-En **Operar → Para enseñar**: agrupado por parecido, con la intención sugerida, para enseñárselo a una intención.
+**Can it run on Docker or Kubernetes?**
+Yes: there's a `Dockerfile`, `docker-compose.yml` and manifests in `deploy/`. See [deployment.md](deployment.md).
 
-**Olvidé la contraseña del único dueño.**
-Con Parla apagado, mové o borrá `users.json` de la carpeta de datos: Parla vuelve a quedar abierto y podés crear
-el dueño de nuevo (se pierden los otros usuarios y sus claves de API).
+**Does it have WhatsApp, Telegram or phone?**
+There are no built-in channels yet. The HTTP API can be used to connect it from your own bridge or IVR. WhatsApp and
+telephony are on the roadmap.
 
-**¿Las funciones son seguras?**
-Corren aisladas de la conversación (si fallan, el bot sigue), pero no son un sandbox de seguridad. Leé
-[security.md](security.md#funciones-no-son-un-sandbox).
+**How do I hand a conversation off to a person?**
+With a `handoff` step, or when the person asks for it («quiero hablar con alguien», "I want to talk to someone").
+It shows up in the **Bandeja** (Inbox): there you take it over, reply and hand it back to the bot. The widget
+receives those replies automatically.
 
-**¿Puedo usar otro modelo que no sea de Ollama?**
-Sí, cualquier servidor local compatible con OpenAI (LM Studio, llama.cpp server) con `provider: "openai"`.
+**Where do I see what the bot didn't understand?**
+In **Operar → Para enseñar** (Operate → To teach): grouped by similarity, with a suggested intent, so you can
+teach it to an intent.
 
-**¿Cómo cambio el tema?**
-Con el selector de la interfaz: Claro, Oscuro o Colorido. Se recuerda en ese navegador.
+**I forgot the password of the only owner.**
+With Parla stopped, move or delete `users.json` from the data folder: Parla becomes open again and you can create
+the owner again (the other users and their API keys are lost).
 
-**¿Cuál es la licencia?**
-Todavía no está definida.
+**Are functions safe?**
+They run isolated from the conversation (if they fail, the bot keeps going), but they are not a security sandbox.
+Read [security.md](security.md#functions-not-a-sandbox).
+
+**Can I use a model that isn't from Ollama?**
+Yes, any local OpenAI-compatible server (LM Studio, llama.cpp server) with `provider: "openai"`.
+
+**How do I change the theme?**
+With the interface's selector: Claro (Light), Oscuro (Dark) or Colorido (Colorful). It's remembered in that
+browser.
+
+**What's the license?**
+To be defined.

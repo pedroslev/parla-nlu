@@ -241,9 +241,31 @@ try:
     assert call("GET", "/api/v1/bots/%s" % agent_id)[0] == 401
     # leer los mensajes nuevos: abierto solo para charlas del widget (canal «web»); el sessionId hace de llave
     B = "/api/v1/bots/%s/sessions/" % agent_id
-    for sid, channel in (("webtest-a1b2c3d4", "web"), ("apitest-a1b2c3d4", "api")):
-        status, data, _ = call("POST", "/api/v1/bots/%s/events" % agent_id, dict(event, sessionId=sid, channel=channel))
+    for sid, channel, who in (("webtest-a1b2c3d4", "web", None), ("apitest-a1b2c3d4", "api", eli)):
+        status, data, _ = call("POST", "/api/v1/bots/%s/events" % agent_id, dict(event, sessionId=sid, channel=channel), cookie=who)
         assert status == 200, data
+    # sin sesión: canal «web» y producción a la fuerza, sin datos iniciales ni traza, y no toca charlas de otro canal
+    status, data, _ = call("POST", "/api/v1/bots/%s/events" % agent_id, dict(event, sessionId="anon-1", channel="api", data={"x": 1}))
+    assert status == 200 and data["channel"] == "web" and data["environment"] == "production" and "trace" not in data, data
+    assert call("POST", "/api/v1/bots/%s/events" % agent_id, {"type": "message", "text": "hola", "sessionId": "apitest-a1b2c3d4"})[0] == 403
+    assert "trace" in call("POST", "/api/v1/bots/%s/events" % agent_id, event, cookie=eli)[1]
+    # DNS rebinding: un Host que no es esta compu se rechaza, salvo el widget público
+    conn = http.client.HTTPConnection("127.0.0.1", PORT, timeout=30)
+    conn.request("GET", "/api/agents", headers={"Host": "evil.example:%d" % PORT, "Cookie": ana})
+    assert conn.getresponse().status == 403
+    conn.close()
+    conn = http.client.HTTPConnection("127.0.0.1", PORT, timeout=30)
+    conn.request("POST", "/api/v1/bots/%s/events" % agent_id, json.dumps(event), headers={"Host": "evil.example"})
+    assert conn.getresponse().status == 200
+    conn.close()
+    # editor: no escribe ni prueba código de funciones (las funciones están prendidas)
+    fn = {"name": "f", "language": "python", "inputs": [], "code": "def run(i):\n    return {}"}
+    status, data, _ = call("PUT", A, dict(agent, functions=[fn]), cookie=eli)
+    assert status == 403 and "dueño" in data["error"], data
+    assert call("POST", A + "/functions/test", {"function": fn, "inputs": {}}, cookie=eli)[0] == 403
+    assert call("PUT", A, dict(agent, functions=[fn]), cookie=ana)[0] == 200
+    assert call("PUT", A, dict(agent, functions=[fn], name="otro"), cookie=eli)[0] == 200    # lo demás sí
+    assert call("POST", "/api/ai/status", {"agent": "../users"}, cookie=ana)[0] == 400
     status, data, _ = call("GET", B + "webtest-a1b2c3d4/messages?after=0")
     assert status not in (401, 403), (status, data)   # 200 cuando ENGINE implemente /messages
     assert call("GET", B + "webtest-a1b2c3d4")[0] == 401                  # la conversación entera, no

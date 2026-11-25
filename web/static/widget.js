@@ -13,7 +13,7 @@
   const canVoice = d.voice === 'true' && !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
   const key = 'parla.widget.' + bot;
   const remember = (v) => { try { localStorage.setItem(key, v); } catch {} };
-  const newSid = () => 'web-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const newSid = () => 'web-' + (crypto.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2)).replace(/-/g, '');
   let sid = (() => { try { return localStorage.getItem(key); } catch { return null; } })() || newSid();
   remember(sid);
 
