@@ -13,7 +13,7 @@ General notes:
 
 - Base: `http://127.0.0.1:8000` (or the port you passed to `app.py`).
 - Request bodies and responses are JSON. The body must be a JSON object (otherwise 400). Maximum size (otherwise
-  413): 25 MB for uploading files, knowledge documents and audio; 2 MB for audio from the public widget; 1 MB for
+  413): 25 MB for uploading files, knowledge documents, audio and Rasa projects; 2 MB for audio from the public widget; 1 MB for
   everything else.
 - Errors: `{"error": "mensaje en castellano"}` (a message in Spanish) with 400, 401, 403, 404, 405, 413, 415 or
   429. An exception inside a route (for example, requesting a version that doesn't exist) comes back as 400 with the
@@ -279,6 +279,7 @@ don't work here).
 |---|---|---|
 | `GET /api/agents` | — | `[{"id", "name", "intents" (count), "flows" (count)}]` |
 | `POST /api/agents` | `{"name", "demo"?: true}` (blank, or the ordering example) or `{"import": agent}` (accepts the `{"parla": 1, "agent": ...}` envelope) | The created agent. A user who sees only some bots also gets to see this one. |
+| `POST /api/agents/import/rasa` | `{"zip": base64 of the project .zip, "name"?}` or `{"files": {"domain.yml": "...", "data/nlu.yml": "..."}, "name"?}` | `{"agent", "warnings"}`: a new agent converted from a Rasa 3.x project and already trained; `warnings` lists everything that couldn't be migrated as is. Same role as creating an agent (owner or editor). Only `.yml`/`.yaml` files are read; zip limits: 500 files, 20 MB uncompressed, no absolute paths or `..`. See [migrate-from-rasa.md](migrate-from-rasa.md). |
 | `GET /api/agents/{id}` | — | The agent's full JSON (draft), with the full `system`. |
 | `PUT /api/agents/{id}` | The whole agent | The saved agent. Replaces everything (anything missing goes back to blank values); `environments` and `deployments` can't be overwritten. |
 | `DELETE /api/agents/{id}` | — | `{}`. Deletes the agent, its model, versions, conversations and files. |

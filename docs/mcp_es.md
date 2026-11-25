@@ -97,7 +97,7 @@ en el proxy (ver [security.md](security_es.md)).
 
 ## Herramientas
 
-25 herramientas, un recurso (`parla://format-guide`) y un prompt (`build_bot`). En todas, `agent` puede ser el id,
+26 herramientas, un recurso (`parla://format-guide`) y un prompt (`build_bot`). En todas, `agent` puede ser el id,
 el nombre exacto o el slug. Las que cambian algo trabajan sobre el **borrador**.
 
 **Armar**
@@ -111,6 +111,7 @@ el nombre exacto o el slug. Las que cambian algo trabajan sobre el **borrador**.
 | `create_agent(agent_json)` | Valida, crea y entrena un bot nuevo. Completa la regex de las entidades `number`, `email`, `phone` y `dni` si falta. Devuelve `{id, name, slug, trained, warnings}` (`trained.log` trae la autoevaluación). |
 | `update_agent(agent, agent_json)` | Reemplaza el borrador entero (lo que no mandes vuelve a vacío) y reentrena. Valida antes, también que existan los archivos de los pasos `file`. Producción y staging no cambian. |
 | `train_agent(agent)` | Reentrena el borrador. |
+| `import_rasa_project(path, name=None)` | Lee los `.yml` de la carpeta de un proyecto de Rasa 3.x en tu compu (clásico o CALM), crea un agente nuevo entrenado y devuelve `{id, name, slug, warnings, validation}`: `warnings` es lo que no se pudo pasar tal cual. Ver [migrate-from-rasa_es.md](migrate-from-rasa_es.md). |
 | `delete_agent(agent, confirm)` | Borra el bot con sus conversaciones; pide `confirm=True`. |
 
 **Probar**

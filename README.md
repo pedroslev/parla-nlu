@@ -77,9 +77,11 @@ The interface is in Spanish, and Parla is aimed at bots for Spanish-speaking use
   authorized for the widget.
 
 ### Integrations
-- MCP server with 25 tools to build, validate, train, test, publish and analyze bots.
+- MCP server with 26 tools to build, validate, train, test, publish and analyze bots.
 - **Conectar con IA** (Connect to AI): one button registers Parla in Claude Code, Codex, Claude Desktop or Cursor.
 - Functions in Python or JavaScript for logic that an HTTP step can't handle.
+- **Import from Rasa**: upload your Rasa 3.x project (classic or CALM) as a .zip and get a Parla agent plus a list of what
+  couldn't be migrated. See [docs/migrate-from-rasa.md](docs/migrate-from-rasa.md).
 
 ## Screenshots
 
@@ -265,7 +267,7 @@ get a useful bot running in an afternoon, on your machine and without sending da
 ## Documentation
 
 Everything is in [`docs/`](docs/README.md): getting started, concepts, API, MCP, AI and voice, security,
-deployment, development and FAQ.
+deployment, development, FAQ and [migrating from Rasa](docs/migrate-from-rasa.md).
 
 ## Contributing
 
