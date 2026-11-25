@@ -125,6 +125,13 @@ for bad in [{"hola": 1}, {"intents": "no"}, {"agent": {"flows": {}}}]:
         raise AssertionError(bad)
     except ValueError:
         pass
+import json  # noqa: E402
+# all_agents lista solo <id>.json: las claves (<id>.secrets.json) al lado no son un agente sin "id"
+os.makedirs(app.AGENTS, exist_ok=True)
+with open(os.path.join(app.AGENTS, "cccc3333.secrets.json"), "w") as f:
+    json.dump({"TOKEN": "x"}, f)
+assert all("id" in a for a in app.all_agents())
+os.remove(os.path.join(app.AGENTS, "cccc3333.secrets.json"))
 # API pública: slug, y una conversación completa por eventos (sin modelo: se reemplaza converse)
 assert app.slug("Pizzería Don Luis") == "pizzeria-don-luis"
 saved = app.all_agents, app.load, app.model, app.parse
@@ -300,7 +307,12 @@ assert app.handle(tricky, {}, "x", fake("pedir"))["messages"][0].startswith("⚠
 # ---------- ola "Rasa-like": botones, persona humana, pila de flujos, correcciones, sistema, idiomas, claves, IA ----------
 import base64
 from parla import brain, dates, vault, voice
-ROUTES = [("cancelar", "__cancel__"), ("repetí", "__repeat__"), ("una persona", "__handoff__"), ("menu", "menu"),
+# fechas escritas apurado: «maniana» es mañana (antes quedaba «a la tarde» de hoy)
+import datetime as _dt  # noqa: E402
+_d = lambda text: [f["value"] for f in dates.extract(text, _dt.date(2026, 11, 25))]
+assert _d("maniana a la tarde") == ["2026-11-26T16:00"] and _d("no, mainana") == ["2026-11-26"]
+assert _d("pasado maniana") == ["2026-11-27"] and _d("a las 10 de la maniana") == ["2026-11-25T10:00"]
+ROUTES =[("cancelar", "__cancel__"), ("repetí", "__repeat__"), ("una persona", "__handoff__"), ("menu", "menu"),
           ("pizza", "pedir"), ("horario", "horario"), ("reclamo", "reclamo"), ("loop", "loop"), ("plan", "planes")]
 def R(agent, text):
     intent = next((i for k, i in ROUTES if k in text.lower()), None)
@@ -329,6 +341,36 @@ BOT = {"threshold": 0.5, "fallback": "no entendí", "languages": ["es", "pt"], "
            {"name": "planes", "trigger": "planes", "steps": [{"type": "ask", "slot": "plan", "text": "¿Qué plan?"},
                                                              {"type": "message", "text": "Plan {{ plan }}"}]}]}
 say = lambda st, text, agent=BOT: app.handle(agent, st, text, R)
+# 0. una pregunta en medio de una pregunta: no llena el slot aunque nombre una opción; contesta y vuelve a preguntar.
+#    Y una opción dicha con otras palabras la elige la IA (acá simulada); si no, «No reconocí».
+saved_side, saved_pick = brain.side_question, brain.pick_value
+brain.side_question = lambda agent, st, text, asked: {"text": "Ventas vende.", "sources": [], "via": "knowledge"} if "?" in text else None
+brain.pick_value = lambda agent, entity, text, asked, st=None: "soporte" if "ayuda" in text else None
+st = {}
+say(st, "menu")
+r = say(st, "¿qué hace ventas?")
+assert r["messages"] == ["Ventas vende.", "¿Con qué área?"] and st["slots"]["area"] is None and r["answer_to"] is None, r
+r = say(st, "necesito ayuda técnica")
+assert r["messages"] == ["Área: soporte"] and r["via"] == "ia", r
+st = {}
+say(st, "menu")
+assert say(st, "cualquier cosa")["messages"][0] == "No reconocí ese dato, probemos de nuevo."
+brain.side_question, brain.pick_value = saved_side, saved_pick
+# «also»: la pregunta acepta también otra entidad; el slot queda vacío y el flujo sigue leyendo `entities`
+ALSO = dict(BOT, flows=[{"name": "oferta", "trigger": "menu", "steps": [
+    {"type": "ask", "slot": "gusto", "text": "¿Muzza?", "also": ["cantidad"]},
+    {"type": "if", "expr": "has(entities.cantidad)", "then": [{"type": "message", "text": "Van {{ entities.cantidad }}"}, {"type": "end"}]},
+    {"type": "message", "text": "Gusto {{ gusto }}"}]}])
+st = {}
+say(st, "menu", ALSO)
+saved_pick = brain.pick_value
+brain.pick_value = lambda *a, **k: "muzza"      # una IA que «entiende» cualquier cosa como sí: con contrapropuesta no se la consulta
+r = say(st, "mejor 3", ALSO)                     # (así se confirmó una cita de verdad: «jueves» leído como «sí»)
+brain.pick_value = saved_pick
+assert r["messages"] == ["Van 3"] and st["slots"]["gusto"] is None, r
+st = {}
+say(st, "menu", ALSO)
+assert say(st, "nada que ver", ALSO)["messages"][0] == "No reconocí ese dato, probemos de nuevo."   # sin also: se rechaza igual
 # 1. botones: el turno trae los del último mensaje; tocar uno contesta la pregunta con su valor
 st = {}
 r = say(st, "menu")

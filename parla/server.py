@@ -937,6 +937,8 @@ def handle(agent, st, text, parse=parse):
     entities = {e["entity"]: e["value"] for e in reversed(nlu["entities"])}
     waiting = st.pop("waiting", None)
     busy = waiting is not None and st.get("flow")
+    before = slots.get(waiting) if waiting else None    # si resulta que era otra pregunta, el slot vuelve a esto
+    asked = ((st.get("last_bot") or [{}])[-1] or {}).get("text") or ""
     for slot in agent["slots"]:
         # El slot se llena solo con su entidad. Mientras se espera una respuesta, solo el slot preguntado:
         # si no, el número de una dirección terminaría guardado como cantidad.
@@ -948,6 +950,9 @@ def handle(agent, st, text, parse=parse):
     # del sistema (y las interrupciones) piden más seguridad, y no cuentan si el mensaje ya trajo el dato que se pedía.
     strict = max(threshold, 0.75) if busy else threshold
     floor = max(strict, 0.65)        # «repetí», «cancelar»: frases cortas que se parecen a cualquier cosa
+    spec_waiting = next((s for s in agent["slots"] if s["name"] == waiting), {}) if busy else {}
+    if busy and not spec_waiting.get("entity") and spec_waiting.get("fill") != "ai":
+        floor = max(floor, 0.92)     # pregunta de texto libre: «jiménez» es una respuesta, no «repetí»
     answered = busy and waiting and any(s["name"] == waiting and s.get("entity") in entities for s in agent["slots"])
     system = (nlu["intent"] if nlu["intent"] in RESERVED.values() and nlu["confidence"] >= floor and button is None
               and not answered else None)
@@ -960,12 +965,20 @@ def handle(agent, st, text, parse=parse):
     if system == "__handoff__":
         start_handoff(st, "pidió hablar con una persona")
         return turn(agent, st, [localized(conf["handoff"], st)], nlu, ["pasa con una persona"])
-    answer_to, rejected, via = waiting, False, None
+    answer_to, rejected, via, sources = waiting, False, None, []
     if st.get("agent") and st.get("flow"):              # la charla está en un paso de IA: le toca a ella
         answer_to = None
     elif busy:
-        fixed = corrections(agent, st, waiting, entities) if conf["correction"].get("enabled") else None
-        if fixed:
+        # «¿qué es presencial?» a «¿presencial o virtual?»: se contesta (base de conocimiento) y se vuelve a preguntar
+        side = hook(brain.side_question, agent, st, text, asked) if button is None else None
+        fixed = None if side else corrections(agent, st, waiting, entities) if conf["correction"].get("enabled") else None
+        if side:
+            slots[waiting] = before
+            out.append(side["text"])
+            st["pc"] -= 1
+            trace.append("pregunta otra cosa: la contesta y vuelve a preguntar")
+            answer_to, via, sources = None, side.get("via"), side.get("sources") or []
+        elif fixed:
             st["pc"] = fixed[0] + 1                     # sigue desde después de esa pregunta: se recalcula lo que sigue
             out.append(localized(conf["correction"], st))
             trace.append("corrige " + ", ".join(fixed[1]))
@@ -980,7 +993,24 @@ def handle(agent, st, text, parse=parse):
                 else:
                     slots[waiting], via = value, "ia"
             elif entity and (entity.get("regex") or entity.get("values") or entity.get("kind") == "date"):
-                rejected = True                          # se esperaba un formato u opción
+                # Se esperaba un formato u opción y no vino. En este orden:
+                # 1. una contrapropuesta que el paso acepta («also»): «jueves» a «¿te sirve?». El slot queda vacío y el
+                #    flujo sigue: los pasos que vienen leen `entities` y deciden (buscar ese día, cambiar de médico…)
+                # 2. una intención clara («quiero cancelar mi cita»): interrumpe más abajo, no se la fuerza a una opción
+                # 3. con IA, una opción dicha con otras palabras («dale nomás» -> «si»)
+                # El orden importa: la IA leyó «jueves» como «sí» y confirmó una cita.
+                _, steps = steps_of(agent, st["flow"])
+                ask = steps[st["pc"] - 1] if 0 < st["pc"] <= len(steps) else {}
+                also = [e for e in ask.get("also") or [] if e in entities] if ask.get("type") == "ask" else []
+                clear_intent = flow_for(agent, nlu, strict)
+                if also:
+                    trace.append("contestó con otro dato: %s" % ", ".join(also))
+                elif entity.get("values") and not (clear_intent and clear_intent["name"] != st["flow"]) and (
+                        value := hook(brain.pick_value, agent, entity, text, asked, st)):
+                    slots[waiting], via = value, "ia"
+                    trace.append("la IA entendió «%s» como «%s»" % (text, value))
+                else:
+                    rejected = True
             else:
                 slots[waiting] = text
             other = flow_for(agent, nlu, strict) if rejected else None
@@ -1022,7 +1052,7 @@ def handle(agent, st, text, parse=parse):
         elif conf["anything_else"].get("enabled"):
             out.append(localized(conf["anything_else"], st))
     # answer_to: el mensaje se tomó como respuesta a la pregunta por ese slot, no como una intención nueva
-    return turn(agent, st, out, nlu, trace, answer_to=answer_to, rejected=rejected, via=via)
+    return turn(agent, st, out, nlu, trace, answer_to=answer_to, rejected=rejected, via=via, sources=sources)
 
 
 START = "__start__"   # trigger de un flujo que corre apenas empieza la conversación
@@ -1129,8 +1159,9 @@ def imported(data):
 
 
 def all_agents():
+    # solo <id>.json: al lado viven <id>.model.json, <id>.secrets.json, etc., que no son agentes
     return [load(name[:-5]) for name in sorted(os.listdir(AGENTS))
-            if name.endswith(".json") and not name.endswith(".model.json")]
+            if re.fullmatch(r"[0-9a-f]{8}\.json", name)]
 
 
 def slug(text):

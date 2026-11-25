@@ -148,6 +148,7 @@ nbad["system"]["handoff"]["translations"] = {"fr": "Je vous passe..."}
 nbad["widget"]["origins"] = ["https://mitienda.com/", "mitienda.com"]
 nbad["widget"]["position"] = "arriba"
 nbad["slots"].append({"name": "humor", "fill": "magia"})
+nbad["slots"].append({"name": "canal", "start": "si"})
 nbad["ai"]["provider"] = "nube"
 nbad["intents"].append({"name": "__cancel__", "examples": ["a", "b", "c"]})
 nbad["functions"].append({"name": "con_clave", "inputs": ["plan", "secret.API_KEY", "secret.mal-nombre"],
@@ -173,6 +174,8 @@ has(nerrs, "widget", "https://mitienda.com/")
 has(nerrs, "widget", "«mitienda.com»")
 has(nerrs, "widget", "position")
 has(nerrs, "slot «humor»", "fill")
+has(nerrs, "slot «canal»", "start")
+assert m.validate(m.DEMO_IVR)[1] == [] and m.DEMO_IVR["slots"][0]["start"] is True   # el ejemplo del guía usa start
 has(nerrs, "ai", "provider")
 has(nerrs, "intent «__cancel__»", "reservados")
 has(nerrs, "«con_clave»", "secret.mal-nombre")

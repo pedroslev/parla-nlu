@@ -363,6 +363,8 @@ def validate(data):
                           "%s; si no, no se puede usar en {{ }} ni en CEL" % (s["name"], ", ".join(sorted(RESERVED))))
         if s.get("entity") and s["entity"] not in entity_names:
             errors.append("slot «%s»: la entidad «%s» no existe" % (s["name"], s["entity"]))
+        if "start" in s and not isinstance(s["start"], bool):
+            errors.append("slot «%s»: «start» es true o false (true = dato que llega al iniciar la conversación)" % s["name"])
         if s.get("fill") not in (None, "", "ai"):
             errors.append("slot «%s»: «fill» solo puede ser \"ai\" (la IA lo completa leyendo «description»)" % s["name"])
         elif s.get("fill") == "ai":
@@ -523,6 +525,10 @@ def validate(data):
                 need_slot(w, step.get("slot"))
                 if not str(step.get("text") or "").strip():
                     errors.append("%s: falta «text» con la pregunta" % w)
+                also = step.get("also")
+                if also is not None and (not isinstance(also, list) or any(e not in entity_names for e in also)):
+                    errors.append("%s: «also» es una lista de entidades que también cuentan como respuesta (entidades: %s)"
+                                  % (w, ", ".join(sorted(entity_names)) or "ninguna"))
                 bubble(w, step)
             elif kind == "handoff":
                 if step.get("reason") is not None and not isinstance(step.get("reason"), str):
@@ -708,7 +714,7 @@ DEMO_IVR = {
         {"name": "Consultar saldo", "examples": ["quiero saber mi saldo", "cuánta plata tengo", "saldo de mi cuenta", "cuánto me queda"]},
         {"name": "Hablar con alguien", "examples": ["quiero hablar con una persona", "pasame con un operador", "necesito un humano"]}],
     "entities": [{"name": "dni", "kind": "number", "regex": PRESETS["number"], "values": [], "color": 3}],
-    "slots": [{"name": "dni", "entity": "dni"}, {"name": "nombre", "entity": ""}, {"name": "codigo_respuesta", "entity": ""},
+    "slots": [{"name": "dni", "entity": "dni", "start": True}, {"name": "nombre", "entity": ""}, {"name": "codigo_respuesta", "entity": ""},
               {"name": "email", "entity": ""}],
     "flows": [
         {"name": "Bienvenida", "trigger": "__start__", "steps": [
@@ -955,7 +961,7 @@ values, la aprende el CRF por contexto de las frases marcadas. "kind" lo usa la 
 - color (opcional): color del resaltado en la interfaz: un índice de la paleta (0-5) o un hex "#rrggbb"
   (el texto se ajusta solo para que se lea).
 
-## slots: [{name, entity, description?, fill?}]
+## slots: [{name, entity, description?, fill?, start?}]
 - La memoria de la conversación. name: minúsculas, números y _ (no empieza con número). Reservados: intent,
   confidence, text, entities, status, body, true, false, null, in.
 - entity ("" = ninguna): si el mensaje trae esa entidad, el slot se llena solo (en cualquier turno, salvo cuando el bot
@@ -966,6 +972,9 @@ values, la aprende el CRF por contexto de las frases marcadas. "kind" lo usa la 
 - fill: "ai" + description ("Por qué devuelve el producto, en pocas palabras"): la IA (ai.enabled) saca el dato de la
   respuesta leyendo la descripción; si no lo encuentra, repregunta. Para datos sin formato fijo que una entidad no
   agarra bien. Sin IA prendida, no lo uses.
+- start: true marca un dato inicial: llega en start data (IVR, CRM, widget) al empezar. En Parla, «Empezar con
+  datos» muestra solo esos slots (si ninguno está marcado, muestra todos). No cambia el motor: start data puede
+  precargar cualquier slot. Marcá los que manda el canal (DNI, número de cliente) y no los de trabajo interno.
 
 ## flows: [{name, trigger, steps}]
 - trigger: nombre exacto de una intent, "__start__" (corre al empezar la conversación; uno solo por agente) o ""
@@ -977,6 +986,12 @@ values, la aprende el CRF por contexto de las frases marcadas. "kind" lo usa la 
   - {"type": "message", "text": "...", "translations": {"pt": "..."}, "buttons": [...]}   envía un mensaje (con plantillas)
   - {"type": "ask", "slot": "s", "text": "¿...?", "translations": {...}, "buttons": [...]}
        pregunta y espera; SE SALTEA si el slot ya tiene valor
+     also (opcional): ["fecha", "cambio"] otras entidades que también cuentan como respuesta. Si la respuesta no trae la
+     del slot pero sí una de esas («jueves» a «¿te sirve el lunes?»), el slot queda vacío y el flujo SIGUE: los pasos
+     siguientes leen `entities` (if expr "has(entities.fecha)") y deciden. Para contrapropuestas a una oferta.
+     Con IA prendida, mientras espera una respuesta: si la persona pregunta otra cosa («¿qué es presencial?») el bot
+     contesta con la base de conocimiento (o dice que no sabe) y vuelve a preguntar, sin llenar el slot; y si contesta
+     una opción de lista con otras palabras («dale nomás», «por videollamada») la IA elige la opción.
      translations (opcional): {idioma: texto} para cada idioma extra de "languages" (admite plantillas).
      buttons (opcional): [{"label": "Ventas", "value": "ventas", "translations": {"pt": "Vendas"}}] respuestas rápidas
      (value opcional = label). En un ask, tocar el botón guarda su value en el slot. En un message, el value se

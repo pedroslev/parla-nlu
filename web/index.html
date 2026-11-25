@@ -147,7 +147,11 @@
   .swatches { display: flex; gap: 4px; align-items: center; }
   .swatches button { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12); }
   .swatches button[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink); }
-  .side { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; }
+  /* la lista scrollea sola: con un flujo largo al lado no hay que bajar todo el contenido para llegar al final de la lista
+     (56px la barra de arriba, 28px el padding de #center, más un respiro abajo) */
+  .side { display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; max-height: calc(100dvh - 56px - 56px); overflow-y: auto; }
+  .side > input[type="search"] { position: sticky; top: 0; z-index: 1; margin-bottom: 6px; flex: none; }
+  .side > .empty { padding: 14px; font-size: 14px; }
   .side button.item { text-align: left; padding: 9px 12px; border-radius: 10px; display: flex; flex-direction: column; }
   .side button.item:hover { background: var(--surface); }
   .side button.item[aria-current="true"] { background: var(--surface); box-shadow: inset 3px 0 0 var(--brand); font-weight: 600; }
@@ -326,7 +330,8 @@
     #nav .nav-group { font-size: 0; padding: 0; margin: 6px 8px; border-top: 1px solid var(--line); }
     #nav .nav-group:first-child { display: none; }
     .two { grid-template-columns: 1fr; }
-    .side { position: static; flex-direction: row; flex-wrap: wrap; }
+    .side { position: static; flex-direction: row; flex-wrap: wrap; max-height: none; overflow: visible; }
+    .side > input[type="search"] { position: static; flex: 1 1 100%; }
   }
   @media (max-width: 760px) {
     .work { display: flex; flex-direction: column; height: auto; min-height: 100%; }
@@ -497,7 +502,7 @@ function inkFor(hex) {                 // contraste contra tinta oscura vs. cont
 const colorOf = (x) => HEX.test(x?.color) ? [x.color, inkFor(x.color)] : COLORS[(Math.abs(parseInt(x?.color)) || 0) % COLORS.length];
 const markStyle = (e) => { const [bg, ink] = colorOf(e); return 'background:' + bg + ';color:' + ink; };
 const fold = (t) => String(t ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-const query = { slots: '', entities: '' };    // lo que se busca en Slots y Entidades; sobrevive a los redibujos
+const query = { slots: '', entities: '', flows: '' };    // lo que se busca en Slots, Entidades y Flujos; sobrevive a los redibujos
 function searchBox(key, label, rows) {        // rows: [[elemento, texto]]. Filtra en el lugar, sin redibujar, así no se pierde el foco
   const none = h('div', { class: 'empty', hidden: true }, 'Nada coincide con «', h('span'), '».');
   const apply = () => {
@@ -678,7 +683,7 @@ async function home() {
 async function openAgent(id, start) {
   agent = await api('GET', '/' + id);
   agent.classifications ||= []; agent.functions ||= [];
-  section = /^[a-z]+$/.test(start || '') ? start : 'intents';     // al recargar (F5) vuelve a la sección que estaba sel = { intents: 0, flows: 0, functions: 0, system: null }; query.slots = query.entities = ''; testEnv = 'draft'; chat = []; lastSlots = {}; lastTrace = []; session = newSession();
+  section = /^[a-z]+$/.test(start || '') ? start : 'intents';     // al recargar (F5) vuelve a la sección que estaba sel = { intents: 0, flows: 0, functions: 0, system: null }; query.slots = query.entities = query.flows = ''; testEnv = 'draft'; chat = []; lastSlots = {}; lastTrace = []; session = newSession();
   editLang = null; stopHandoff(); lastLang = null;
   const app = $('#app');
   app.className = 'work' + (chatOpen ? '' : ' chat-closed');
@@ -921,7 +926,10 @@ function slotsView() {
     h('div', { class: 'row', style: 'gap:8px 16px' },
       h('input', { class: 'grow', ...bind(v, 'description'), placeholder: 'Para qué es, por ejemplo: el día que quiere el turno', 'aria-label': 'Descripción de ' + v.name, style: 'font-size:14px;min-width:220px' }),
       h('label', { class: 'toggle' }, h('input', { type: 'checkbox', class: 'switch', role: 'switch', checked: v.fill === 'ai',
-        onchange: (e) => { if (e.target.checked) v.fill = 'ai'; else delete v.fill; touch(); render(); } }), 'La IA lo completa leyendo la descripción')),
+        onchange: (e) => { if (e.target.checked) v.fill = 'ai'; else delete v.fill; touch(); render(); } }), 'La IA lo completa leyendo la descripción'),
+      h('label', { class: 'toggle', title: 'Llega al empezar la conversación (IVR, CRM, widget): es lo que se muestra en «Empezar con datos»' },
+        h('input', { type: 'checkbox', class: 'switch', role: 'switch', checked: !!v.start,
+          onchange: (e) => { if (e.target.checked) v.start = true; else delete v.start; touch(); render(); } }), 'Dato inicial')),
     v.fill === 'ai' && !v.description?.trim() ? h('p', { class: 'help', style: 'font-size:13px;color:var(--warn)' }, 'Escribí una descripción: es lo que lee la IA para saber qué buscar.') : null,
     v.fill === 'ai' && !agent.ai?.enabled ? h('p', { class: 'help', style: 'font-size:13px' }, 'La IA está apagada. ', h('button', { class: 'link', onclick: () => { section = 'ai'; render(); } }, 'Prenderla en IA')) : null),
   [v.name, v.entity, v.description].join(' ')]);
@@ -1147,6 +1155,10 @@ function flowsView() {
   if (sel.system) list.querySelectorAll('button.item').forEach((b) => b.setAttribute('aria-current', 'false'));
   list.append(h('div', { class: 'side-group' }, 'Del sistema'), ...SYSTEM.map(([key, title]) => h('button', { class: 'item', 'aria-current': String(sel.system === key),
     onclick: () => { sel.system = key; render(); $('#center').scrollTop = 0; } }, title, h('small', { class: sysOf(key).enabled ? 'on' : null }, sysOf(key).enabled ? 'Activado' : 'Apagado'))));
+  if (agent.flows.length > 5) {          // buscador: filtra por nombre y por a qué responde, sin redibujar (no pierde el foco)
+    const [search, none] = searchBox('flows', 'Buscar flujos', [...list.querySelectorAll('button.item')].map((b) => [b, b.textContent]));
+    list.prepend(search); list.querySelector('.side-group').before(none);
+  }
   if (sel.system) return h('div', { class: 'two' }, list, systemView(sel.system));
   if (!fl) return h('div', { class: 'two' }, list, h('div', { class: 'empty' }, h('h2', {}, 'Todavía no hay flujos'), h('p', {}, 'Un flujo es la conversación que sigue el bot cuando entiende una intención.')));
   const intent = agent.intents.find((i) => i.name === fl.trigger);
@@ -1281,6 +1293,8 @@ async function startChat(data) {   // empieza una conversación nueva, con los d
 }
 function startBox() {
   const hasStart = agent.flows.some((f) => f.trigger === START);
+  const initial = agent.slots.filter((s) => s.start);   // los marcados como dato inicial; si no hay, todos
+  const shown = initial.length ? initial : agent.slots;
   const go = () => startChat(Object.fromEntries(Object.entries(startData).map(([k, v]) => [k, v.trim()]).filter(([k, v]) => v && agent.slots.some((s) => s.name === k))));
   const create = () => {
     const f = { name: uniqueName(agent.flows, 'Bienvenida'), trigger: START, steps: [] };
@@ -1288,9 +1302,11 @@ function startBox() {
   };
   return h('details', { class: 'start-box', open: startOpen, ontoggle: (e) => { startOpen = e.target.open; } }, h('summary', {}, 'Empezar con datos'),
     h('p', { class: 'help' }, 'Probá cómo arranca la conversación cuando llegan datos de antes, por ejemplo el DNI que ya pidió el conmutador.'),
-    agent.slots.length ? agent.slots.map((s) => lab(s.name, h('input', { value: startData[s.name] ?? '', placeholder: 'valor que llega al iniciar', autocomplete: 'off',
+    shown.length ? shown.map((s) => lab(s.name, h('input', { value: startData[s.name] ?? '', placeholder: 'valor que llega al iniciar', autocomplete: 'off',
       oninput: (e) => { startData[s.name] = e.target.value; }, onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } } })))
       : h('p', { class: 'help' }, 'Este agente todavía no tiene slots. Creá uno en Slots para poder cargarle datos.'),
+    !initial.length && agent.slots.length > 4 ? h('p', { class: 'help' }, 'Para ver solo los que llegan al iniciar, marcalos como «Dato inicial» en ',
+      h('button', { class: 'link', onclick: () => { section = 'slots'; render(); } }, 'Slots'), '.') : null,
     hasStart ? null : h('p', { class: 'help' }, 'Los datos se guardan en los slots. Para usarlos apenas empieza, ', h('button', { class: 'link', onclick: create }, 'creá un flujo «Al empezar la conversación»'), '.'),
     h('button', { class: 'btn small', onclick: go }, 'Empezar conversación'));
 }

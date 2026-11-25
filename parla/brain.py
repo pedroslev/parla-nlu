@@ -116,6 +116,89 @@ def fill_slot(agent, slot, text, ctx=None):
         return None
 
 
+# ---------- una pregunta en medio de una pregunta ----------
+# «¿qué es presencial?» mientras el bot pregunta «¿presencial o virtual?»: trae el valor, pero no es una respuesta.
+# «que sea más tarde» o «que quede en Bogotá» contestan: «que» solo cuenta en «qué es», «qué significa», etc.
+QUESTION = re.compile(r"\?|^\s*(que\s+(es|son|significa|quiere\s+decir|incluye|pasa|tengo|necesito|debo|hago|llevo)"
+                      r"|cual|cuales|como|donde|cuando|cuanto|cuantos|cuanta|por\s*que|para\s*que|quien|quienes"
+                      r"|tienen|se\s+puede|necesito\s+saber)\b")
+DONT_KNOW = {"es": "Esa consulta no la puedo responder por acá.", "pt": "Essa dúvida eu não consigo responder por aqui.",
+             "en": "I can't answer that here."}   # neutro: lo dice cualquier bot, de cualquier país
+
+
+def side_question(agent, st, text, asked):
+    """Si la persona, en vez de contestar `asked`, hace otra pregunta: {"text", "sources", "via"} con la respuesta
+    (de la base de conocimiento; sin datos, un «no lo sé» honesto). None si el mensaje parece una respuesta.
+    Sin IA solo cuenta como pregunta lo que la base de conocimiento sabe contestar."""
+    try:
+        if not QUESTION.search(_plain(text)):
+            return None
+        found = _from_knowledge(agent, st, text)
+        if found:
+            return found
+        cfg = _on(agent)
+        if not cfg:
+            return None
+        out = llm.chat(cfg, [
+            {"role": "system", "content": (
+                'Clasificás mensajes de clientes de un chat. El bot hizo una pregunta y el cliente escribió algo.\n'
+                '"contesta": el cliente responde o elige, aunque lo haga con signos de pregunta, con dudas, proponiendo otra '
+                'opción, un día, una hora, un lugar, o pidiendo algo distinto a lo ofrecido.\n'
+                '"pregunta": el cliente pide información que no responde la pregunta del bot (qué significa algo, cuánto '
+                'cuesta, dónde queda, qué tiene que llevar, cómo funciona).\n'
+                'Ejemplos:\nBot: "¿Te sirve el lunes a las 9?" Cliente: "¿y el jueves hay algo?" -> contesta\n'
+                'Bot: "¿Te sirve el lunes a las 9?" Cliente: "¿no tenés más tarde?" -> contesta\n'
+                'Bot: "¿Presencial o virtual?" Cliente: "¿qué es virtual?" -> pregunta\n'
+                'Bot: "¿En qué ciudad?" Cliente: "¿puede ser en Cali?" -> contesta\n'
+                'Bot: "¿En qué ciudad?" Cliente: "¿cuánto sale la consulta?" -> pregunta')},
+            {"role": "user", "content": 'Bot: "%s" Cliente: "%s" ->' % (asked, text)}], timeout=20, max_tokens=15,
+            schema={"type": "object", "properties": {"tipo": {"type": "string", "enum": ["contesta", "pregunta"]}}, "required": ["tipo"]})
+        if out.get("tipo") != "pregunta":
+            return None
+        return {"text": DONT_KNOW.get((st or {}).get("lang") or "es", DONT_KNOW["es"]), "sources": [], "via": "ia"}
+    except Exception:
+        return None
+
+
+# ---------- una respuesta libre a una pregunta de opciones ----------
+def pick_value(agent, entity, text, asked, st=None):
+    """Para una entidad de lista: el valor que corresponde a lo que contestó la persona con sus palabras
+    («dale nomás» -> «si», «por video» -> «virtual»), o None. Solo vale un valor de la lista."""
+    try:
+        cfg = _on(agent)
+        values = [v for v in entity.get("values") or [] if isinstance(v, str)]
+        if not cfg or not values or not str(text or "").strip():
+            return None
+        synonyms = entity.get("synonyms") or {}
+        yes_no = "si" in values and "no" in values
+
+        def ask(order):
+            options = "\n".join('- "%s"%s' % (v, (" (por ejemplo: %s)" % ", ".join(synonyms[v][:6])) if synonyms.get(v) else "")
+                                for v in order)
+            out = llm.chat(cfg, [
+            {"role": "system", "content": (
+                'Interpretás respuestas de clientes en un chat. El bot hizo una pregunta con opciones y el cliente contestó '
+                'con sus palabras. Elegí la opción que corresponde al SENTIDO de lo que dijo, aunque no use esas palabras. '
+                'Usá "ninguna" solo si el mensaje no contesta la pregunta.%s\n'
+                'Ejemplos:\nOpciones "presencial", "virtual". Cliente: "prefiero ir en persona" -> presencial\n'
+                'Opciones "presencial", "virtual". Cliente: "desde mi casa por la compu" -> virtual\n'
+                'Opciones "fecha", "medico", "ciudad". Cliente: "con otra doctora" -> medico\n'
+                'Opciones "fecha", "medico", "ciudad". Cliente: "ese horario no me queda" -> fecha'
+                % ('\nSi el cliente rechaza lo ofrecido, pone una objeción ("muy temprano", "no puedo") o propone otra cosa '
+                   '(otro día, otra hora), es "no". Si lo acepta con cualquier palabra ("de una", "agendala", "me viene bien"), es "si".'
+                   if yes_no else ''))},
+            {"role": "user", "content": 'Bot: "%s"\nOpciones:\n%s\nCliente: "%s" ->' % (asked, options, text)}],
+            timeout=20, max_tokens=20,
+            schema={"type": "object", "properties": {"opcion": {"type": "string", "enum": order + ["ninguna"]}}, "required": ["opcion"]})
+            return out.get("opcion") if out.get("opcion") in values else None
+
+        # Una lectura equivocada puede confirmar una cita: vale solo si da lo mismo con las opciones al revés.
+        first = ask(values)
+        return first if first and (len(values) < 2 or ask(values[::-1]) == first) else None
+    except Exception:
+        return None
+
+
 # ---------- antes del «no entendí» ----------
 def _snippet(text, limit=600):
     text = re.sub(r"^(p|pregunta|q)\s*[:.)-]\s*[^\n]*\?\s*\n", "", str(text).strip(), flags=re.I)   # sin repetir la pregunta
@@ -147,35 +230,44 @@ def _capabilities(agent):
     return [i["name"].replace("_", " ") for i in agent.get("intents") or [] if i.get("name")][:8]
 
 
+def _from_knowledge(agent, st, text):
+    """Respuesta de la base de conocimiento ({"text", "sources", "via"}) o None si nada pasa el umbral.
+    Sin IA devuelve el fragmento; con IA (use_knowledge) lo redacta, y si la redacción no se sostiene, el fragmento."""
+    try:
+        hits = knowledge.search(agent, text, 3) or []
+    except Exception:
+        hits = []
+    threshold = float(agent.get("knowledge_threshold", 0.55))
+    good = [h for h in hits if float(h.get("score") or 0) >= threshold]
+    if not good:
+        return None
+    sources = [{"title": h.get("title"), "doc": h.get("doc"), "score": round(float(h.get("score") or 0), 3)} for h in good]
+    cfg = _on(agent, "use_knowledge")
+    if cfg:
+        try:
+            context = "\n\n".join(h["text"] for h in good[:2])
+            persona = (cfg.get("persona") or "").strip()
+            answer = llm.chat(cfg, [{"role": "user", "content": (
+                '%sTexto:\n"""\n%s\n"""\n\nPregunta del cliente: %s\n\nRespondé la pregunta en una o dos oraciones '
+                'completas, en %s, usando solo datos del texto.' % (("Así habla el bot: " + persona + "\n") if persona else "",
+                                                                  context, text, _lang(st)))}], timeout=40, max_tokens=140)
+            leaked = re.search(r"(?im)^\s*(p|r|pregunta|respuesta|texto)\s*:|pregunta del cliente|\"\"\"", answer or "")
+            if answer and not leaked and len(answer) <= 400 and _supported(answer, context, text):
+                return {"text": answer, "sources": sources, "via": "knowledge"}
+        except Exception:
+            pass
+    return {"text": _snippet(good[0]["text"]), "sources": sources[:1], "via": "knowledge"}
+
+
 def fallback(agent, st, text):
     """{"text", "sources", "via"} o None. Base de conocimiento primero (funciona sin IA, de forma extractiva);
     si no hay nada, con IA una repregunta corta que dice qué sabe hacer el bot."""
     try:
         if not str(text or "").strip():
             return None
-        try:
-            hits = knowledge.search(agent, text, 3) or []
-        except Exception:
-            hits = []
-        threshold = float(agent.get("knowledge_threshold", 0.55))
-        good = [h for h in hits if float(h.get("score") or 0) >= threshold]
-        if good:
-            sources = [{"title": h.get("title"), "doc": h.get("doc"), "score": round(float(h.get("score") or 0), 3)} for h in good]
-            cfg = _on(agent, "use_knowledge")
-            if cfg:
-                try:
-                    context = "\n\n".join(h["text"] for h in good[:2])
-                    persona = (cfg.get("persona") or "").strip()
-                    answer = llm.chat(cfg, [{"role": "user", "content": (
-                        '%sTexto:\n"""\n%s\n"""\n\nPregunta del cliente: %s\n\nRespondé la pregunta en una o dos oraciones '
-                        'completas, en %s, usando solo datos del texto.' % (("Así habla el bot: " + persona + "\n") if persona else "",
-                                                                          context, text, _lang(st)))}], timeout=40, max_tokens=140)
-                    leaked = re.search(r"(?im)^\s*(p|r|pregunta|respuesta|texto)\s*:|pregunta del cliente|\"\"\"", answer or "")
-                    if answer and not leaked and len(answer) <= 400 and _supported(answer, context, text):
-                        return {"text": answer, "sources": sources, "via": "knowledge"}
-                except Exception:
-                    pass
-            return {"text": _snippet(good[0]["text"]), "sources": sources[:1], "via": "knowledge"}
+        found = _from_knowledge(agent, st, text)
+        if found:
+            return found
         cfg = _on(agent, "generative_fallback")
         if not cfg:
             return None

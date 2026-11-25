@@ -12,12 +12,13 @@ MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agost
 NUMBERS = {"un": 1, "una": 1, "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5, "seis": 6, "siete": 7,
            "ocho": 8, "nueve": 9, "diez": 10, "quince": 15}
 PARTS = {"manana": 9, "tarde": 16, "noche": 20}   # «a la tarde» sin hora: una hora razonable de esa franja
+MANANA = r"ma(?:nn?i?|in)ana"   # mañana y cómo se escribe apurado: manana, maniana, mannana, mainana
 NUM = r"(\d{1,3}|" + "|".join(NUMBERS) + ")"
 B = r"(?<!\w)"   # borde de palabra que no se confunde con letras acentuadas (ya sin acento)
 
 DATE = [
-    ("rel", re.compile(B + r"pasado\s+manana\b")),
-    ("rel", re.compile(B + r"(hoy|(?<!la )(?<!por )manana)\b")),
+    ("rel", re.compile(B + r"pasado\s+" + MANANA + r"\b")),
+    ("rel", re.compile(B + r"(hoy|(?<!la )(?<!por )" + MANANA + r")\b")),
     ("in", re.compile(B + r"(?:dentro\s+de|en)\s+" + NUM + r"\s+(dias?|semanas?)\b")),
     ("week", re.compile(B + r"(?:la\s+)?(?:semana\s+que\s+viene|proxima\s+semana|semana\s+proxima)\b")),
     ("wday", re.compile(B + r"(?:el\s+)?(?:proximo\s+)?(" + "|".join(WEEKDAYS) + r")(?:\s+que\s+viene|\s+proximo)?\b")),
@@ -25,11 +26,11 @@ DATE = [
     ("dm", re.compile(B + r"(?:el\s+)?(\d{1,2})\s+de\s+(" + "|".join(MONTHS) + r")(?:\s+(?:de\s+)?(\d{4}))?\b")),
 ]
 TIME = [
-    ("hm", re.compile(B + r"(?:a\s+las?\s+)?(\d{1,2})(?::|\.)(\d{2})(?:\s*(?:hs|h)\b)?(?:\s+de\s+la\s+(manana|tarde|noche))?")),
-    ("h", re.compile(B + r"a\s+las?\s+(\d{1,2})(\s+y\s+media|\s+y\s+cuarto)?(?:\s*(?:hs|h)\b)?(?:\s+de\s+la\s+(manana|tarde|noche))?")),
+    ("hm", re.compile(B + r"(?:a\s+las?\s+)?(\d{1,2})(?::|\.)(\d{2})(?:\s*(?:hs|h)\b)?(?:\s+de\s+la\s+(" + MANANA + r"|tarde|noche))?")),
+    ("h", re.compile(B + r"a\s+las?\s+(\d{1,2})(\s+y\s+media|\s+y\s+cuarto)?(?:\s*(?:hs|h)\b)?(?:\s+de\s+la\s+(" + MANANA + r"|tarde|noche))?")),
     ("h", re.compile(B + r"(\d{1,2})(\s+y\s+media|\s+y\s+cuarto)?\s*(?:hs)\b()")),
     ("noon", re.compile(B + r"al\s+mediodia\b")),
-    ("part", re.compile(B + r"(?:a|de|por|en)\s+la\s+(manana|tarde|noche)\b")),
+    ("part", re.compile(B + r"(?:a|de|por|en)\s+la\s+(" + MANANA + r"|tarde|noche)\b")),
 ]
 
 
@@ -44,7 +45,8 @@ def _num(word):
 
 def _date(kind, m, today):
     if kind == "rel":
-        return today + dt.timedelta(days={"hoy": 0, "manana": 1}.get(m.group(0).strip(), 2))
+        word = m.group(0).strip()
+        return today + dt.timedelta(days=0 if word == "hoy" else 2 if word.startswith("pasado") else 1)
     if kind == "in":
         n = _num(m.group(1))
         return today + dt.timedelta(days=n * (7 if m.group(2).startswith("semana") else 1))
@@ -71,7 +73,7 @@ def _time(kind, m):
     if kind == "noon":
         return 12, 0
     if kind == "part":
-        return PARTS[m.group(1)], 0
+        return PARTS.get(m.group(1), PARTS["manana"]), 0
     hour = int(m.group(1))
     minute = int(m.group(2)) if kind == "hm" else {"media": 30, "cuarto": 15}.get((m.group(2) or "-").split()[-1], 0)
     part = m.group(3)
