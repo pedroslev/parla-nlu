@@ -18,6 +18,8 @@ import urllib.request
 import uuid
 
 from mcp.server.mcpserver import MCPServer
+
+from .bottests import shape_errors
 from mcp.server.mcpserver.exceptions import ToolError
 
 try:  # celpy viene con Parla; si está, se chequea la sintaxis de las fórmulas CEL
@@ -726,6 +728,8 @@ def validate(data, files=None):
         warnings.append("function «%s» no la ejecuta ningún paso function ni agent: nunca corre" % name)
     for name in sorted(classification_names - used_classifications):
         warnings.append("classification «%s» no la aplica ningún paso classify: siempre va a dar 0 en el reporte" % name)
+    if "tests" in agent:
+        errors += shape_errors(agent["tests"], intent_names | {"__cancel__", "__repeat__", "__handoff__"}, slot_names, flow_names)
     return agent, errors, warnings
 
 
@@ -1194,6 +1198,21 @@ propias para cancelar o pedir un humano: ya están.
 - El borrador usa su última versión ENTRENADA de intents y entities; flujos, slots, threshold y fallback se usan en vivo.
   create_agent/update_agent ya entrenan. Si cambiás frases o entidades por otra vía, llamá train_agent antes de probar.
 
+## Pruebas de conversación: tests [{name, start?, environment?, turns}]
+- Charlas de regresión guardadas en el agente (viajan al exportar y en cada versión). run_tests las corre sin guardar
+  ninguna conversación; publicar a production las corre primero y no publica si falla alguna (salvo force=True).
+- turns: [{user, intent?, says?, buttons?, slots?, flow?, handoff?}]. user = lo que escribe la persona (para tocar un
+  botón, su value o label). El PRIMER turno puede no tener user: revisa lo que dice el bot al empezar (__start__).
+- says: texto que tiene que aparecer en lo que dijo el bot ese turno (sin importar mayúsculas) o "/regex/" de Python
+  ("(?i)" para ignorar mayúsculas). buttons: etiquetas o values que tienen que estar entre los botones ofrecidos.
+  slots: {slot: valor} (solo los que pongas, comparados como texto). intent: la intención que entendió (una respuesta
+  a un ask o un fallback cuentan como ninguna). flow: el flujo en curso al final del turno (o el último que empezó).
+  handoff: true si pasó a una persona. start: {slot: valor} como los datos del evento start. environment: draft
+  (default), staging o production. Un turno con un paso que falló (⚠) falla, salvo que tenga says.
+- Ejemplo: {"name": "Saldo", "start": {"dni": "30123456"}, "turns": [{"says": "Hola"},
+  {"user": "quiero saber mi saldo", "intent": "Consultar saldo", "says": "/\\$\\d+/"}]}
+- Los pasos http, function y agent corren de verdad: las pruebas que dependen de la IA o de una API pueden fallar solas.
+
 ## Borrador, versiones y entornos
 - Editar (create_agent, update_agent, restore_version) cambia solo el BORRADOR. Los usuarios reales NO lo ven
   hasta que se publica y se despliega en producción.
@@ -1259,7 +1278,7 @@ Necesita que la persona cargue la clave CRM_TOKEN en Claves para que ande la val
 mcp = MCPServer("parla", instructions=(
     "Parla es un armador de chatbots. get_report y list_sessions muestran cómo les va a los bots en producción. Para armar un bot: leé agent_format_guide, diseñá el JSON del agente, "
     "probá cada función con test_function, validate_agent, create_agent (valida, crea y entrena), y probalo con "
-    "test_conversation. Para cambiarlo: "
+    "test_conversation; guardá las charlas que importan como pruebas en \"tests\" y corrélas con run_tests. Para cambiarlo: "
     "get_agent, editá el JSON completo y update_agent (reemplaza todo y reentrena). Editar cambia solo el BORRADOR: "
     "los usuarios reales no lo ven hasta publicar. Flujo: probar el borrador → publish_agent a staging → probar staging → "
     "con el OK del usuario, deploy_version a production (confirm=True). Rollback = desplegar la versión anterior. "
@@ -1328,6 +1347,7 @@ def update_agent(agent: str, agent_json: dict | str) -> dict:
     """Replace an existing agent's WHOLE definition (same id; anything you omit is reset to defaults/empty), then
     retrain. `agent` = id, name or slug. Get the current JSON with get_agent, edit it, and pass it entire.
     Validates first; fails with the errors list if invalid. Returns {id, name, slug, trained, warnings}.
+    Keep the "tests" list (conversation tests, see run_tests) in the JSON: omitting it deletes them.
     This edits the DRAFT only: production/staging keep answering with their published version (real users and
     conversations in progress are NOT affected) until you publish_agent and deploy_version."""
     agent_id = resolve(agent)
@@ -1477,14 +1497,27 @@ def needs_confirm(agent, environment, confirm):
 
 
 @mcp.tool()
-def publish_agent(agent: str, note: str, environment: str | None = None, confirm: bool = False) -> dict:
+def publish_agent(agent: str, note: str, environment: str | None = None, confirm: bool = False, force: bool = False) -> dict:
     """Publish the current DRAFT as a new immutable numbered version (v1, v2…) with its own trained model.
     `note` = what changed, for humans. `environment` = None (just create the version), "staging" (recommended: for
     the user/client to test) or "production" (goes live right away: requires confirm=True, only with the user's OK).
+    Publishing to production first runs the agent's tests (see run_tests): if any fails nothing is published and
+    this fails with the failures; force=True publishes anyway (only if the user accepts the failing tests).
     Returns {version, created, note, stats, environments}."""
     if environment is not None:
         needs_confirm(agent, environment_of(environment), confirm)
-    return call("POST", "/api/agents/%s/versions" % resolve(agent), {"note": note, "environment": environment})
+    return call("POST", "/api/agents/%s/versions" % resolve(agent), {"note": note, "environment": environment, "force": force is True})
+
+
+@mcp.tool()
+def run_tests(agent: str, environment: str | None = None, names: list[str] | None = None) -> dict:
+    """Run the agent's conversation tests (the "tests" list of the agent JSON, see agent_format_guide). Nothing is
+    saved: they don't show up in conversations or reports. `environment` = "draft" | "staging" | "production"
+    (default: each test's own, usually draft = the current draft, even if not trained yet). `names` = only these.
+    Returns {passed, total, failed, tests: [{name, passed, error?, turns: [{user, passed, failures: [{check,
+    expected, got}], got: {intent, says, buttons, slots, flow, handoff}}]}]}. Run them after update_agent and before
+    publishing; to add a test, put it in "tests" and update_agent."""
+    return call("POST", "/api/agents/%s/tests/run" % resolve(agent), {"environment": environment, "names": names})
 
 
 @mcp.tool()

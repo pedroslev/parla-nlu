@@ -53,7 +53,7 @@
   const names = (list) => list.slice(0, 4).map((x) => '«' + x + '»').join(', ') + (list.length > 4 ? ' y ' + (list.length - 4) + ' más' : '');
 
   // ---------- el diff en palabras ----------
-  const PARTS = [['intents', 'Intenciones', 'a'], ['entities', 'Entidades', 'a'], ['slots', 'Slots', 'o'], ['flows', 'Flujos', 'o'], ['classifications', 'Clasificaciones', 'a']];
+  const PARTS = [['intents', 'Intenciones', 'a'], ['entities', 'Entidades', 'a'], ['slots', 'Slots', 'o'], ['flows', 'Flujos', 'o'], ['classifications', 'Clasificaciones', 'a'], ['tests', 'Pruebas', 'a']];
   const SETTINGS = { name: 'el nombre', threshold: 'qué tan seguro tiene que estar', fallback: 'qué responde cuando no entiende' };
   function describe(d) {
     const lines = [];
@@ -134,12 +134,25 @@
     const radio = (value, title, sub, checked) => h('label', { class: 'rl-choice' }, h('input', { type: 'radio', name: 'rl-env', value, checked }), h('span', {}, title, h('small', {}, sub)));
     const go = h('button', { class: 'btn' }, 'Publicar v' + next);
     const problem = h('p', { class: 'notice warn', hidden: true, role: 'alert' });
-    go.onclick = async () => {
+    const anyway = h('button', { class: 'btn', type: 'button', hidden: true, style: 'background:var(--warn)' }, 'Publicar igual');
+    const failed = h('div', { class: 'stack', hidden: true });
+    anyway.onclick = () => go.onclick(null, true);
+    go.onclick = async (e, force) => {
       const environment = d.querySelector('input[name=rl-env]:checked').value;
-      go.disabled = true; cancel.disabled = true; go.textContent = 'Publicando…';
+      go.disabled = true; cancel.disabled = true; anyway.disabled = true; go.textContent = environment === 'production' && agent.tests?.length && !force ? 'Corriendo las pruebas…' : 'Publicando…';
       try {
         await saveNow();
-        const r = await api('POST', '/' + agent.id + '/versions', { note: note.value.trim(), environment });
+        let r;
+        try { r = await api('POST', '/' + agent.id + '/versions', { note: note.value.trim(), environment, force: !!force }); }
+        catch (err) {
+          if (err.status !== 409 || !err.data?.tests) throw err;
+          // fallaron pruebas: no se publicó; se muestran y se puede publicar igual (force)
+          fill(failed, h('p', { class: 'notice warn', role: 'alert' }, 'No se publicó: fallaron ' + err.data.tests.failed + ' de ' + err.data.tests.total + ' pruebas.'),
+            window.testFailures(err.data.tests), h('button', { class: 'link', type: 'button', onclick: () => { d.close(); section = 'tests'; render(); } }, 'Ver las pruebas'));
+          failed.hidden = false; anyway.hidden = false; anyway.disabled = false; problem.hidden = true;
+          go.disabled = false; cancel.disabled = false; go.textContent = 'Publicar v' + next;
+          return;
+        }
         (agent.environments ||= {})[environment] = r.version;
         refresh();
         fill(body, 
@@ -162,8 +175,9 @@
       h('div', { class: 'stack' },
         radio('staging', 'Probar primero en Pruebas', 'Producción sigue igual. Probala vos o tu cliente y después la pasás.', true),
         radio('production', 'Publicar directo en Producción', prod != null ? 'Reemplaza a la v' + prod + ' para las conversaciones nuevas.' : 'La API empieza a responder con esta versión.', false)),
-      problem,
-      h('div', { class: 'row' }, go, cancel));
+      agent.tests?.length ? h('p', { class: 'help', style: 'font-size:14px' }, 'Al publicar en Producción primero corren las ' + plural(agent.tests.length, 'prueba', 'pruebas') + ' del bot.') : null,
+      problem, failed,
+      h('div', { class: 'row' }, go, anyway, cancel));
     note.focus();
   };
 

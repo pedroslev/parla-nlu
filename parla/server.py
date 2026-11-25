@@ -19,7 +19,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import DATA, ROOT, write_json, auth, brain, channels, connect, dates, files, insights, knowledge, llm, rasa_import, runner, vault, voice
+from . import DATA, ROOT, write_json, auth, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, rasa_import, runner, vault, voice
 
 import celpy
 import pycrfsuite
@@ -589,7 +589,7 @@ def diff(old, new):
     """Qué cambia de una definición a otra, por nombre, en palabras que entiende cualquiera."""
     out, total = {}, 0
     for key, label in (("intents", "intenciones"), ("entities", "entidades"), ("slots", "slots"), ("flows", "flujos"),
-                       ("classifications", "clasificaciones"), ("functions", "funciones")):
+                       ("classifications", "clasificaciones"), ("functions", "funciones"), ("tests", "pruebas")):
         a = {x["name"]: x for x in old.get(key) or []}
         b = {x["name"]: x for x in new.get(key) or []}
         changed = []
@@ -1361,7 +1361,7 @@ def spoken_texts(agent):
 def imported(data):
     """Valida un agente exportado (con o sin el sobre {"parla": 1, "agent": ...}) y lo deja listo para crear."""
     agent = data.get("agent") if isinstance(data.get("agent"), dict) else data
-    for key in ("intents", "entities", "slots", "flows", "classifications", "functions"):
+    for key in ("intents", "entities", "slots", "flows", "classifications", "functions", "tests"):
         if not isinstance(agent.get(key, []), list):
             raise ValueError("el archivo no es un agente de Parla: «%s» tiene que ser una lista" % key)
     if not any(agent.get(key) for key in ("intents", "entities", "slots", "flows")):
@@ -1934,7 +1934,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(*reversed(import_rasa(data, self.user)))
         if url.startswith("/api/v1/"):
             return self.reply(*reversed(api_v1(method, [p for p in url[len("/api/v1/"):].split("/") if p], data, query, self.user, self.public)))
-        match = re.fullmatch(r"/api/agents(?:/([0-9a-f]{8})(?:/(chat|reset|http|train|versions|deploy|diff|versions/\d+|versions/\d+/restore|functions/test"
+        match = re.fullmatch(r"/api/agents(?:/([0-9a-f]{8})(?:/(chat|reset|http|train|tests/run|versions|deploy|diff|versions/\d+|versions/\d+/restore|functions/test"
                              r"|knowledge/extract|knowledge/search|voice/transcribe|secrets|files|files/[A-Za-z0-9_-]{22}|insights/unrecognized|insights/analytics"
                              r"|inbox|channels|channels/telegram|sessions/[A-Za-z0-9_.@+-]+/(?:reply|release|take)))?)?", url)
         if not match:
@@ -1972,7 +1972,20 @@ class Handler(BaseHTTPRequestHandler):
                                "environments": {e: (agent.get("environments") or {}).get(e) for e in ENVIRONMENTS},
                                "deployments": list(reversed(agent.get("deployments", [])))[:50]})
         elif action == "versions" and method == "POST":
+            # a Producción, con pruebas: primero las pruebas. Si falla alguna, 409 con el detalle (force: true publica igual)
+            if data.get("environment") == "production" and data.get("force") is not True and load(agent_id).get("tests"):
+                results = bottests.run_suite(agent_id, "draft")
+                if not results["passed"]:
+                    return self.reply({"error": "No se publicó en Producción: %s. Corregilas o mandá «force»: true para publicar igual."
+                                       % bottests.summary(results), "tests": results}, 409)
             return self.reply(publish(agent_id, data.get("note"), data.get("environment")))
+        elif action == "tests/run" and method == "POST":           # {"environment"?, "names"?: [...]}: no guarda nada
+            names, environment = data.get("names"), data.get("environment")
+            if names is not None and not (isinstance(names, list) and all(isinstance(n, str) for n in names)):
+                return self.reply({"error": "«names» tiene que ser una lista con los nombres de las pruebas"}, 400)
+            if environment is not None:
+                target(load(agent_id), environment)       # que exista: si no, 400 con el motivo
+            return self.reply(bottests.run_suite(agent_id, environment, names))
         elif action == "deploy" and method == "POST":
             return self.reply(deploy(agent_id, data.get("environment"), data.get("version")))
         elif action == "diff" and method == "GET":

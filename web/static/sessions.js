@@ -348,7 +348,10 @@ function svDetail(s, redraw) {
   return [
     h('div', { class: 'sv-head' }, h('div', { class: 'grow stack', style: 'gap:4px;min-width:min(240px,100%)' }, h('h2', {}, who ? 'Cliente ' + who : s.sessionId),
       h('span', { class: 'sv-sub' }, svState(s.ended), svEnvTag(s), [who ? s.sessionId : null, svChannelName(s.channel), 'empezó ' + svWhen(s.started)].filter(Boolean).join(' · '))),
-      h('div', { class: 'sv-actions' }, replayBtn, imperBtn, iconBtn('trash', 'Borrar conversación', remove))),
+      h('div', { class: 'sv-actions' }, replayBtn, imperBtn,
+        canEdit() && users ? h('button', { class: 'btn quiet small', title: 'Guarda esta charla en Pruebas, con lo que respondió el bot como lo esperado',
+          onclick: () => window.testFromHistory(s.history, s.slots, who ? 'Cliente ' + who : s.sessionId) }, icon('check'), 'Guardar como prueba') : null,
+        iconBtn('trash', 'Borrar conversación', remove))),
     h('p', { class: 'sv-note' }, icon('globe'), h('span', {}, 'Re-ejecutar y hablar como el cliente usan el chat de prueba con ' + svTestEnv() + ' (se elige arriba del chat) y llaman de verdad a las integraciones del bot: APIs, reservas.')),
     run?.running ? h('div', { class: 'notice', role: 'status' }, 'Re-ejecutando: mensaje ' + run.step + ' de ' + run.total + '. Lo ves en vivo en el chat de prueba.') : null,
     run?.error ? h('div', { class: 'notice warn', role: 'alert' }, 'No se pudo re-ejecutar: ' + run.error + '.') : null,
