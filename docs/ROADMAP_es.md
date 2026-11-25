@@ -16,13 +16,14 @@ una edición paga que se guarde funciones.
   desde la Bandeja. Ver [channels_es.md](channels_es.md).
 - **Importador de proyectos Rasa**: los proyectos de Rasa 3.x, clásicos y CALM, pasan a agentes de Parla, con un
   aviso por todo lo que no se convierte. Ver [migrate-from-rasa_es.md](migrate-from-rasa_es.md).
+- **Suites de pruebas de conversación**: conversaciones esperadas guardadas en el bot, que se corren desde la
+  interfaz, la API, el MCP y la línea de comandos (también en GitHub Actions), y antes de cada publicación a
+  producción. Ver [testing-bots_es.md](testing-bots_es.md).
 
 ## Ahora (en curso)
 
 - **Persistencia en base de datos**: SQLite y Postgres como alternativa a los archivos JSON, con políticas de
   **retención de sesiones** y un **registro de auditoría** de quién cambió qué.
-- **Suites de pruebas de conversación en CI**: escribir conversaciones esperadas y correrlas en cada cambio (línea
-  de comandos y GitHub Actions).
 - **Enmascarado de datos personales (PII)**: tapar emails, teléfonos, documentos y tarjetas en las conversaciones
   guardadas y en los registros.
 - **Endpoints de modelos compatibles con OpenAI**: apuntar las funciones de IA a cualquier API compatible con

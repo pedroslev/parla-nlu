@@ -22,6 +22,7 @@ An **agent** (or bot) is a JSON file with everything that defines it. The main f
 | `widget` | `{"enabled", "origins", "title", "color", "greeting", "position", "voice"}`. |
 | `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id"}, "telegram": {"enabled"}}`. Tokens go in the vault, see [channels.md](channels.md). |
 | `ignored_phrases` | Phrases that «Para enseñar» (To teach) no longer shows. |
+| `tests` | Conversation tests: expected conversations that run before publishing to production (see [testing-bots.md](testing-bots.md)). |
 
 Exporting an agent downloads that JSON; importing it creates a new agent. Versions, environments, training, secrets
 and uploaded files are not included (it is trained when opened).
@@ -313,3 +314,7 @@ Rollback = pointing the environment to another version. «Restaurar» (Restore) 
 version had.
 
 What belongs to the bot rather than to a version: secrets, files and conversations.
+
+The conversation **tests** (section «Pruebas») are part of the definition, so each version keeps its own. Publishing
+to `production` runs them against the draft first and stops if any fails; publishing to `staging` and `deploy`
+don't. See [testing-bots.md](testing-bots.md).

@@ -15,7 +15,8 @@ Generalidades:
 - Cuerpo y respuestas en JSON. El cuerpo tiene que ser un objeto JSON (si no, 400). Tamaño máximo (si no, 413):
   25 MB para subir archivos, documentos de conocimiento, audios y proyectos de Rasa; 2 MB para un audio del widget público; 1 MB para
   lo demás.
-- Errores: `{"error": "mensaje en castellano"}` con 400, 401, 403, 404, 405, 413, 415 o 429. Una excepción adentro
+- Errores: `{"error": "mensaje en castellano"}` con 400, 401, 403, 404, 405, 409, 413, 415 o 429 (409: publicar a
+  producción con pruebas que fallan). Una excepción adentro
   de una ruta (por ejemplo, pedir una versión que no existe) vuelve como 400 con el mensaje.
 - `{bot}` puede ser el id (`654a0008`), el nombre exacto (sin importar mayúsculas) o el slug (`pizzeria`). Si el
   nombre es ambiguo, usá el id.
@@ -39,7 +40,7 @@ Sin ninguna de las dos: 401. Lo que se puede hacer depende del rol del usuario:
 |---|---|
 | `owner` (dueño) | Todo, incluido manejar usuarios (`/api/users*`). Ve todos los bots. |
 | `editor` | Todo menos manejar usuarios. |
-| `analyst` (analista) | Solo pedidos `GET` (mirar). Cualquier otro método: 403. |
+| `analyst` (analista) | Solo pedidos `GET` (mirar), más `POST /api/agents/{id}/tests/run` (correr pruebas no cambia nada). Cualquier otro método: 403. |
 | `agent` (atención) | Solo la Bandeja: `GET /api/agents`, `GET /api/agents/{id}`, `GET /api/agents/{id}/inbox`, `POST /api/agents/{id}/sessions/{sid}/take\|reply\|release` y `GET /api/v1/bots/{bot}/sessions/{sid}[/messages]`. |
 
 Los usuarios que no son dueños pueden tener una lista de bots visibles (`bots`). Un pedido a un bot que no ve
@@ -296,7 +297,7 @@ nombre ni el slug).
 | `POST /api/agents` | `{"name", "demo"?: true}` (en blanco o el ejemplo de pedidos) o `{"import": agente}` (acepta el sobre `{"parla": 1, "agent": ...}`) | El agente creado. Quien ve solo algunos bots pasa a ver también este. |
 | `POST /api/agents/import/rasa` | `{"zip": el .zip del proyecto en base64, "name"?}` o `{"files": {"domain.yml": "...", "data/nlu.yml": "..."}, "name"?}` | `{"agent", "warnings"}`: un agente nuevo convertido de un proyecto de Rasa 3.x y ya entrenado; `warnings` dice todo lo que no se pudo pasar tal cual. Mismo rol que crear un agente (dueño o editor). Solo lee `.yml`/`.yaml`; límites del zip: 500 archivos, 20 MB descomprimido, sin rutas absolutas ni `..`. Ver [migrate-from-rasa_es.md](migrate-from-rasa_es.md). |
 | `GET /api/agents/{id}` | — | El JSON completo del agente (borrador), con `system` completo. |
-| `PUT /api/agents/{id}` | El agente entero | El agente guardado. Reemplaza todo (lo que falta vuelve a los valores en blanco); `environments` y `deployments` no se pueden pisar. |
+| `PUT /api/agents/{id}` | El agente entero | El agente guardado. Reemplaza todo (lo que falta vuelve a los valores en blanco); `environments` y `deployments` no se pueden pisar. Las pruebas de conversación son el campo `tests` (ver [testing-bots_es.md](testing-bots_es.md#formato)). |
 | `DELETE /api/agents/{id}` | — | `{}`. Borra el agente, su modelo, versiones, conversaciones y archivos. |
 | `POST /api/agents/{id}/train` | `{"fingerprint"?}` | `{"at", "fingerprint", "phrases", "marked", "log"}`; `log` trae los pasos, la autoevaluación (`self_check`), el CRF y los consejos (`warnings`). |
 | `POST /api/agents/{id}/chat` | `{"session", "text", "environment"?}` (`draft` por defecto) | Un turno del chat de prueba (canal `prueba`): `messages`, `buttons`, `replies`, `nlu` (`intent`, `confidence`, `ranking`, `entities`), `slots`, `trace`, `answer_to`, `rejected`, `fallback`, `handoff`, `language`, `via`, `sources`. |
@@ -309,11 +310,12 @@ nombre ni el slug).
 | Ruta | Cuerpo | Respuesta |
 |---|---|---|
 | `GET /api/agents/{id}/versions` | — | `{"versions": [{"version", "created", "note", "stats", "environments"}], "environments": {"production", "staging"}, "deployments": [{"environment", "version", "previous", "at"}]}`, lo más nuevo primero (hasta 50 despliegues). |
-| `POST /api/agents/{id}/versions` | `{"note", "environment"?}` | Publica el borrador como versión nueva (con su propio modelo) y, si se pide, la pone en ese entorno. Devuelve el resumen de la versión. |
+| `POST /api/agents/{id}/versions` | `{"note", "environment"?, "force"?}` | Publica el borrador como versión nueva (con su propio modelo) y, si se pide, la pone en ese entorno. Devuelve el resumen de la versión. Con `"environment": "production"` y pruebas en el agente, antes corre toda la suite contra el borrador: si falla alguna, 409 `{"error", "tests": resultados}` y no se publica nada; `"force": true` publica igual. Staging y sin entorno nunca se frenan. |
+| `POST /api/agents/{id}/tests/run` | `{"environment"?: "draft" \| "staging" \| "production", "names"?: [...]}` | Corre las pruebas de conversación (todas, o las de `names`; `environment` pisa el de cada prueba) en memoria, sin guardar sesiones: `{"passed", "total", "failed", "tests": [{"name", "environment", "version", "passed", "error"?, "turns": [{"user", "passed", "failures": [{"check", "expected", "got"}], "got": {"intent", "says", "buttons", "slots", "flow", "handoff"}}]}]}`. Dueño, editor o analista. Ver [testing-bots_es.md](testing-bots_es.md#api). |
 | `GET /api/agents/{id}/versions/{n}` | — | El resumen más `agent` (la definición congelada). |
 | `POST /api/agents/{id}/versions/{n}/restore` | — | Vuelve el borrador a esa versión (no toca entornos ni reentrena). Devuelve el agente. |
-| `POST /api/agents/{id}/deploy` | `{"environment": "production" \| "staging", "version": n \| null}` | `{"environment", "version", "previous"}`. `null` deja el entorno vacío. |
-| `GET /api/agents/{id}/diff?from=&to=` | — | Qué cambia entre `production`, `staging`, `draft` o un número de versión (por defecto de `production` a `draft`): `{"changes", "settings", "intents", "entities", "slots", "flows", "classifications", "functions", "from", "to"}`. |
+| `POST /api/agents/{id}/deploy` | `{"environment": "production" \| "staging", "version": n \| null}` | `{"environment", "version", "previous"}`. `null` deja el entorno vacío. No corre las pruebas. |
+| `GET /api/agents/{id}/diff?from=&to=` | — | Qué cambia entre `production`, `staging`, `draft` o un número de versión (por defecto de `production` a `draft`): `{"changes", "settings", "intents", "entities", "slots", "flows", "classifications", "functions", "tests", "from", "to"}`. |
 
 ### Conocimiento, voz, archivos y claves
 

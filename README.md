@@ -90,6 +90,9 @@ Spanish-speaking users.
 ### Publishing
 - Draft → immutable numbered versions → `staging` and `production` environments. Diff before publishing, rollback
   by pointing to an earlier version, and each conversation stays tied to the version it started with.
+- Conversation test suites («Pruebas»): expected conversations stored in the bot, run from the UI, the API, the MCP
+  or the command line in CI, and run before every publish to production
+  ([docs/testing-bots.md](docs/testing-bots.md)).
 - Public HTTP API (`/api/v1`), web widget embeddable with a `<script>`, agent export and import.
 - WhatsApp (Cloud API) and Telegram channels, with buttons, files and Inbox replies ([docs/channels.md](docs/channels.md)).
 - Light, dark and colorful themes in the interface.
@@ -101,7 +104,7 @@ Spanish-speaking users.
   authorized for the widget.
 
 ### Integrations
-- MCP server with 26 tools to build, validate, train, test, publish and analyze bots.
+- MCP server with 27 tools to build, validate, train, test, publish and analyze bots.
 - **Conectar con IA** (Connect to AI): one button registers Parla in Claude Code, Codex, Claude Desktop or Cursor.
 - Functions in Python or JavaScript for logic that an HTTP step can't handle.
 - **Import from Rasa**: upload your Rasa 3.x project (classic or CALM) as a .zip and get a Parla agent plus a list of what
@@ -299,7 +302,7 @@ get a useful bot running in an afternoon, on your machine and without sending da
 
 ## Documentation
 
-Everything is in [`docs/`](docs/README.md): getting started, concepts, API, [WhatsApp and Telegram](docs/channels.md), MCP,
+Everything is in [`docs/`](docs/README.md): getting started, concepts, API, [testing bots](docs/testing-bots.md), [WhatsApp and Telegram](docs/channels.md), MCP,
 AI and voice, security, deployment, development, FAQ, [migrating from Rasa](docs/migrate-from-rasa.md),
 [comparison](docs/comparison.md) and [roadmap](docs/ROADMAP.md). Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
