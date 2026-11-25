@@ -41,13 +41,69 @@ it. This page covers what it protects, what it doesn't, and what to do before ex
   lockout becomes per-user, and someone can lock another person out for a minute at a time. A user that doesn't
   exist takes as long to answer as one that does.
 
+## Single sign-on (OIDC)
+
+Optional: with `PARLA_OIDC_ISSUER` and `PARLA_OIDC_CLIENT_ID` set, the login screen shows **Sign in with
+{label}** next to the password form. Setup per provider in [sso.md](sso.md). How it's protected:
+
+- **Flow:** authorization code with PKCE (`S256`). `GET /api/auth/oidc/start` stores the state (as its SHA-256),
+  the nonce and the PKCE verifier in the `oidc` table of `parla.db`, and sets the `parla_oidc` cookie
+  (`HttpOnly`, `SameSite=Lax`, `Path=/api/auth/oidc`, 10 minutes) with the state. The callback requires the
+  `state` in the URL to match that cookie, which binds the login to the browser that started it (against login
+  CSRF), and the stored state is deleted on first use.
+- **ID token validation:** the signature is checked against the provider's JWKS, only RS256, RS384 or RS512 (`none`,
+  `HS*` and `ES*` are rejected) and only RSA keys of at least 2048 bits. Then `iss` must be exactly the discovery
+  document's issuer, which in turn must equal `PARLA_OIDC_ISSUER`; `aud` must contain the client id; `azp` is
+  checked when present or when there are several audiences; `exp` and `iat` with a 60 s leeway; and the `nonce`.
+- **No crypto dependency.** RSA PKCS#1 v1.5 verification is pure Python (stdlib only): it builds the full expected
+  encoded block (`00 01 FF…FF 00` + DigestInfo + hash) and compares it whole, it doesn't parse the decoded
+  signature. OIDC Core §3.1.3.7 allows skipping signature checks for a token received directly from the token
+  endpoint over TLS; Parla checks it anyway, as defense in depth.
+- The discovery document and the JWKS are cached for 1 hour; an unknown `kid` re-fetches the JWKS (key rotation).
+  Provider URLs must be `https://` (except `localhost` / `127.0.0.1`, for testing).
+- **Redirect URI:** `PARLA_PUBLIC_URL` + `/api/auth/oidc/callback`. Without `PARLA_PUBLIC_URL`, the request's
+  `Host` is used only if it's local or in `PARLA_HOSTS`; any other `Host` is refused.
+- The callback is a cross-site navigation, so it's exempt from the Origin check (state, nonce and PKCE protect
+  it). The Host check still applies: put your public host in `PARLA_HOSTS`.
+- **Users are matched by `sub`, never by name.** A provider user whose name matches a local user gets a suffixed
+  name (`ana-1a2b3c`); it never takes over the local account. SSO users are stored in `users.json` with
+  `sso: true`, `sub` and `email`, and no password.
+- **Roles:** with a role mapping (`PARLA_OIDC_ROLE_CLAIM` + `PARLA_OIDC_ROLE_MAP`) the role is recomputed on every
+  login; the user's `bots` scoping is kept. No mapped role and no `PARLA_OIDC_DEFAULT_ROLE`: access denied.
+  Without a role mapping, new users get `PARLA_OIDC_DEFAULT_ROLE` (none set: denied) and existing ones keep the
+  role set in Parla, which the owner can edit.
+- **`PARLA_OIDC_ONLY=1`** turns password login off, except a break-glass login for an **owner** when the TCP peer
+  is loopback, the `Host` is `127.0.0.1`, `localhost` or `[::1]` and the request has no `X-Forwarded-For`,
+  `X-Forwarded-Host`, `X-Real-IP` or `Forwarded` header. A reverse proxy on the same machine also connects from
+  loopback: it **must** send one of those headers (e.g. `X-Forwarded-For`), or its requests would look local.
+- With OIDC configured and no users, login is required anyway, and the first local owner can only be created
+  break-glass (from the machine itself, as above).
+- API keys keep working as before, also with `PARLA_OIDC_ONLY`.
+- **Audit:** each attempt is logged as `login.sso` with `ok` or `falló: <reason>` and the IP. Tokens are never
+  stored or logged.
+- **Logout** ends the Parla session. If the provider has an `end_session_endpoint`, the browser is then sent there
+  with `client_id` (and `post_logout_redirect_uri` when `PARLA_PUBLIC_URL` is set). There's no `id_token_hint`
+  because tokens aren't kept; providers that require it (Okta) need `PARLA_OIDC_LOGOUT=0`, which turns this off.
+
+Limitations to keep in mind:
+
+- A Parla session lasts 12 hours whatever the provider says. There's no back-channel logout: disabling someone in
+  the provider takes effect at their next login or when the session expires. To cut them off now, delete the user
+  in **Users** (that ends their sessions), but they can sign in again via SSO while the provider allows it.
+- A user removed from every mapped group loses access at their next login, not before.
+- The provider can demote the last owner (role mapping wins). Keep a local owner for break-glass.
+- No ES256 or EdDSA ID tokens; one issuer per installation; Entra ID's multi-tenant `common` issuer isn't
+  supported (use the tenant's issuer); with Entra ID group overage (more than 200 groups the claim is replaced
+  by a link) use app roles (the `roles` claim) instead.
+
 ## Audit log
 
 Parla records successful write operations in the `audit` table of `parla.db`: who (user and role), when, on which
 agent, what, and a short detail. The owner sees it in **Audit log** (`#/auditoria`, from the avatar menu,
 next to **Manage users**) or with `GET /api/audit` ([api.md](api.md)); other roles get 403.
 
-- Actions: `login` (successful **and failed**, with the IP; never the password), `logout`, `user.create`,
+- Actions: `login` (successful **and failed**, with the IP; never the password), `login.sso` (`ok` or
+  `falló: <reason>`, with the IP; never tokens), `logout`, `user.create`,
   `user.update`, `user.role`, `user.delete`, `key.create` (also “Connect to AI”), `key.revoke`, `agent.create`,
   `agent.import`, `agent.save`, `agent.delete`, `agent.train`, `agent.publish`, `agent.deploy`, `agent.restore`,
   `secret.set` / `secret.delete` (the name only, never the value), `file.upload` / `file.delete`,
@@ -298,7 +354,8 @@ publish it, protect it at the proxy and set `PARLA_MCP_ALLOWED_HOSTS` (the accep
 - One replica per data folder. Login lockout counters are in memory: they reset on restart.
 - No rate limiting, except the login lockout.
 - No access log: the audit log records writes, not reads or every request.
-- No second factor, no password policy and no list of open sessions to end by hand.
+- No second factor for local passwords (with [SSO](sso.md), your identity provider can require MFA), no password
+  policy and no list of open sessions to end by hand.
 - Keys aren't encrypted on disk. Agents are saved with the system's normal permissions; `users.json`, the keys and
   `parla.db` (conversations, login hashes and the audit log) are 600.
 - Masking personal data is a heuristic, and it's off by default.

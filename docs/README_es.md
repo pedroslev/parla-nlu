@@ -12,6 +12,7 @@
 | [MCP y «Conectar con IA»](mcp_es.md) | Todos | Que Claude, Codex o Cursor te armen el bot. |
 | [IA local y voz](ai-and-voice_es.md) | Todos | Modelo de vectores, Ollama, qué hace cada función de IA y sus guardas, voz y llamada. |
 | [Seguridad](security_es.md) | Quien lo instala | Usuarios, roles, claves, funciones, qué hacer antes de exponerlo. |
+| [Inicio de sesión único (OIDC)](sso_es.md) | Quien lo instala | Entrar con Keycloak, Entra ID, Google Workspace, Okta, Authentik o Auth0: variables, mapa de roles, pasos por proveedor, problemas comunes. |
 | [Despliegue](deployment_es.md) | Quien lo instala | Local, Docker, Kubernetes, detrás de un proxy, copias de seguridad. |
 | [Desarrollo](development_es.md) | Desarrolladores | Comandos, variables de entorno, código, internals del motor, cómo sumar un tipo de paso, pruebas, estilo. |
 | [Preguntas frecuentes](faq_es.md) | Todos | Dudas comunes. |

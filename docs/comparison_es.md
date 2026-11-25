@@ -21,7 +21,7 @@ fastembed), un CRF para entidades y reglas de listas, regex y fechas. Los flujos
 de IA). El LLM es opcional (Ollama local por defecto, o cualquier endpoint compatible con OpenAI, propio o en la nube), igual que la voz local
 (faster-whisper para transcribir, piper para sintetizar), incluida una llamada de voz interrumpible en el chat de
 prueba. Incluye un servidor MCP con 27 herramientas, versiones con `staging` / `production` y rollback,
-usuarios, roles y claves de API, una bóveda de secretos por agente, una bandeja para la atención humana,
+usuarios, roles y claves de API, inicio de sesión único con OIDC, una bóveda de secretos por agente, una bandeja para la atención humana,
 analítica, una cola «para enseñar» con las frases no reconocidas y la reproducción de conversaciones contra otra
 versión. Los canales hoy son la API HTTP (`/api/v1`) y un widget web embebible. Se puede desplegar con Docker,
 docker-compose, Kubernetes o k3s. La interfaz está en español, inglés y portugués. Parla
@@ -40,6 +40,7 @@ tiene un **compromiso de no open core**: todas las funciones siguen siendo de c�
 | MCP | Servidor MCP (27 herramientas) para construir, probar y publicar bots | Servidor de herramientas MCP para IDE (beta, 3.16) [1] | Herramientas MCP en agentes; endpoint de servidor MCP (experimental) [4] | No verificado en la documentación oficial | No verificado en la documentación oficial | Herramientas MCP en agentes (GA) [10] | MCP en el ADK CLI, según fuentes de terceros [12] | Herramientas MCP en agentes + servidor MCP alojado [14] |
 | Analítica | Contención, derivaciones, fallbacks, CSAT, abandono | Panel integrado en Studio 1.16 [1] | Sí | Sí | Sí (Google Cloud) | Sí | Sí | Sí (observabilidad) [13] |
 | Pruebas | Autoevaluación, matriz de confusión, chat de prueba, reproducción contra otra versión | Sí (pruebas E2E) | Simulador [3] | Sí | Sí | Sí | Sí | Sí |
+| SSO | Sí, OIDC (Keycloak, Entra ID, Google, Okta, Authentik, Auth0) | No verificado para esta página | No verificado para esta página | No verificado para esta página | Identidad de Google Cloud | Microsoft Entra ID | No verificado para esta página | No verificado para esta página |
 
 «Sí» sin fuente indica que la función está ampliamente documentada por el proveedor, pero no se volvió a
 verificar para esta página.
@@ -130,7 +131,7 @@ Ser honestos con lo que falta importa más que una lista larga de funciones. Est
 - **Canales:** API HTTP, widget web, WhatsApp (Cloud API) y Telegram. Todavía no hay telefonía, Messenger, Teams ni Slack.
 - **Telefonía:** sin integración directa SIP / telefónica (un IVR puede llamar a la API HTTP).
 - **Escalado horizontal:** Parla es un solo proceso con archivos en disco; está pensado para un servidor chico.
-- **SSO** (SAML / OIDC).
+- **Inicio de sesión único con SAML** (el SSO es solo OIDC, ver [sso_es.md](sso_es.md)).
 - **Suites de pruebas de conversación de punta a punta** (existe la reproducción contra otra versión; las suites
   completas, no).
 - **Exportación de observabilidad** (OpenTelemetry, Prometheus o similares).

@@ -95,6 +95,8 @@ tema: inicio, menú ⋯ o pantalla de entrada).
 
 ### Seguridad
 - Usuarios con roles (dueño, editor, analista, atención), bots visibles por usuario y claves de API.
+- Inicio de sesión único con OIDC (Keycloak, Entra ID, Google, Okta, Authentik, Auth0), con roles desde los grupos
+  de tu proveedor ([docs/sso_es.md](docs/sso_es.md)).
 - Bóveda de claves por agente (`{{ secret.NOMBRE }}`): los valores no viajan en el JSON del bot y se tapan en
   las trazas.
 - Escucha en `127.0.0.1` (salvo que cambies `PARLA_HOST`) y rechaza pedidos de otros sitios web salvo los
@@ -252,7 +254,8 @@ Todo es opcional. Copiá `.env.example` para ver los valores.
 | `PARLA_SECURE_COOKIE` | vacío | `1` marca la cookie de sesión como `Secure` (detrás de HTTPS). |
 | `PARLA_RETENTION_DAYS` | vacío | Días que se guardan las conversaciones sin movimiento, para los agentes sin `retention_days` propio. Vacío o `0`: para siempre. |
 | `PARLA_AUDIT_DAYS` | `365` | Días que se guarda la auditoría. |
-| `PARLA_PUBLIC_URL` | vacío | Dirección pública con HTTPS, para los webhooks de WhatsApp y Telegram (ver [docs/channels_es.md](docs/channels_es.md)). |
+| `PARLA_PUBLIC_URL` | vacío | Dirección pública con HTTPS, para los webhooks de WhatsApp y Telegram (ver [docs/channels_es.md](docs/channels_es.md)) y la redirect URI del SSO. |
+| `PARLA_OIDC_ISSUER`, `PARLA_OIDC_CLIENT_ID` | vacío | Inicio de sesión único con OIDC; el secreto, el mapa de roles y las demás `PARLA_OIDC_*` en [docs/sso_es.md](docs/sso_es.md). |
 | `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` u `off` apagan las funciones de los agentes. |
 | `PARLA_WHISPER` | `base` | Modelo de faster-whisper (`tiny` si la máquina es lenta). |
 | `PARLA_URL` | `http://127.0.0.1:8000` | (MCP) dónde está Parla. |
@@ -306,7 +309,7 @@ Parla apunta a que un bot útil quede andando en una tarde, en tu máquina y sin
 ## Documentación
 
 Todo en [`docs/`](docs/README_es.md): primeros pasos, conceptos, API, [probar bots](docs/testing-bots_es.md), [WhatsApp y Telegram](docs/channels_es.md), MCP,
-IA y voz, seguridad, despliegue, desarrollo, preguntas frecuentes, [migrar desde Rasa](docs/migrate-from-rasa_es.md),
+IA y voz, seguridad, [inicio de sesión único](docs/sso_es.md), despliegue, desarrollo, preguntas frecuentes, [migrar desde Rasa](docs/migrate-from-rasa_es.md),
 [comparación](docs/comparison_es.md) y [hoja de ruta](docs/ROADMAP_es.md). Las novedades de cada versión están en [CHANGELOG.md](CHANGELOG.md).
 
 ## Contribuir

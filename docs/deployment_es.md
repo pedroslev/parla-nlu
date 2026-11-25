@@ -27,6 +27,8 @@ auditoría van en un archivo SQLite ahí mismo (`parla.db`). Eso define cómo se
 | `PARLA_USERS` | | Otra ruta para `users.json`. |
 | `PARLA_RETENTION_DAYS` | | Días que se guardan las conversaciones sin movimiento, para los agentes sin `retention_days` propio. Sin definir o `0`: para siempre. |
 | `PARLA_AUDIT_DAYS` | | Días que se guarda la auditoría. Sin definir: `365`. |
+| `PARLA_PUBLIC_URL` | | Dirección pública (`https://bots.example.com`): webhooks y la redirect URI del SSO. |
+| `PARLA_OIDC_ISSUER`, `PARLA_OIDC_CLIENT_ID` | | Inicio de sesión único con tu proveedor de identidad. El secreto va en `PARLA_OIDC_CLIENT_SECRET` o, mejor, en un archivo con `PARLA_OIDC_CLIENT_SECRET_FILE`. El resto (`PARLA_OIDC_ROLE_CLAIM`, `PARLA_OIDC_ROLE_MAP`, `PARLA_OIDC_ONLY`…) en [sso_es.md](sso_es.md). |
 
 El puerto es el argumento de `app.py` (la imagen usa `8000`). La dirección de Ollama no es una variable: se
 configura por agente en la interfaz (**IA → dirección**).
@@ -122,8 +124,8 @@ Qué trae el Deployment:
 - No root (uid/gid `10001`, `fsGroup` para el volumen), `readOnlyRootFilesystem`, sin capabilities, sin token de
   service account. `/tmp` es un `emptyDir`.
 - Probes en `GET /` (devuelve la página estática, no toca modelos ni disco).
-- La configuración va en el ConfigMap `parla`. No hay Secret: Parla no lee secretos por variable; las claves de
-  los bots y los usuarios viven en el volumen.
+- La configuración va en el ConfigMap `parla`. Las claves de los bots y los usuarios viven en el volumen; el único
+  secreto que Parla lee de afuera es el del cliente de SSO (ver [Inicio de sesión único](#inicio-de-sesión-único)).
 
 ### Administrar
 
@@ -150,6 +152,42 @@ necesita `PARLA_HOSTS` (ver abajo). Si tus bots mandan archivos (paso «Enviar u
 Los webhooks de WhatsApp y Telegram (`/api/v1/bots/{bot}/whatsapp` y `/telegram`) están bajo `/api/v1/`, así que
 estos ejemplos ya los publican. Poné en `PARLA_PUBLIC_URL` la dirección pública (`https://bots.example.com`) para que
 Parla muestre la URL del webhook y pueda conectar Telegram. Ver [channels_es.md](channels_es.md).
+
+### Inicio de sesión único
+
+Para entrar con tu proveedor de identidad ([sso_es.md](sso_es.md)) la interfaz completa tiene que llegar a tu
+dominio: publicá también `/` y `/api/` (no solo las rutas del ejemplo de Ingress) y definí `PARLA_HOSTS`. Guardá el
+secreto del cliente en un Secret montado como archivo:
+
+```sh
+kubectl -n parla create secret generic parla-oidc --from-literal=client-secret='<el secreto del cliente>'
+```
+
+En `deploy/k8s/parla.yaml`, sumá al ConfigMap `parla`:
+
+```yaml
+  PARLA_PUBLIC_URL: "https://bots.example.com"
+  PARLA_HOSTS: "bots.example.com"
+  PARLA_SECURE_COOKIE: "1"
+  PARLA_OIDC_ISSUER: "https://kc.example.com/realms/acme"
+  PARLA_OIDC_CLIENT_ID: "parla"
+  PARLA_OIDC_CLIENT_SECRET_FILE: "/run/secrets/parla-oidc/client-secret"
+  PARLA_OIDC_ROLE_CLAIM: "groups"
+  PARLA_OIDC_ROLE_MAP: "parla-owners:owner,parla-editors:editor"
+```
+
+y al Deployment, junto a los `volumeMounts` y `volumes` que ya tiene:
+
+```yaml
+          volumeMounts:
+            - {name: oidc, mountPath: /run/secrets/parla-oidc, readOnly: true}
+      volumes:
+        - name: oidc
+          secret: {secretName: parla-oidc, defaultMode: 0440}   # legible por el grupo: el fsGroup 10001 del pod
+```
+
+Creá antes el dueño local por `kubectl port-forward` (ver [Administrar](#administrar)): con SSO prendido solo se
+puede crear desde el loopback del propio pod, y `port-forward` llega por ahí.
 
 ## k3s
 
@@ -234,6 +272,9 @@ por defecto. Por eso, antes de publicar nada:
 1. Entrá por `127.0.0.1` (o el túnel / port-forward).
 2. En **Usuarios**, creá el primer usuario: queda como dueño y desde ahí se pide iniciar sesión.
 3. Creá los demás con el rol mínimo y, para integraciones, claves de API.
+
+Con [SSO](sso_es.md) configurado, el login se pide aunque no haya usuarios, y ese primer dueño local solo se puede
+crear desde la misma máquina (`127.0.0.1`, el túnel o el `port-forward`).
 
 Cambiar una contraseña: **Usuarios → editar** (solo un dueño puede, la propia o la de otro). Cambiarla o
 borrar el usuario cierra sus sesiones. Si perdiste la del único dueño, con Parla apagado borrá `users.json` de la

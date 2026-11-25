@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Single sign-on with OIDC (Keycloak, Entra ID, Google Workspace, Okta, Authentik, Auth0): authorization code +
+  PKCE, ID token signature (RS256/384/512) checked against the provider's JWKS with no new dependency, roles mapped
+  from a groups/roles claim (`PARLA_OIDC_ROLE_CLAIM`, `PARLA_OIDC_ROLE_MAP`, `PARLA_OIDC_DEFAULT_ROLE`), an
+  SSO-only mode with a local break-glass owner (`PARLA_OIDC_ONLY`), provider logout, an **SSO** badge in
+  **Users** and `login.sso` audit entries. Configured with `PARLA_OIDC_*` variables; the client secret can come from
+  a file (`PARLA_OIDC_CLIENT_SECRET_FILE`) ([docs/sso.md](docs/sso.md)).
 - English and Portuguese (pt-BR) UI: every screen of the web interface in English, Spanish or Portuguese
   (`web/static/i18n.js`, `t()` with the Spanish text as key), chosen next to the theme picker (the ⋯ menu, the home
   screen or the sign-in screen; `?lang=en` also works) and remembered per browser. `PARLA_LANG` sets the install

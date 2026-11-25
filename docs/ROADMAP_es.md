@@ -12,6 +12,8 @@ una edición paga que se guarde funciones.
 
 ## Recién salido
 
+- **Inicio de sesión único con OIDC**: entrar con Keycloak, Entra ID, Google Workspace, Okta, Authentik o Auth0,
+  con roles mapeados desde los grupos del proveedor y un modo opcional solo SSO. Ver [sso_es.md](sso_es.md).
 - **Interfaz en inglés y portugués**: toda la interfaz, los mensajes del servidor y el widget web en español, inglés
   o portugués (pt-BR), a elección de cada usuario (al lado del selector de tema: inicio, menú ⋯ o pantalla de
   entrada), con un idioma por defecto de la instalación en `PARLA_LANG` (`scripts/setup.sh --lang en|es|pt`); los bots con inglés como idioma principal traen en
@@ -37,7 +39,6 @@ una edición paga que se guarde funciones.
 ## Después
 
 - **Telefonía**: llamadas SIP / telefónicas con Jambonz y Twilio, con entrada DTMF, sobre la voz local que ya existe.
-- **Inicio de sesión único con OIDC** (Keycloak, Entra ID, Google, Okta y otros).
 
 ## Más adelante
 
@@ -51,6 +52,6 @@ una edición paga que se guarde funciones.
 ## Lo que ya está
 
 Como referencia, lo que Parla hace hoy: constructor sin código, NLU con embeddings + CRF, flujos con muchos tipos de
-paso, LLM local opcional, voz local, versiones con `staging`/`production`, usuarios y roles, bóveda de secretos,
+paso, LLM local opcional, voz local, versiones con `staging`/`production`, usuarios y roles, inicio de sesión único con OIDC, bóveda de secretos,
 bandeja, analíticas, API HTTP, widget web, servidor MCP, Docker y Kubernetes. Ver el
 [README](../README_es.md#qué-trae).

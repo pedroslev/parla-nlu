@@ -26,6 +26,8 @@ file there (`parla.db`). That shapes how it's deployed:
 | `PARLA_USERS` | | A different path for `users.json`. |
 | `PARLA_RETENTION_DAYS` | | Days to keep conversations with no activity, for agents without their own `retention_days`. Unset or `0`: forever. |
 | `PARLA_AUDIT_DAYS` | | Days to keep the audit log. Unset: `365`. |
+| `PARLA_PUBLIC_URL` | | Public address (`https://bots.example.com`): webhooks and the SSO redirect URI. |
+| `PARLA_OIDC_ISSUER`, `PARLA_OIDC_CLIENT_ID` | | Single sign-on with your identity provider. The secret goes in `PARLA_OIDC_CLIENT_SECRET` or, better, a file in `PARLA_OIDC_CLIENT_SECRET_FILE`. The rest (`PARLA_OIDC_ROLE_CLAIM`, `PARLA_OIDC_ROLE_MAP`, `PARLA_OIDC_ONLY`…) in [sso.md](sso.md). |
 
 The port is the argument to `app.py` (the image uses `8000`). The Ollama address isn't a variable: it's configured
 per agent in the interface (**IA → dirección**, AI → address).
@@ -121,8 +123,8 @@ What the Deployment includes:
 - Non-root (uid/gid `10001`, `fsGroup` for the volume), `readOnlyRootFilesystem`, no capabilities, no service
   account token. `/tmp` is an `emptyDir`.
 - Probes on `GET /` (returns the static page, doesn't touch models or disk).
-- Configuration goes in the `parla` ConfigMap. There's no Secret: Parla doesn't read secrets from variables; bot
-  keys and users live in the volume.
+- Configuration goes in the `parla` ConfigMap. Bot keys and users live in the volume; the only secret Parla reads
+  from outside is the SSO client secret (see [Single sign-on](#single-sign-on)).
 
 ### Administering
 
@@ -149,6 +151,42 @@ publish `/files/`.
 The WhatsApp and Telegram webhooks (`/api/v1/bots/{bot}/whatsapp` and `/telegram`) are under `/api/v1/`, so these
 examples already publish them. Set `PARLA_PUBLIC_URL` to the public address (`https://bots.example.com`) so Parla
 can show the webhook URL and connect Telegram. See [channels.md](channels.md).
+
+### Single sign-on
+
+To sign in with your identity provider ([sso.md](sso.md)) the whole interface has to be reachable on your domain:
+publish `/` and `/api/` too (not only the Ingress example's routes) and set `PARLA_HOSTS`. Keep the client secret
+in a Secret mounted as a file:
+
+```sh
+kubectl -n parla create secret generic parla-oidc --from-literal=client-secret='<the client secret>'
+```
+
+In `deploy/k8s/parla.yaml`, add to the `parla` ConfigMap:
+
+```yaml
+  PARLA_PUBLIC_URL: "https://bots.example.com"
+  PARLA_HOSTS: "bots.example.com"
+  PARLA_SECURE_COOKIE: "1"
+  PARLA_OIDC_ISSUER: "https://kc.example.com/realms/acme"
+  PARLA_OIDC_CLIENT_ID: "parla"
+  PARLA_OIDC_CLIENT_SECRET_FILE: "/run/secrets/parla-oidc/client-secret"
+  PARLA_OIDC_ROLE_CLAIM: "groups"
+  PARLA_OIDC_ROLE_MAP: "parla-owners:owner,parla-editors:editor"
+```
+
+and to the Deployment, next to the existing `volumeMounts` and `volumes`:
+
+```yaml
+          volumeMounts:
+            - {name: oidc, mountPath: /run/secrets/parla-oidc, readOnly: true}
+      volumes:
+        - name: oidc
+          secret: {secretName: parla-oidc, defaultMode: 0440}   # group-readable: the pod's fsGroup 10001
+```
+
+Create the local owner first through `kubectl port-forward` (see [Administering](#administering)): with SSO on, it
+can only be created from the pod's own loopback, and `port-forward` connects there.
 
 ## k3s
 
@@ -233,6 +271,9 @@ no default password. So, before publishing anything:
 1. Go in through `127.0.0.1` (or the tunnel / port-forward).
 2. In **Users**, create the first user: it becomes the owner and from then on login is required.
 3. Create the others with the minimum role and, for integrations, API keys.
+
+With [SSO](sso.md) configured, login is required even with no users, and that first local owner can only be
+created from the machine itself (`127.0.0.1`, the tunnel or `port-forward`).
 
 Changing a password: **Users → Change password**. Only an owner can do it, for their own or someone
 else's. Changing it or deleting the user ends their sessions. If you lost the password of the only owner, stop

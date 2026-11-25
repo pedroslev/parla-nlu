@@ -12,6 +12,8 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Shipped recently
 
+- **OIDC single sign-on**: sign in with Keycloak, Entra ID, Google Workspace, Okta, Authentik or Auth0, with roles
+  mapped from the provider's groups and an optional SSO-only mode. See [sso.md](sso.md).
 - **English and Portuguese UI**: the whole interface, server messages and the web widget in English, Spanish or
   Portuguese (pt-BR), chosen per user (next to the theme picker: home screen, ⋯ menu or sign-in screen), with an
   install default in `PARLA_LANG` (`scripts/setup.sh --lang en|es|pt`); bots whose main language is English get
@@ -37,7 +39,6 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 ## Next
 
 - **Telephony**: SIP / phone calls through Jambonz and Twilio, with DTMF input, on top of the existing local voice.
-- **OIDC single sign-on** (Keycloak, Entra ID, Google, Okta and others).
 
 ## Later
 
@@ -51,5 +52,5 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 ## Already there
 
 For reference, what Parla does today: no-code builder, embeddings + CRF NLU, flows with many step types, optional
-local LLM, local voice, versions with `staging`/`production`, users and roles, secret vault, inbox, analytics,
+local LLM, local voice, versions with `staging`/`production`, users and roles, OIDC single sign-on, secret vault, inbox, analytics,
 HTTP API, web widget, MCP server, Docker and Kubernetes. See the [README](../README.md#features).

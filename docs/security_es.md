@@ -42,13 +42,73 @@ administra. Esta página cuenta qué protege, qué no, y qué hacer antes de exp
   `X-Forwarded-For`): el bloqueo pasa a ser por usuario, y alguien puede trabar el login de otro un minuto por
   vez. Un usuario que no existe tarda lo mismo en contestar que uno que sí.
 
+## Inicio de sesión único (OIDC)
+
+Es opcional: con `PARLA_OIDC_ISSUER` y `PARLA_OIDC_CLIENT_ID` definidas, la pantalla de entrada muestra
+**Entrar con {label}** al lado del formulario de contraseña. La configuración por proveedor está en
+[sso_es.md](sso_es.md). Cómo se protege:
+
+- **Flujo:** authorization code con PKCE (`S256`). `GET /api/auth/oidc/start` guarda el state (como su SHA-256),
+  el nonce y el verificador de PKCE en la tabla `oidc` de `parla.db`, y deja el state en la cookie `parla_oidc`
+  (`HttpOnly`, `SameSite=Lax`, `Path=/api/auth/oidc`, 10 minutos). La vuelta exige que el `state` de la URL
+  coincida con esa cookie, lo que ata el login al navegador que lo empezó (contra el CSRF de login), y el state
+  guardado se borra al primer uso.
+- **Validación del ID token:** la firma se verifica con la JWKS del proveedor, solo RS256, RS384 o RS512 (se
+  rechazan `none`, `HS*` y `ES*`) y solo con claves RSA de 2048 bits o más. Después `iss` tiene que ser
+  exactamente el issuer del discovery, que a su vez tiene que ser igual a `PARLA_OIDC_ISSUER`; `aud` tiene que
+  incluir el client id; `azp` se revisa si viene o si hay varias audiencias; `exp` e `iat` con 60 s de margen; y el
+  `nonce`.
+- **Sin dependencias de criptografía.** La verificación RSA PKCS#1 v1.5 está en Python puro (solo biblioteca
+  estándar): arma el bloque esperado completo (`00 01 FF…FF 00` + DigestInfo + hash) y lo compara entero, no
+  parsea la firma descifrada. OIDC Core §3.1.3.7 permite no verificar la firma de un token que llega directo del
+  token endpoint por TLS; Parla la verifica igual, como defensa en profundidad.
+- El discovery y la JWKS se guardan 1 hora en caché; un `kid` desconocido vuelve a traer la JWKS (rotación de
+  claves). Las URLs del proveedor tienen que ser `https://` (salvo `localhost` / `127.0.0.1`, para pruebas).
+- **Redirect URI:** `PARLA_PUBLIC_URL` + `/api/auth/oidc/callback`. Sin `PARLA_PUBLIC_URL`, se usa el `Host` del
+  pedido solo si es local o de `PARLA_HOSTS`; cualquier otro `Host` se rechaza.
+- La vuelta es una navegación desde otro sitio, así que no pasa por el chequeo de Origin (la protegen state, nonce
+  y PKCE). El chequeo de Host sí: poné tu host público en `PARLA_HOSTS`.
+- **Los usuarios se buscan por `sub`, nunca por nombre.** Un usuario del proveedor que se llama igual que uno
+  local recibe un nombre con sufijo (`ana-1a2b3c`); nunca se queda con la cuenta local. Los usuarios de SSO se
+  guardan en `users.json` con `sso: true`, `sub` y `email`, sin contraseña.
+- **Roles:** con mapa de roles (`PARLA_OIDC_ROLE_CLAIM` + `PARLA_OIDC_ROLE_MAP`) el rol se recalcula en cada
+  login; los `bots` que ve el usuario se mantienen. Sin un rol mapeado y sin `PARLA_OIDC_DEFAULT_ROLE`: no entra.
+  Sin mapa de roles, los usuarios nuevos reciben `PARLA_OIDC_DEFAULT_ROLE` (si no está: no entran) y los que ya
+  existen se quedan con el rol que tienen en Parla, que el dueño puede cambiar.
+- **`PARLA_OIDC_ONLY=1`** apaga el login con contraseña, salvo el de emergencia para un **dueño** cuando la
+  conexión llega del loopback, el `Host` es `127.0.0.1`, `localhost` o `[::1]` y el pedido no trae
+  `X-Forwarded-For`, `X-Forwarded-Host`, `X-Real-IP` ni `Forwarded`. Un proxy en la misma máquina también conecta
+  desde el loopback: **tiene que** mandar alguno de esos encabezados (p. ej. `X-Forwarded-For`), o sus pedidos
+  parecerían locales.
+- Con OIDC configurado y sin usuarios, el login se pide igual, y el primer dueño local solo se puede crear con el
+  acceso de emergencia (desde la misma máquina, como arriba).
+- Las claves de API siguen andando como siempre, también con `PARLA_OIDC_ONLY`.
+- **Auditoría:** cada intento queda como `login.sso` con `ok` o `falló: <motivo>` y la IP. Los tokens nunca se
+  guardan ni se anotan.
+- **Salir** cierra la sesión de Parla. Si el proveedor tiene `end_session_endpoint`, después manda el navegador
+  ahí con `client_id` (y `post_logout_redirect_uri` si está `PARLA_PUBLIC_URL`). No va `id_token_hint` porque los
+  tokens no se guardan; los proveedores que lo exigen (Okta) necesitan `PARLA_OIDC_LOGOUT=0`, que lo apaga.
+
+Límites a tener en cuenta:
+
+- Una sesión de Parla dura 12 horas, diga lo que diga el proveedor. No hay back-channel logout: desactivar a
+  alguien en el proveedor vale en su próximo login o cuando vence la sesión. Para cortarlo ya, borrá el usuario en
+  **Usuarios** (eso cierra sus sesiones), pero puede volver a entrar por SSO mientras el proveedor lo deje.
+- Un usuario que sacás de todos los grupos mapeados pierde el acceso en su próximo login, no antes.
+- El proveedor puede bajarle el rol al último dueño (manda el mapa de roles). Mantené un dueño local para
+  emergencias.
+- Sin ID tokens ES256 ni EdDSA; un solo issuer por instalación; no se soporta el issuer multi-tenant `common` de
+  Entra ID (usá el del tenant); con el overage de grupos de Entra ID (con más de 200 grupos la claim se cambia por
+  un enlace) usá app roles (la claim `roles`).
+
 ## Registro de auditoría
 
 Parla anota las escrituras que salieron bien en la tabla `audit` de `parla.db`: quién (usuario y rol), cuándo, en
 qué agente, qué y un detalle corto. El dueño lo ve en **Auditoría** (`#/auditoria`, desde el menú del avatar, al
 lado de «Administrar usuarios») o con `GET /api/audit` ([api_es.md](api_es.md)); los otros roles reciben 403.
 
-- Acciones: `login` (bien **y mal**, con la IP; nunca la contraseña), `logout`, `user.create`, `user.update`,
+- Acciones: `login` (bien **y mal**, con la IP; nunca la contraseña), `login.sso` (`ok` o `falló: <motivo>`, con
+  la IP; nunca los tokens), `logout`, `user.create`, `user.update`,
   `user.role`, `user.delete`, `key.create` (también «Conectar con IA»), `key.revoke`, `agent.create`,
   `agent.import`, `agent.save`, `agent.delete`, `agent.train`, `agent.publish`, `agent.deploy`, `agent.restore`,
   `secret.set` / `secret.delete` (solo el nombre, nunca el valor), `file.upload` / `file.delete`,
@@ -303,7 +363,8 @@ protegelo en el proxy y configurá `PARLA_MCP_ALLOWED_HOSTS` (los `Host` aceptad
   servidor.
 - Sin límite de pedidos, salvo el bloqueo de login.
 - Sin registro de accesos: la auditoría anota escrituras, no lecturas ni cada pedido.
-- Sin segundo factor, sin política de contraseñas y sin lista de sesiones abiertas para cerrarlas a mano.
+- Sin segundo factor para las contraseñas locales (con [SSO](sso_es.md), tu proveedor de identidad puede pedir
+  MFA), sin política de contraseñas y sin lista de sesiones abiertas para cerrarlas a mano.
 - Las claves no se cifran en disco. Los agentes se guardan con los permisos normales del sistema; `users.json`, las
   claves y `parla.db` (conversaciones, hashes de los logins y la auditoría) son 600.
 - Tapar datos personales es una heurística, y viene apagado.

@@ -19,7 +19,7 @@ rules. Flows have many step types (questions, HTTP requests, conditions, subflow
 handoff, AI steps). An LLM is optional (local Ollama by default, or any OpenAI-compatible endpoint, self-hosted or hosted), and so is local voice
 (faster-whisper for speech-to-text, piper for text-to-speech), including an interruptible voice call in the test
 chat. It ships an MCP server with 27 tools, versions with `staging` / `production` and rollback, users, roles and
-API keys, a per-agent secret vault, an inbox for human handoff, analytics, a "to teach" queue for unrecognized
+API keys, OIDC single sign-on, a per-agent secret vault, an inbox for human handoff, analytics, a "to teach" queue for unrecognized
 phrases and conversation replay against another version. Channels today are the HTTP API (`/api/v1`) and an
 embeddable web widget. It can be deployed with Docker, docker-compose, Kubernetes or k3s. The interface is in
 English, Spanish and Portuguese. Parla has a **no-open-core pledge**: every feature stays open source.
@@ -37,6 +37,7 @@ English, Spanish and Portuguese. Parla has a **no-open-core pledge**: every feat
 | MCP | MCP server (27 tools) to build/test/publish bots | MCP tools server for IDEs (beta, 3.16) [1] | MCP tools in agents; MCP server endpoint (experimental) [4] | Not verified in official docs | Not verified in official docs | MCP tools in agents (GA) [10] | MCP in the ADK CLI, per third-party sources [12] | MCP tools in agents + hosted MCP server [14] |
 | Analytics | Containment, handoffs, fallbacks, CSAT, drop-off | Built-in dashboard in Studio 1.16 [1] | Yes | Yes | Yes (Google Cloud) | Yes | Yes | Yes (observability) [13] |
 | Testing | Self-evaluation, confusion matrix, test chat, replay against another version | Yes (E2E tests) | Simulator [3] | Yes | Yes | Yes | Yes | Yes |
+| SSO | Yes, OIDC (Keycloak, Entra ID, Google, Okta, Authentik, Auth0) | Not checked for this page | Not checked for this page | Not checked for this page | Google Cloud identity | Microsoft Entra ID | Not checked for this page | Not checked for this page |
 
 "Yes" without a source means the feature is widely documented by the vendor but was not re-checked for this page.
 
@@ -121,7 +122,7 @@ Being honest about gaps matters more than a long feature list. These are on the 
 - **Channels:** HTTP API, web widget, WhatsApp (Cloud API) and Telegram. No telephony, Messenger, Teams or Slack yet.
 - **Telephony:** no direct SIP / phone integration (an IVR can call the HTTP API).
 - **Horizontal scaling:** Parla is a single process with files on disk; it is designed for a small server.
-- **SSO** (SAML / OIDC).
+- **SAML single sign-on** (SSO is OIDC only, see [sso.md](sso.md)).
 - **End-to-end conversation test suites** (replay against another version exists; full test suites do not).
 - **Observability exports** (OpenTelemetry, Prometheus or similar).
 

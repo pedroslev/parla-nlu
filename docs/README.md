@@ -12,6 +12,7 @@
 | [MCP and “Connect to AI”](mcp.md) | Everyone | Let Claude, Codex or Cursor build the bot for you. |
 | [Local AI and voice](ai-and-voice.md) | Everyone | Embedding model, Ollama, what each AI feature does and its guardrails, voice and calls. |
 | [Security](security.md) | Whoever installs it | Users, roles, keys, functions, what to do before exposing it. |
+| [Single sign-on (OIDC)](sso.md) | Whoever installs it | Sign in with Keycloak, Entra ID, Google Workspace, Okta, Authentik or Auth0: variables, role mapping, per-provider steps, troubleshooting. |
 | [Deployment](deployment.md) | Whoever installs it | Local, Docker, Kubernetes, behind a proxy, backups. |
 | [Development](development.md) | Developers | Commands, environment variables, code, engine internals, how to add a step type, tests, style. |
 | [FAQ](faq.md) | Everyone | Common questions. |

@@ -99,6 +99,8 @@ The interface is available in English, Spanish and Portuguese (pick it next to t
 
 ### Security
 - Users with roles (owner, editor, analyst, support agent), per-user bot visibility and API keys.
+- Single sign-on with OIDC (Keycloak, Entra ID, Google, Okta, Authentik, Auth0), with roles from your provider's
+  groups ([docs/sso.md](docs/sso.md)).
 - Per-agent secret vault (`{{ secret.NOMBRE }}`): values don't travel in the bot JSON and are masked in traces.
 - Listens on `127.0.0.1` (unless you change `PARLA_HOST`) and rejects requests from other websites except those
   authorized for the widget.
@@ -255,7 +257,8 @@ Everything is optional. Copy `.env.example` to see the values.
 | `PARLA_SECURE_COOKIE` | empty | `1` marks the session cookie as `Secure` (behind HTTPS). |
 | `PARLA_RETENTION_DAYS` | empty | Days to keep conversations with no activity, for agents without their own `retention_days`. Empty or `0`: forever. |
 | `PARLA_AUDIT_DAYS` | `365` | Days to keep the audit log. |
-| `PARLA_PUBLIC_URL` | empty | Public HTTPS address, for the WhatsApp/Telegram webhooks (see [docs/channels.md](docs/channels.md)). |
+| `PARLA_PUBLIC_URL` | empty | Public HTTPS address, for the WhatsApp/Telegram webhooks (see [docs/channels.md](docs/channels.md)) and the SSO redirect URI. |
+| `PARLA_OIDC_ISSUER`, `PARLA_OIDC_CLIENT_ID` | empty | Single sign-on with OIDC; secret, role mapping and the other `PARLA_OIDC_*` in [docs/sso.md](docs/sso.md). |
 | `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` or `off` disable agent functions. |
 | `PARLA_WHISPER` | `base` | faster-whisper model (`tiny` if the machine is slow). |
 | `PARLA_URL` | `http://127.0.0.1:8000` | (MCP) where Parla is. |
@@ -308,7 +311,7 @@ get a useful bot running in an afternoon, on your machine and without sending da
 ## Documentation
 
 Everything is in [`docs/`](docs/README.md): getting started, concepts, API, [testing bots](docs/testing-bots.md), [WhatsApp and Telegram](docs/channels.md), MCP,
-AI and voice, security, deployment, development, FAQ, [migrating from Rasa](docs/migrate-from-rasa.md),
+AI and voice, security, [single sign-on](docs/sso.md), deployment, development, FAQ, [migrating from Rasa](docs/migrate-from-rasa.md),
 [comparison](docs/comparison.md) and [roadmap](docs/ROADMAP.md). Release notes are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
