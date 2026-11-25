@@ -13,7 +13,7 @@ before you decide. Where a vendor does not publish something, this page says so 
 ## Parla in one paragraph
 
 Parla is an Apache-2.0 open-source chatbot builder that runs locally on a CPU: one Python process (stdlib HTTP
-server), JSON files on disk and a no-code web interface in vanilla JavaScript. Its NLU uses embeddings and
+server), JSON files and a SQLite file on disk and a no-code web interface in vanilla JavaScript. Its NLU uses embeddings and
 nearest neighbour (`google/embeddinggemma-300m` via fastembed), a CRF for entities, and lists, regex and date
 rules. Flows have many step types (questions, HTTP requests, conditions, subflows, file sending, functions,
 handoff, AI steps). An LLM is optional (local Ollama by default, or any OpenAI-compatible endpoint, self-hosted or hosted), and so is local voice
@@ -53,7 +53,7 @@ guide), and production pricing is not published [2].
 
 **Choose Rasa if** you need a mature, large-scale platform with CALM, telephony partners and enterprise support,
 and a commercial license fits your budget. **Choose Parla if** you are looking for an open-source Rasa
-alternative that is lighter (one process, no database), fully Apache-2.0 and runs on a laptop.
+alternative that is lighter (one process, no database server), fully Apache-2.0 and runs on a laptop.
 
 ### NiCE Cognigy
 
@@ -122,8 +122,6 @@ Being honest about gaps matters more than a long feature list. These are on the 
 - **Telephony:** no direct SIP / phone integration (an IVR can call the HTTP API).
 - **Horizontal scaling:** Parla is a single process with files on disk; it is designed for a small server.
 - **SSO** (SAML / OIDC).
-- **Audit log.**
-- **PII redaction** in saved conversations.
 - **End-to-end conversation test suites** (replay against another version exists; full test suites do not).
 - **Observability exports** (OpenTelemetry, Prometheus or similar).
 - **Interface languages:** the UI is in Spanish; i18n is planned.

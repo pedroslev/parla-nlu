@@ -14,7 +14,7 @@ adivinar.
 ## Parla en un párrafo
 
 Parla es un constructor de chatbots de código abierto con licencia Apache-2.0 que corre localmente en CPU: un
-solo proceso de Python (servidor HTTP de la biblioteca estándar), archivos JSON en disco y una interfaz web sin
+solo proceso de Python (servidor HTTP de la biblioteca estándar), archivos JSON y un archivo SQLite en disco y una interfaz web sin
 código en JavaScript puro. Su NLU usa embeddings y vecino más cercano (`google/embeddinggemma-300m` vía
 fastembed), un CRF para entidades y reglas de listas, regex y fechas. Los flujos tienen muchos tipos de paso
 (preguntas, pedidos HTTP, condiciones, subflujos, envío de archivos, funciones, derivación a una persona, pasos
@@ -57,7 +57,7 @@ por mes según una guía) y el precio para producción no está publicado [2].
 
 **Elegí Rasa si** necesitás una plataforma madura y de gran escala con CALM, socios de telefonía y soporte
 empresarial, y una licencia comercial entra en tu presupuesto. **Elegí Parla si** buscás una alternativa de
-código abierto a Rasa más liviana (un proceso, sin base de datos), completamente Apache-2.0 y que corre en una
+código abierto a Rasa más liviana (un proceso, sin servidor de base de datos), completamente Apache-2.0 y que corre en una
 notebook.
 
 ### NiCE Cognigy
@@ -131,8 +131,6 @@ Ser honestos con lo que falta importa más que una lista larga de funciones. Est
 - **Telefonía:** sin integración directa SIP / telefónica (un IVR puede llamar a la API HTTP).
 - **Escalado horizontal:** Parla es un solo proceso con archivos en disco; está pensado para un servidor chico.
 - **SSO** (SAML / OIDC).
-- **Registro de auditoría.**
-- **Enmascaramiento de datos personales (PII)** en las conversaciones guardadas.
 - **Suites de pruebas de conversación de punta a punta** (existe la reproducción contra otra versión; las suites
   completas, no).
 - **Exportación de observabilidad** (OpenTelemetry, Prometheus o similares).

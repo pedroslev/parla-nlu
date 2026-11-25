@@ -33,8 +33,8 @@ costado, publicás una versión y lo conectás a tu web, a tu sistema o a un IVR
 
 - Equipos chicos y pymes que quieren un bot de atención (turnos, pedidos, preguntas frecuentes) sin depender de
   una plataforma paga ni mandar las conversaciones afuera.
-- Desarrolladores que quieren algo tipo Rasa pero más liviano: un solo proceso Python, archivos JSON en disco,
-  sin base de datos, con una API para integrarlo.
+- Desarrolladores que quieren algo tipo Rasa pero más liviano: un solo proceso Python, archivos JSON y un archivo
+  SQLite en disco, sin servidor de base de datos, con una API para integrarlo.
 - Quien quiera que una IA (Claude, Codex, Cursor) le arme el bot: Parla trae un servidor MCP.
 
 ## Qué trae
@@ -96,6 +96,9 @@ costado, publicás una versión y lo conectás a tu web, a tu sistema o a un IVR
   las trazas.
 - Escucha en `127.0.0.1` (salvo que cambies `PARLA_HOST`) y rechaza pedidos de otros sitios web salvo los
   autorizados para el widget.
+- Registro de auditoría de quién cambió qué (solo el dueño), retención de conversaciones por agente y tapado
+  opcional de datos personales (emails, teléfonos, tarjetas, documentos, cuentas) en lo guardado. Ver
+  [docs/security_es.md](docs/security_es.md#registro-de-auditoría).
 
 ### Integraciones
 - Servidor MCP con 27 herramientas para armar, validar, entrenar, probar, publicar y analizar bots.
@@ -209,6 +212,8 @@ mcp_server.py           atajo al servidor MCP (parla/mcp_server.py)
 parla/
   server.py             HTTP, motor (handle/run/begin), NLU, versiones, API pública
   auth.py               usuarios, roles, sesiones y claves de API
+  db.py                 base SQLite (parla.db): conversaciones, logins y auditoría
+  pii.py                tapado de datos personales en lo guardado
   brain.py              IA encima del motor (rescate, slots, leer respuestas, fallback, paso agent)
   llm.py                cliente de modelos (Ollama local / cualquier endpoint compatible con OpenAI)
   knowledge.py          base de conocimiento: extraer texto y buscar
@@ -242,6 +247,8 @@ Todo es opcional. Copiá `.env.example` para ver los valores.
 | `PARLA_EMBED_CACHE` | `data/models/embeddings` del repo | Dónde se guarda el modelo de vectores (~1,2 GB). |
 | `PARLA_HOSTS` | vacío | Nombres extra por los que se entra a Parla detrás de un proxy (ver [docs/deployment.md](docs/deployment_es.md)). |
 | `PARLA_SECURE_COOKIE` | vacío | `1` marca la cookie de sesión como `Secure` (detrás de HTTPS). |
+| `PARLA_RETENTION_DAYS` | vacío | Días que se guardan las conversaciones sin movimiento, para los agentes sin `retention_days` propio. Vacío o `0`: para siempre. |
+| `PARLA_AUDIT_DAYS` | `365` | Días que se guarda la auditoría. |
 | `PARLA_PUBLIC_URL` | vacío | Dirección pública con HTTPS, para los webhooks de WhatsApp y Telegram (ver [docs/channels_es.md](docs/channels_es.md)). |
 | `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` u `off` apagan las funciones de los agentes. |
 | `PARLA_WHISPER` | `base` | Modelo de faster-whisper (`tiny` si la máquina es lenta). |
@@ -259,8 +266,8 @@ make test                         # o: .venv/bin/python tests/run_all.py
 ```
 
 Son scripts con `assert`, sin framework, y nunca tocan tu `data/`. `test_app.py`, `test_insights.py`,
-`test_connect.py` y `test_auth.py` no necesitan nada externo (`test_auth.py` levanta su propio servidor en un
-puerto libre); `test_knowledge.py` y `test_mcp.py` necesitan el modelo de vectores (`test_mcp.py` levanta su
+`test_connect.py`, `test_auth.py` y `test_storage.py` no necesitan nada externo (`test_auth.py` y
+`test_storage.py` levantan su propio servidor en un puerto libre); `test_knowledge.py` y `test_mcp.py` necesitan el modelo de vectores (`test_mcp.py` levanta su
 propio Parla temporal); `test_ai.py` saltea lo que necesita Ollama si no está; `test_voice.py` se saltea sin los
 extras de voz. Detalle en [docs/development.md](docs/development_es.md#pruebas).
 
@@ -272,8 +279,6 @@ El plan público (Ahora / Después / Más adelante) está en [docs/ROADMAP_es.md
 - Endpoint público o túnel integrado (hoy lo publicás vos con un proxy).
 - Plantillas de bots y campañas salientes.
 - Memoria por usuario entre conversaciones.
-- Tapado automático de datos personales (PII) en las conversaciones guardadas.
-- Política de retención (las conversaciones no se borran solas).
 - Telefonía (la API sirve para un IVR, pero no hay integración directa).
 
 ## Comparación

@@ -31,8 +31,8 @@ With users, every request to `/api/` (except `/api/auth/*`) needs one of these t
 
 - **API key** (for your system, the MCP or `curl`): `Authorization: Bearer parla_xxxxxxxx`. Created in
   **Usuarios → tu usuario → Claves de API** (Users → your user → API keys).
-- **Session cookie** `parla_session` (used by the UI): lasts 12 hours and lives in the server's memory (it is lost
-  when the server restarts).
+- **Session cookie** `parla_session` (used by the UI): lasts 12 hours and is stored in `parla.db` (it survives a
+  server restart).
 
 Without either: 401. What you can do depends on the user's role:
 
@@ -202,7 +202,8 @@ The state (`bot`, `sessionId`, `channel`, dates, `ended`, `slots`, `waiting_for`
 Each `history` entry has `from` (`user`, `bot`, `event` or `human`), `text` and `at`. `user` entries carry `intent`,
 `confidence`, `entities`, `answer_to`, `fallback`, `via` and `flow`/`waiting` (where the conversation was); `bot`
 entries carry `buttons` and `file` if they had them; `human` entries carry `by`; `event` entries may carry `data`
-(the start data) or `classification`. The last 500 messages are kept.
+(the start data) or `classification`. The last 500 messages are kept. With `pii_redaction` on, texts, entity
+values and `data` come with personal data masked («[email]», «[teléfono]», …).
 
 ### `GET /api/v1/bots/{bot}/sessions/{sessionId}/messages?after=N`
 
@@ -288,6 +289,14 @@ don't work here).
 
 `{nombre}` is the user name. `bots`: `null` (sees all) or a list of agent ids. The owner always sees all.
 
+### Audit
+
+| Route | Who | Response |
+|---|---|---|
+| `GET /api/audit?agent=&user=&since=&limit=` | Owner (403 for other roles; with no users, anyone) | `{"entries": [{"at", "user", "role", "agent_id", "action", "detail"}]}`, newest first. Filters: `agent` (id), `user` (name), `since` (`YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`), `limit` (1 to 1000, 200 by default). |
+
+The actions recorded are listed in [security.md](security.md#audit-log).
+
 ### Agents
 
 | Route | Body | Response |
@@ -296,7 +305,7 @@ don't work here).
 | `POST /api/agents` | `{"name", "demo"?: true}` (blank, or the ordering example) or `{"import": agent}` (accepts the `{"parla": 1, "agent": ...}` envelope) | The created agent. A user who sees only some bots also gets to see this one. |
 | `POST /api/agents/import/rasa` | `{"zip": base64 of the project .zip, "name"?}` or `{"files": {"domain.yml": "...", "data/nlu.yml": "..."}, "name"?}` | `{"agent", "warnings"}`: a new agent converted from a Rasa 3.x project and already trained; `warnings` lists everything that couldn't be migrated as is. Same role as creating an agent (owner or editor). Only `.yml`/`.yaml` files are read; zip limits: 500 files, 20 MB uncompressed, no absolute paths or `..`. See [migrate-from-rasa.md](migrate-from-rasa.md). |
 | `GET /api/agents/{id}` | — | The agent's full JSON (draft), with the full `system`. |
-| `PUT /api/agents/{id}` | The whole agent | The saved agent. Replaces everything (anything missing goes back to blank values); `environments` and `deployments` can't be overwritten. The conversation tests are the `tests` field (see [testing-bots.md](testing-bots.md#format)). |
+| `PUT /api/agents/{id}` | The whole agent | The saved agent. Replaces everything (anything missing goes back to blank values); `environments` and `deployments` can't be overwritten. Includes the operational settings `retention_days` (days, `0` = forever, `null` = `PARLA_RETENTION_DAYS`) and `pii_redaction` (`false`, `true` or a list of `email`, `phone`, `card`, `id`, `bank`); they aren't versioned or exported. See [concepts.md](concepts.md#retention-and-personal-data). The conversation tests are the `tests` field (see [testing-bots.md](testing-bots.md#format)). |
 | `DELETE /api/agents/{id}` | — | `{}`. Deletes the agent, its model, versions, conversations and files. |
 | `POST /api/agents/{id}/train` | `{"fingerprint"?}` | `{"at", "fingerprint", "phrases", "marked", "log"}`; `log` has the steps, the self-evaluation (`self_check`), the CRF and the tips (`warnings`). |
 | `POST /api/agents/{id}/chat` | `{"session", "text", "environment"?}` (`draft` by default) | One turn of the test chat (channel `prueba`): `messages`, `buttons`, `replies`, `nlu` (`intent`, `confidence`, `ranking`, `entities`), `slots`, `trace`, `answer_to`, `rejected`, `fallback`, `handoff`, `language`, `via`, `sources`. |

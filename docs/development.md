@@ -6,7 +6,8 @@
 
 Python 3.11 or newer (`scripts/setup.sh` looks for `python3.13`, `3.12`, `3.11` or `python3`, or the one you pass in
 `PYTHON=`). Few dependencies, on purpose: the HTTP server is the standard library one (`http.server`), with no
-framework, and everything is stored in JSON files.
+framework. Agents, versions and users are JSON files; conversations, login sessions and the audit log go in a
+SQLite file (`parla.db`, with the standard library's `sqlite3`).
 
 | Package (`requirements.txt`) | What for |
 |---|---|
@@ -41,6 +42,8 @@ All are optional. Nothing loads `.env` automatically: export them in your shell.
 | `PARLA_USERS` | `$PARLA_DATA/users.json` | Users file. |
 | `PARLA_HOST` | `127.0.0.1` | Address the server listens on (the Docker image uses `0.0.0.0`). |
 | `PARLA_HOSTS` | empty | Extra names (`host[:port]`) used to reach Parla behind a proxy. See [deployment.md](deployment.md). |
+| `PARLA_RETENTION_DAYS` | empty | Days to keep conversations with no activity, for agents without `retention_days`. Empty or `0`: forever. |
+| `PARLA_AUDIT_DAYS` | `365` | Days to keep the audit log. |
 | `PARLA_SECURE_COOKIE` | empty | `1` adds `Secure` to the session cookie (it is also added automatically if a `PARLA_HOSTS` proxy signals HTTPS with `X-Forwarded-Proto`). |
 | `PARLA_EMBED_CACHE` | `<repo>/data/models/embeddings` | Where the vector model is stored. It doesn't follow `PARLA_DATA`, so the tests don't download it every time. |
 | `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` or `off` disable agent functions. |
@@ -59,6 +62,8 @@ All are optional. Nothing loads `.env` automatically: export them in your shell.
 | `parla/__init__.py` | `ROOT`, `DATA` (`PARLA_DATA`) and `__version__`. |
 | `parla/server.py` | NLU (`classify`, `extract`, `parse`, `read_answer`), training (`train`, `self_check`), versions (`publish`, `deploy`, `target`, `diff`), templates (`cel`, `render`), the engine (`handle`, `run`, `begin`), conversations on disk (`converse`), `api_v1`, `audio_event`, the Bandeja (Inbox) (`human`) and the HTTP `Handler`. |
 | `parla/auth.py` | Users, roles, cookies, keys; `handle` (routes `/api/auth`, `/api/users`) and `guard` (before every `/api/`). |
+| `parla/db.py` | The SQLite database `parla.db` (WAL, one connection and a lock per process): tables `sessions`, `logins` and `audit`; `q`, `audit`, `audit_list`. |
+| `parla/pii.py` | Masking personal data in what is stored (`pii_redaction`): `categories`, the rules and the Luhn / mod-97 checks. |
 | `parla/brain.py` | AI on top of the engine: `rescue_intent`, `fill_slot`, `understand`, `side_question`, `answer`, `fallback`, `agent_turn`. No function raises. |
 | `parla/llm.py` | Ollama / OpenAI-compatible client: `chat`, `status`, `pull`. |
 | `parla/knowledge.py` | `extract` (text, HTML, URL, PDF), `chunks`, `search`. |
@@ -73,18 +78,22 @@ All are optional. Nothing loads `.env` automatically: export them in your shell.
 | `web/index.html` | The UI (JS with no build step): editor, test chat and voice call. Each large section lives in `web/static/*.js`. |
 | `web/static/voice.js` | Dictation, read aloud and the call (local WebRTC + voice activity detector). |
 | `web/static/files.js`, `sessions.js`, `functions.js`, … | Files for the `file` step; conversations (re-run as a test, continue as that customer); functions (editor with syntax highlighting, examples and testing); and the rest of the sections. |
+| `web/static/audit.js` | The «Auditoría» (Audit) page, owner only (`#/auditoria`). |
 | `web/static/widget.js` | The widget, with no dependencies, in a Shadow DOM. |
 
 On disk (`PARLA_DATA`): `agents/<id>.json` (the draft), `<id>.model.json` and `<id>.crfsuite` (the trained model),
-`<id>.versions/`, `<id>.sessions/<sessionId>.json`, `<id>.files/`, `<id>.secrets.json`, `users.json` and
-`models/` (voice and audio cache).
+`<id>.versions/`, `<id>.files/`, `<id>.secrets.json`, `users.json`, `parla.db` (conversations, login sessions and
+audit log) and `models/` (voice and audio cache). On startup, `migrate_sessions` imports any old
+`agents/<id>.sessions/` folder into `parla.db` and renames it to `<id>.sessions.migrated`; `cleanup` (at startup
+and every hour) applies the retention.
 
 ## How the engine works
 
 A conversation's state (`st`) is a dictionary: `slots`, `flow` (current flow), `pc` (step), `stack` (subflows and
 interruptions), `waiting` (slot being asked), `lang`, `buttons`, `clarify`, `hint` (option just explained),
 `csat_waiting`, `handoff`, `agent` (state of the AI step), `last_bot` (for «repetí») and `recent` (context for the
-AI). It is stored inside `agents/<id>.sessions/<sid>.json`.
+AI). It is stored inside the conversation's record (`record` column of the `sessions` table in `parla.db`, through
+`load_session` / `save_session`).
 
 `begin(agent, st, data)` starts it: copies `data` to the slots with the same name, picks the language and runs the
 flow with trigger `__start__`.
@@ -159,6 +168,7 @@ and, for the tests that need it, starts its own copy of the server on a free por
 | `test_connect.py` | Nothing (uses a temporary HOME and an empty `PATH`). |
 | `test_knowledge.py` | The vector model. |
 | `test_auth.py` | Nothing external: starts its own server with a temporary `users.json`. |
+| `test_storage.py` | Nothing external: `parla.db`, the migration, retention, audit and masking; starts its own server twice on the same temporary data (logins survive the restart). |
 | `test_ai.py` | Ollama for the part with a model; if it isn't there, skips it with a warning. Dates are always tested. |
 | `test_voice.py` | The voice extras and `ffmpeg`; if missing, it is skipped. |
 | `test_mcp.py` | The `mcp` package and the vector model: starts its own temporary Parla and tests the validator and the tools end to end. |
@@ -168,18 +178,21 @@ and, for the tests that need it, starts its own copy of the server on a free por
 - **Small functions** that do one thing and read top to bottom.
 - **Comments in Spanish**, to explain the why, not the what. User-facing messages too, in Rioplatense Spanish and
   saying what to do («Revisá que los slots que usa existan» — check that the slots it uses exist).
-- **The simplest thing that works**: standard library before a new dependency, JSON files before a database, no
-  abstractions nobody asked for.
+- **The simplest thing that works**: standard library before a new dependency, JSON files before a database
+  (conversations are the exception: they live in SQLite, still standard library), no abstractions nobody asked
+  for.
 - **`ponytail:` comments** when taking a shortcut with a known limit, naming the limit and how to improve it. Real
   examples from the code (kept in Spanish, as in the source):
   ```python
   # ponytail: un hilo por pedido (la IA y la voz tardan segundos); dos mensajes a la vez en la MISMA conversación
   # pueden pisarse: agregar un lock por sessionId si algún canal los manda en paralelo
-  # ponytail: sesiones en memoria (se pierden al reiniciar el servidor: hay que volver a entrar); a disco si molesta
+  # ponytail: una conexión y un lock para todo el proceso (ThreadingHTTPServer); alcanza para un servidor.
+  # Con mucho tráfico: una conexión por hilo (WAL ya deja leer mientras otro escribe)
   ```
   (One thread per request — AI and voice take seconds; two simultaneous messages in the SAME conversation can
-  overwrite each other: add a lock per sessionId if some channel sends them in parallel. / In-memory sessions — lost
-  when the server restarts, you have to log in again; move to disk if it becomes a problem.)
+  overwrite each other: add a lock per sessionId if some channel sends them in parallel. / One connection and one
+  lock for the whole process — enough for one server; with heavy traffic, one connection per thread, since WAL
+  already lets you read while another writes.)
   Find them with `grep -rn "ponytail:" parla web` to see the technical debt taken on.
 - An error in an optional module (AI, voice, dates) never stops a conversation.
 - All non-trivial logic leaves a test in `tests/`.

@@ -37,8 +37,8 @@ Spanish-speaking users.
 
 - Small teams and businesses that want a customer-service bot (appointments, orders, FAQs) without depending on a
   paid platform or sending conversations to third parties.
-- Developers who want something like Rasa but lighter: a single Python process, JSON files on disk, no database,
-  with an API for integration.
+- Developers who want something like Rasa but lighter: a single Python process, JSON files and a SQLite file on
+  disk, no database server, with an API for integration.
 - Anyone who wants an AI (Claude, Codex, Cursor) to build the bot for them: Parla ships an MCP server.
 
 ## Features
@@ -102,6 +102,9 @@ Spanish-speaking users.
 - Per-agent secret vault (`{{ secret.NOMBRE }}`): values don't travel in the bot JSON and are masked in traces.
 - Listens on `127.0.0.1` (unless you change `PARLA_HOST`) and rejects requests from other websites except those
   authorized for the widget.
+- Audit log of who changed what (owner only), per-agent conversation retention and optional masking of personal
+  data (emails, phones, cards, ID numbers, bank accounts) in saved conversations. See
+  [docs/security.md](docs/security.md#audit-log).
 
 ### Integrations
 - MCP server with 27 tools to build, validate, train, test, publish and analyze bots.
@@ -215,6 +218,8 @@ mcp_server.py           shortcut to the MCP server (parla/mcp_server.py)
 parla/
   server.py             HTTP, engine (handle/run/begin), NLU, versions, public API
   auth.py               users, roles, sessions and API keys
+  db.py                 SQLite database (parla.db): conversations, logins and audit log
+  pii.py                masking of personal data in what is stored
   brain.py              AI on top of the engine (rescue, slots, reading answers, fallback, agent step)
   llm.py                LLM client (local Ollama / any OpenAI-compatible endpoint)
   knowledge.py          knowledge base: text extraction and search
@@ -248,6 +253,8 @@ Everything is optional. Copy `.env.example` to see the values.
 | `PARLA_EMBED_CACHE` | the repo's `data/models/embeddings` | Where the embedding model (~1.2 GB) is stored. |
 | `PARLA_HOSTS` | empty | Extra hostnames used to reach Parla behind a proxy (see [docs/deployment.md](docs/deployment.md)). |
 | `PARLA_SECURE_COOKIE` | empty | `1` marks the session cookie as `Secure` (behind HTTPS). |
+| `PARLA_RETENTION_DAYS` | empty | Days to keep conversations with no activity, for agents without their own `retention_days`. Empty or `0`: forever. |
+| `PARLA_AUDIT_DAYS` | `365` | Days to keep the audit log. |
 | `PARLA_PUBLIC_URL` | empty | Public HTTPS address, for the WhatsApp/Telegram webhooks (see [docs/channels.md](docs/channels.md)). |
 | `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` or `off` disable agent functions. |
 | `PARLA_WHISPER` | `base` | faster-whisper model (`tiny` if the machine is slow). |
@@ -265,8 +272,8 @@ make test                         # or: .venv/bin/python tests/run_all.py
 ```
 
 They are scripts with `assert`, no framework, and they never touch your `data/`. `test_app.py`,
-`test_insights.py`, `test_connect.py` and `test_auth.py` need nothing external (`test_auth.py` starts its own
-server on a free port); `test_knowledge.py` and `test_mcp.py` need the embedding model (`test_mcp.py` starts its
+`test_insights.py`, `test_connect.py`, `test_auth.py` and `test_storage.py` need nothing external (`test_auth.py`
+and `test_storage.py` start their own server on a free port); `test_knowledge.py` and `test_mcp.py` need the embedding model (`test_mcp.py` starts its
 own temporary Parla); `test_ai.py` skips what needs Ollama if it isn't there; `test_voice.py` is skipped without
 the voice extras. Details in [docs/development.md](docs/development.md#tests).
 
@@ -277,8 +284,6 @@ The public plan (Now / Next / Later) is in [docs/ROADMAP.md](docs/ROADMAP.md). W
 - Built-in public endpoint or tunnel (today you publish it yourself with a proxy).
 - Bot templates and outbound campaigns.
 - Per-user memory across conversations.
-- Automatic masking of personal data (PII) in saved conversations.
-- Retention policy (conversations aren't deleted automatically).
 - Telephony (the API works for an IVR, but there's no direct integration).
 
 ## Comparison

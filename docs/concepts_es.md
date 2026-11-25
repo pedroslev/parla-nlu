@@ -23,9 +23,12 @@ Un **agente** (o bot) es un archivo JSON con todo lo que lo define. Los campos p
 | `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id"}, "telegram": {"enabled"}}`. Los tokens van en la bóveda, ver [channels_es.md](channels_es.md). |
 | `ignored_phrases` | Frases que «Para enseñar» ya no muestra. |
 | `tests` | Pruebas de conversación: conversaciones esperadas que corren antes de publicar a producción (ver [testing-bots_es.md](testing-bots_es.md)). |
+| `retention_days` | Días que se guardan las conversaciones sin movimiento. Sin el campo o `null`: `PARLA_RETENTION_DAYS`; `0`: para siempre. Ver [Retención y datos personales](#retención-y-datos-personales). |
+| `pii_redaction` | Tapar datos personales en las conversaciones guardadas: `false` (por defecto), `true` (todo) o una lista de categorías. Misma sección. |
 
 Exportar un agente baja ese JSON; importarlo crea un agente nuevo. No viajan las versiones, los entornos, el
-entrenamiento, las claves ni los archivos subidos (se entrena al abrirlo).
+entrenamiento, las claves ni los archivos subidos (se entrena al abrirlo), ni `retention_days` y
+`pii_redaction`.
 
 ## Intención
 
@@ -309,8 +312,41 @@ La API habla con `production` por defecto (o con el borrador si todavía no se p
 queda atada a la versión con la que empezó: publicar no cambia los pasos a mitad de una charla. Rollback =
 apuntar el entorno a otra versión. «Restaurar» vuelve el borrador a lo que tenía una versión.
 
-Lo que no es de una versión sino del bot: las claves, los archivos y las conversaciones.
+Lo que no es de una versión sino del bot: las claves, los archivos, las conversaciones y los ajustes de operación
+`retention_days` y `pii_redaction` (no se versionan y «Restaurar» los respeta).
 
 Las **pruebas** de conversación (sección «Tests») son parte de la definición, así que cada versión tiene las suyas.
 Publicar a `production` las corre antes contra el borrador y frena si falla alguna; publicar a `staging` y `deploy`
 no. Ver [testing-bots_es.md](testing-bots_es.md).
+
+## Retención y datos personales
+
+Las conversaciones se guardan en `parla.db`, en la carpeta de datos. Los dos ajustes están en **Ajustes** del
+agente → **Privacidad y datos**.
+
+**Retención (`retention_days`).** Se borran las conversaciones cuyo último movimiento tiene más de esa cantidad de
+días. Sin el campo (o con `null`) vale `PARLA_RETENTION_DAYS`; con `0`, o sin ninguno de los dos, se guardan para
+siempre. La limpieza corre al arrancar y cada hora. Los archivos subidos (paso `file`) son del agente, no de una
+conversación: la retención nunca los borra.
+
+**Tapado (`pii_redaction`).** `true` tapa todas las categorías; una lista, solo esas:
+
+| Categoría | Queda | Qué agarra |
+|---|---|---|
+| `email` | «[email]» | Direcciones de correo. |
+| `phone` | «[teléfono]» | Teléfonos. |
+| `card` | «[tarjeta]» | De 13 a 19 dígitos, solo si pasan el control de Luhn. |
+| `id` | «[documento]» | CUIT/CUIL (11 dígitos), DNI (7 u 8 dígitos, con o sin puntos) y cualquier otro número de 9 dígitos o más. |
+| `bank` | «[cuenta]» | CBU/CVU (22 dígitos) e IBAN (validado con módulo 97). |
+
+Se aplica a lo que se **guarda**: el texto del historial, los valores de las entidades y los datos de inicio. Así,
+la Bandeja, el visor de conversaciones, «lo que no entendió», las analíticas y el historial de la API ven el texto
+tapado. No se aplica al turno en vivo: el flujo, los pasos `http` y las funciones reciben el valor real, y la
+respuesta de ese turno trae el texto real. Los slots y el contexto de la IA guardan los valores reales mientras la
+conversación sigue abierta (los pasos siguientes los necesitan) y se borran cuando termina; con el tapado
+prendido, las conversaciones quietas por 24 horas (salvo las que están con una persona) se cierran para que eso pase.
+
+Límites: es una heurística, así que se le puede escapar un formato o tapar un número que no es un dato personal
+(un número de pedido de 9 dígitos o más); las respuestas del operador en la Bandeja también se guardan tapadas (un
+widget que lee el historial las ve tapadas); prenderlo no reescribe lo que ya estaba guardado (cada conversación
+se tapa desde su próximo guardado); y no se aplica a lo que el servidor escribe en la consola.

@@ -317,6 +317,7 @@ window.userAvatar = () => {
     onclick: (e) => openPop(e.currentTarget.getBoundingClientRect(), [
       h('div', { class: 'us-who' }, h('span', { class: 'us-av', 'aria-hidden': 'true' }, initial), h('span', {}, h('strong', {}, me.name), h('small', {}, (US_ROLES[me.role] || [me.role])[0]))),
       h('button', { class: 'opt', onclick: () => { closePop(); usOpen(); } }, icon('users'), h('span', {}, me.role === 'owner' ? 'Administrar usuarios' : 'Mi usuario')),
+      me.role === 'owner' && window.auditPage ? h('button', { class: 'opt', onclick: () => { closePop(); window.auditPage(); } }, icon('history'), h('span', {}, 'Auditoría')) : null,
       h('button', { class: 'opt', onclick: () => { closePop(); usLogout(); } }, icon('back'), h('span', {}, 'Cerrar sesión')),
     ]) }, initial);
 };
@@ -328,6 +329,7 @@ window.userAvatar = () => {
     if (r.enabled && !r.user) await window.showLogin();
   } catch {}
   if (location.hash === '#/usuarios') window.usersPage();      // ya sabemos quién es: redibujar con sus permisos
+  else if (location.hash === '#/auditoria' && window.auditPage) window.auditPage();
   else if (typeof agent !== 'undefined' && !agent && $('#app')?.classList.contains('home')) home();
   document.querySelectorAll('[data-me-slot]').forEach((el) => el.replaceChildren(window.userAvatar()));   // el editor ya estaba abierto (F5)
 })();

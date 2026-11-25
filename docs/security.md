@@ -31,14 +31,47 @@ it. This page covers what it protects, what it doesn't, and what to do before ex
   one of `PARLA_HOSTS` (an HTTPS proxy in front). Otherwise the cookie is also sent over HTTP. If the proxy
   rewrites the `Host` (nginx with `proxy_pass` does by default), the second condition isn't met: use
   `PARLA_SECURE_COOKIE=1`.
-- Sessions live **in memory**: after a server restart you have to log in again. Each user's role and bots are read
-  from `users.json` on every request, so a role change takes effect immediately.
+- Sessions are stored in `parla.db` in the data folder, only as the SHA-256 of the cookie value: they survive a
+  restart. Each user's role and bots are read from `users.json` on every request, so a role change takes effect
+  immediately.
 - Changing the password or deleting a user ends their sessions. Logging out (`/api/auth/logout`) deletes the
   session.
 - **Login lockout:** after 5 failed attempts within a minute for the same username and the same IP, login responds
   429 until the minute is up. Behind a proxy the IP is the proxy's (Parla doesn't read `X-Forwarded-For`): the
   lockout becomes per-user, and someone can lock another person out for a minute at a time. A user that doesn't
   exist takes as long to answer as one that does.
+
+## Audit log
+
+Parla records successful write operations in the `audit` table of `parla.db`: who (user and role), when, on which
+agent, what, and a short detail. The owner sees it in **Auditoría** (Audit, `#/auditoria`, from the avatar menu,
+next to «Administrar usuarios») or with `GET /api/audit` ([api.md](api.md)); other roles get 403.
+
+- Actions: `login` (successful **and failed**, with the IP; never the password), `logout`, `user.create`,
+  `user.update`, `user.role`, `user.delete`, `key.create` (also «Conectar con IA»), `key.revoke`, `agent.create`,
+  `agent.import`, `agent.save`, `agent.delete`, `agent.train`, `agent.publish`, `agent.deploy`, `agent.restore`,
+  `secret.set` / `secret.delete` (the name only, never the value), `file.upload` / `file.delete`,
+  `channel.update` (a save that changed `channels`), `channel.telegram`, `inbox.take` / `inbox.release` /
+  `inbox.reply` and `session.delete`.
+- The interface autosaves every ~400 ms: consecutive `agent.save` entries by the same user on the same agent
+  within 5 minutes are merged into one.
+- Without users configured, entries have an empty user.
+- Entries older than `PARLA_AUDIT_DAYS` (default 365) are deleted by the hourly cleanup.
+- It doesn't log reads or every request: for that, use the proxy's access log.
+
+## Personal data in conversations
+
+- **Retention:** `retention_days` on the agent (or `PARLA_RETENTION_DAYS` for all of them) deletes conversations
+  with no activity for that many days. Without either, they're kept forever. See
+  [concepts.md](concepts.md#retention-and-personal-data).
+- **Masking (`pii_redaction`):** replaces emails, phones, cards, ID numbers and bank accounts with «[email]»,
+  «[teléfono]», etc. in what's **stored** (history, Bandeja, insights, analytics, the API's history). The live turn
+  (flow, `http` steps, functions and that turn's reply) still sees the real value, and the conversation's working
+  state keeps it until the conversation ends; with masking on, conversations idle for 24 h are closed so it's
+  wiped.
+- Masking is a heuristic (regular expressions): it can miss a format or mask a number that isn't personal data.
+  It doesn't rewrite what was already stored when you turn it on, and it doesn't apply to the server's console
+  output.
 
 ## API keys
 
@@ -254,7 +287,8 @@ publish it, protect it at the proxy and set `PARLA_MCP_ALLOWED_HOSTS` (the accep
    service and the internal network.
 7. **Container:** unprivileged user (the image uses uid `10001`), read-only file system
    (`--read-only --tmpfs /tmp`, or `readOnlyRootFilesystem` in Kubernetes) and no capabilities.
-8. **Backups:** the data folder holds conversations, users and keys. Keep backups somewhere private and keep
+8. **Backups:** the data folder holds conversations, users and keys (`parla.db` included, see
+   [deployment.md](deployment.md#backups)). Keep backups somewhere private and keep
    `users.json` and `*.secrets.json` at permissions 600 when restoring.
 9. Review `http` steps, widget origins and old API keys (especially the ones from «Conectar con IA»).
 10. If you use MCP with `--http`, protect it at the proxy.
@@ -262,14 +296,13 @@ publish it, protect it at the proxy and set `PARLA_MCP_ALLOWED_HOSTS` (the accep
 
 ## Not there yet
 
-- One replica per data folder. Sessions and login counters are in memory: they're lost on restart.
+- One replica per data folder. Login lockout counters are in memory: they reset on restart.
 - No rate limiting, except the login lockout.
-- No audit or access log: Parla doesn't record who changed what (the deployment log doesn't say who) and doesn't
-  log requests. The Bandeja (Inbox) does record who took and replied to each conversation.
+- No access log: the audit log records writes, not reads or every request.
 - No second factor, no password policy and no list of open sessions to end by hand.
-- Keys aren't encrypted on disk. Agents and conversations are saved with the system's normal permissions (only
-  `users.json` and the keys are 600).
-- Personal data in saved conversations isn't masked, and conversations aren't deleted automatically.
+- Keys aren't encrypted on disk. Agents are saved with the system's normal permissions; `users.json`, the keys and
+  `parla.db` (conversations, login hashes and the audit log) are 600.
+- Masking personal data is a heuristic, and it's off by default.
 
 ## Reporting a vulnerability
 

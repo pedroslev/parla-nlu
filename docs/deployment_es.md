@@ -2,12 +2,13 @@
 
 [English](deployment.md) · **Español**
 
-Parla es **un solo proceso** Python (`ThreadingHTTPServer`, un hilo por pedido) sin base de datos: todo queda en
-archivos en la carpeta de datos. Eso define cómo se despliega:
+Parla es **un solo proceso** Python (`ThreadingHTTPServer`, un hilo por pedido) sin servidor de base
+de datos: los agentes son archivos en la carpeta de datos, y las conversaciones, las sesiones de login y la
+auditoría van en un archivo SQLite ahí mismo (`parla.db`). Eso define cómo se despliega:
 
-- **Una sola réplica por carpeta de datos.** Las sesiones de login y los modelos cargados viven en memoria y los
-  agentes se guardan en archivos sin bloqueo entre procesos. Dos instancias sobre los mismos datos se pisan; al
-  reiniciar, los usuarios tienen que volver a entrar.
+- **Una sola réplica por carpeta de datos.** Los modelos cargados viven en memoria y los agentes se guardan en
+  archivos sin bloqueo entre procesos. Dos instancias sobre los mismos datos se pisan. Las sesiones de login
+  sobreviven a un reinicio.
 - **La interfaz de administración se usa desde `127.0.0.1` / `localhost`**, o por un dominio que sumes a
   `PARLA_HOSTS`. Ver [Origin](#la-guarda-de-origin).
 - Leé [security.md](security_es.md#antes-de-exponerlo-a-internet) antes de exponerlo.
@@ -23,6 +24,8 @@ archivos en la carpeta de datos. Eso define cómo se despliega:
 | `PARLA_HOSTS` | | Dominios (`host` o `host:puerto`, separados por coma) por los que también se entra a la interfaz y a `/api/`. |
 | `PARLA_SECURE_COOKIE` | | `1`: la cookie de sesión siempre con `Secure` (detrás de HTTPS). |
 | `PARLA_USERS` | | Otra ruta para `users.json`. |
+| `PARLA_RETENTION_DAYS` | | Días que se guardan las conversaciones sin movimiento, para los agentes sin `retention_days` propio. Sin definir o `0`: para siempre. |
+| `PARLA_AUDIT_DAYS` | | Días que se guarda la auditoría. Sin definir: `365`. |
 
 El puerto es el argumento de `app.py` (la imagen usa `8000`). La dirección de Ollama no es una variable: se
 configura por agente en la interfaz (**IA → dirección**).
@@ -269,7 +272,8 @@ La imagen pasa de ~400 MB a ~1,6 GB. Si cambia `MODEL` en `parla/server.py`, act
 
 Medido: con el modelo de vectores cargado el proceso usa ~970 MB. El Deployment pide 1,5 Gi y limita a 3 Gi;
 subilo a 4 Gi con voz. No tiene límite de CPU a propósito (entrenar es un pico corto). Las conversaciones crecen
-sin límite: no se borran solas.
+sin límite salvo que pongas una retención (`retention_days` o `PARLA_RETENTION_DAYS`, ver
+[concepts_es.md](concepts_es.md#retención-y-datos-personales)).
 
 ## Dónde quedan los datos
 
@@ -281,35 +285,44 @@ sin límite: no se borran solas.
     <id>.crfsuite           modelo de entidades
     <id>.secrets.json       claves (permisos 600)
     <id>.versions/<n>.json  versiones publicadas (+ <n>.crfsuite)
-    <id>.sessions/<sid>.json  una conversación por archivo
+    <id>.files/             archivos subidos para el paso `file`
+    <id>.sessions.migrated/ archivos viejos de conversaciones, ya importados a parla.db (se pueden borrar)
+  parla.db                  conversaciones, sesiones de login y auditoría (SQLite, permisos 600)
+  parla.db-wal, -shm        el diario de parla.db mientras corre (son parte de la base)
   users.json                usuarios (permisos 600)
   models/                   vectores, voz y caché de audios (se pueden volver a bajar)
 ```
 
 ## Copias de seguridad
 
-Copiá la carpeta de datos entera, con Parla apagado o en un momento tranquilo. `models/` se puede excluir (se
-vuelve a bajar). Las copias tienen conversaciones, usuarios y claves: guardalas en un lugar privado.
+Copiá la carpeta de datos entera; `models/` se puede excluir (se vuelve a bajar). Con Parla apagado alcanza con
+copiar la carpeta tal cual. Mientras corre, `parla.db` se está escribiendo y una copia común puede salir
+inconsistente: primero sacá una copia con `.backup` de SQLite (segura con Parla andando) y dejá la base en uso
+fuera del archivo. Las copias tienen conversaciones, usuarios y claves: guardalas en un lugar privado.
 
 ```sh
 # en tu compu / systemd
-tar czf parla-$(date +%F).tar.gz --exclude=models data/
+sqlite3 data/parla.db ".backup 'data/parla.db.backup'"
+tar czf parla-$(date +%F).tar.gz --exclude=models --exclude=parla.db --exclude='parla.db-*' data/
 
-# Docker / Compose (el volumen se llama parla-data; con compose: parla_parla-data)
+# Docker / Compose (contenedor parla, volumen parla-data; con compose: docker compose exec parla …, volumen parla_parla-data)
+docker exec parla python -c "import sqlite3; sqlite3.connect('/data/parla.db').backup(sqlite3.connect('/data/parla.db.backup'))"
 docker run --rm -v parla-data:/data:ro -v "$PWD":/backup python:3.12-slim \
-  tar czf /backup/parla-$(date +%F).tar.gz --exclude=models -C /data .
+  tar czf /backup/parla-$(date +%F).tar.gz --exclude=models --exclude=parla.db --exclude='parla.db-*' -C /data .
 
 # Kubernetes (la imagen no tiene tar: se copia con Python)
+kubectl -n parla exec deploy/parla -- python -c "import sqlite3; sqlite3.connect('/data/parla.db').backup(sqlite3.connect('/data/parla.db.backup'))"
 kubectl -n parla exec deploy/parla -- python -c \
-  "import tarfile,sys; t=tarfile.open(fileobj=sys.stdout.buffer,mode='w|gz'); t.add('/data','.',filter=lambda i: None if i.name.startswith('./models') else i); t.close()" \
+  "import tarfile,sys; t=tarfile.open(fileobj=sys.stdout.buffer,mode='w|gz'); t.add('/data','.',filter=lambda i: None if i.name.startswith('./models') or i.name in ('./parla.db','./parla.db-wal','./parla.db-shm') else i); t.close()" \
   > parla-$(date +%F).tar.gz
 ```
 
-Restaurar: con Parla apagado, descomprimir en la carpeta / volumen vacío y arrancar. En Docker:
+Restaurar: con Parla apagado, descomprimir en la carpeta / volumen vacío, renombrar `parla.db.backup` a
+`parla.db` y arrancar. En Docker:
 
 ```sh
 docker run --rm -v parla-data:/data -v "$PWD":/backup python:3.12-slim \
-  sh -c 'tar xzf /backup/parla-AAAA-MM-DD.tar.gz -C /data && chown -R 10001:10001 /data'
+  sh -c 'tar xzf /backup/parla-AAAA-MM-DD.tar.gz -C /data && mv /data/parla.db.backup /data/parla.db && chown -R 10001:10001 /data'
 ```
 
 Para mover un solo bot a otra instalación usá «Exportar agente» / «Importar agente» (no lleva versiones,
@@ -317,7 +330,10 @@ conversaciones ni claves).
 
 ## Upgrades
 
-Los datos viven fuera de la imagen; al arrancar, Parla migra los archivos viejos solo. Hacé una copia antes.
+Los datos viven fuera de la imagen; al arrancar, Parla migra los archivos viejos solo. Hacé una copia antes. Si
+venís de una versión que guardaba las conversaciones en `agents/<id>.sessions/`: al arrancar se importan a
+`parla.db` (sin pisar lo que ya esté) y la carpeta pasa a llamarse `<id>.sessions.migrated`; nunca se borra, y los
+archivos que no se pueden leer se avisan y quedan ahí.
 
 ```sh
 docker compose build && docker compose up -d                       # Compose
@@ -325,7 +341,7 @@ docker build -t registry.example.com/parla:1.1.0 . && docker push registry.examp
 kubectl -n parla set image deploy/parla parla=registry.example.com/parla:1.1.0   # Kubernetes
 ```
 
-Al reiniciar se pierden las sesiones de login (hay que volver a entrar) y las conversaciones a mitad de un pedido.
+Al reiniciar se pierden las conversaciones a mitad de un pedido; las sesiones de login se mantienen.
 
 ## Como servicio (sin contenedores)
 
