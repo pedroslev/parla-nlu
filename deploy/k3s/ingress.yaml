@@ -1,0 +1,26 @@
+# Traefik (ships with k3s). Publishes ONLY the public API, the widget and /files/; administer with kubectl port-forward
+# (or publish / and /api/ and put the domain in PARLA_HOSTS, see docs/deployment.md).
+# TLS: with cert-manager, add cert-manager.io/cluster-issuer and the tls block as in deploy/k8s/ingress.yaml.
+# Body limit: Traefik doesn't cut by size unless you add a "buffering" middleware.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: parla
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: bots.example.com
+      http:
+        paths:
+          - path: /api/v1/
+            pathType: Prefix
+            backend: {service: {name: parla, port: {name: http}}}
+          - path: /static/widget.js
+            pathType: Exact
+            backend: {service: {name: parla, port: {name: http}}}
+          - path: /files/
+            pathType: Prefix
+            backend: {service: {name: parla, port: {name: http}}}

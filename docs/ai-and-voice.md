@@ -1,128 +1,206 @@
-# IA local y voz
+# Local AI and voice
 
-Todo es opcional y todo corre en tu compu. Sin IA, Parla funciona igual: el NLU (embeddings + CRF + reglas) no
-necesita un modelo de lenguaje.
+**English** · [Español](ai-and-voice_es.md)
 
-## Instalar Ollama
+All of this is optional and all of it runs on your computer. Without AI, Parla works the same: the NLU
+(embeddings + CRF + rules) doesn't need a language model.
 
-1. Bajalo de [ollama.com](https://ollama.com) e instalalo (o en Linux `curl -fsSL https://ollama.com/install.sh | sh`).
-2. Bajá el modelo por defecto:
+## The embedding model (always)
+
+It isn't optional and it isn't "generative AI": it's what the NLU uses to compare phrases.
+
+- Model: `google/embeddinggemma-300m` with [fastembed](https://github.com/qdrant/fastembed) (ONNX, CPU), with the
+  prefix `task: sentence similarity | query: `. It was chosen by measuring with an appointments bot: it got more
+  answers right than `paraphrase-multilingual-MiniLM` and `mpnet`, with no errors, in about 10 ms per message.
+- It's used by intents, [understanding answers by meaning](#understanding-answers-by-meaning), the knowledge base
+  and «Para enseñar» (To teach). It's loaded only once.
+- It's downloaded the first time it's used (~1.2 GB) to `data/models/embeddings` inside the repo, even if you change
+  `PARLA_DATA`. For a different folder: `PARLA_EMBED_CACHE=/ruta`.
+
+## Installing Ollama
+
+1. Download it from [ollama.com](https://ollama.com) and install it (or on Linux `curl -fsSL https://ollama.com/install.sh | sh`).
+2. Pull the default model:
    ```sh
    ollama pull qwen2.5:0.5b
    ```
-   (`scripts/setup.sh` ofrece hacerlo por vos.) También se puede bajar desde la sección **IA** con «Descargar».
-3. En el agente, **Inteligencia → IA**: prendela y probá la conexión.
+   (`scripts/setup.sh --ollama` does it for you.) You can also download it from the **IA** (AI) section with
+   «Descargar» (Download).
+3. In the agent, **Inteligencia → IA** (Intelligence → AI): turn it on and test the connection.
 
-Parla habla con Ollama en `http://127.0.0.1:11434`. También acepta un servidor local compatible con OpenAI (LM
-Studio, llama.cpp server): `provider: "openai"` y su URL. No usa servicios en la nube.
+Parla talks to Ollama at `http://127.0.0.1:11434`. It also accepts a local OpenAI-compatible server (LM Studio,
+llama.cpp server): `provider: "openai"` and its URL (with or without `/v1` at the end). Downloading from the
+interface only works for Ollama. It doesn't use cloud services.
 
-## Modelos sugeridos
+## Suggested models
 
-| Modelo | Tamaño aprox. | Nota |
+| Model | Approx. size | Note |
 |---|---|---|
-| `qwen2.5:0.5b` (por defecto) | 400 MB | El más liviano. Rápido en cualquier compu. |
-| `qwen3:0.6b` | 520 MB | Muy liviano, un poco más listo. |
-| `gemma3:1b` | 820 MB | Liviano, buen español. |
-| `qwen2.5:1.5b` | 990 MB | Más preciso; necesita algo más de memoria. |
-| `llama3.2:1b` | 1,3 GB | Buen seguidor de instrucciones. |
+| `qwen2.5:0.5b` (default) | 400 MB | The lightest. Fast on any computer. |
+| `qwen3:0.6b` | 520 MB | Very light, a bit smarter. |
+| `gemma3:1b` | 820 MB | Light, good Spanish. |
+| `qwen2.5:1.5b` | 990 MB | More accurate; needs a bit more memory. |
+| `llama3.2:1b` | 1.3 GB | Good at following instructions. |
 
-El modelo queda cargado 30 minutos entre mensajes: la primera respuesta tarda más, las demás no.
+With Ollama the model stays loaded for 30 minutes between messages (`keep_alive`) and a 4096-token context is
+used: the first reply takes longer, the rest don't.
 
-## Configuración (`agent.ai`)
+## Configuration (`agent.ai`)
+
+The defaults:
 
 ```json
-{"enabled": true, "provider": "ollama", "url": "http://127.0.0.1:11434", "model": "qwen2.5:0.5b",
- "temperature": 0.2, "rescue_intents": true, "use_knowledge": true, "generative_fallback": true,
- "persona": "Hablás de vos, sos amable y breve."}
+{"enabled": false, "provider": "ollama", "url": "http://127.0.0.1:11434", "model": "qwen2.5:0.5b",
+ "temperature": 0.2, "rescue_intents": true, "use_knowledge": true, "generative_fallback": true, "persona": ""}
 ```
 
-## Qué hace cada función y sus guardas
+`persona` is how the bot talks («Hablás de vos, sos amable y breve.»); it's added to the requests that write text.
 
-La regla general: **la IA propone y el motor decide**. Si la IA está apagada, no responde o devuelve algo raro,
-el bot sigue con el comportamiento de siempre (ninguna falla de la IA corta la conversación).
+## What each feature does and its guards
 
-### Rescatar intenciones (`rescue_intents`)
+The general rule: **the AI proposes and the engine decides**. If the AI is off, doesn't respond or returns
+something odd, the bot carries on with its usual behavior (no AI failure ends the conversation). Model responses
+are requested as JSON with a schema whenever possible.
 
-Cuando la confianza no llega al umbral, o dos intenciones están empatadas, la IA elige entre las 5 más parecidas
-(o «ninguna»).
+### Rescuing intents (`rescue_intents`)
 
-- Solo puede elegir un nombre de la lista (salida JSON con `enum`).
-- Se descartan candidatas lejanas (similitud menor a `max(0.25, umbral − 0.3)`).
-- Se pregunta dos veces con el orden invertido, porque los modelos chicos tienden a elegir la primera: solo vale
-  si las dos respuestas coinciden.
+When confidence doesn't reach the threshold, or two intents are tied, the AI picks among the 5 closest (or
+"none").
 
-### Completar slots (`fill: "ai"`)
+- It can only pick a letter from the list (JSON output with `enum`).
+- Distant candidates are discarded (similarity below `max(0.25, threshold − 0.3)`).
+- It's asked twice with the order reversed, because small models tend to pick the first one: it only counts if
+  both answers match. The chosen intent gets its confidence raised to the threshold.
 
-Para un slot con `"fill": "ai"` y una `description` («el nombre y apellido»), la IA lee el valor del mensaje.
+### Filling slots (`fill: "ai"`)
 
-- El valor tiene que estar escrito en el mensaje: cada palabra se busca en el texto. Si la IA normaliza («dos» →
-  «2»), se descarta.
-- Una segunda pregunta («¿esto es un dato del tipo …? sí/no») confirma.
-- Fechas: se resuelven con `dates.py` (reglas, sin modelo) antes de llamar a la IA.
+For a slot with `"fill": "ai"` and a `description` («el nombre y apellido»), the AI reads the value from the
+message.
 
-### Base de conocimiento (`use_knowledge`)
+- Dates: if the entity is `date` or the name or description mentions a date, day, time or appointment, they're
+  resolved first with `dates.py` (rules, no model).
+- The value has to be written in the message: each word is looked up in the text. If the AI normalizes it («dos» →
+  «2»), it's discarded.
+- A second question ("is this a value of type …? yes/no") confirms it.
 
-Cargás documentos en **Inteligencia → Conocimiento**: texto, HTML, una URL o un PDF. Parla los parte en
-fragmentos (las preguntas frecuentes «P: / R:» quedan juntas) y los busca con el mismo modelo de vectores del NLU.
+### Understanding answers by meaning
 
-- **Sin IA** también funciona: si un fragmento supera `knowledge_threshold` (0.55), responde con ese fragmento.
-- **Con IA**: arma una respuesta corta usando solo los 2 mejores fragmentos. Se descarta (y se muestra el
-  fragmento tal cual) si tiene números que no están en el texto, una negación que el texto no tiene, demasiadas
-  palabras nuevas, más de 400 caracteres o restos del prompt.
-- La respuesta trae `via: "knowledge"` y `sources` con título y puntaje.
+It doesn't use generative AI: it compares with the embedding model. Only for list entities that have `phrasings`
+(the ways of saying each option). See [concepts.md](concepts.md#understanding-an-answer-by-meaning). It decides
+only when it's clear:
 
-### Repregunta generativa (`generative_fallback`)
-
-Si no entendió y no hay nada en el conocimiento, la IA escribe una repregunta corta y amable.
-
-- Tiene que ser una pregunta y no puede tener números, `$`, `@` ni links (sería un dato inventado); si no, se usa
-  una frase fija.
-- La lista de «Puedo ayudarte con: …» la arma el motor con los nombres de las intenciones, no el modelo.
-
-### Paso `agent`
-
-Una isla de IA dentro de un flujo (ver [concepts.md](concepts.md#agent-dejar-que-la-ia-converse)). El modelo
-devuelve JSON: o llama a una función, o responde.
-
-- Solo puede llamar a las funciones listadas en el paso; un nombre inventado se rechaza.
-- Hasta 4 llamadas a funciones por turno; si repite la misma llamada se le recuerda el resultado y se lo obliga a
-  contestar.
-- Solo guarda los slots listados en el paso.
-- Termina al cumplir `goal` o al llegar a `max_turns` (8 por defecto).
-- Con `knowledge: true` recibe los fragmentos relevantes como «información confiable».
-
-## Latencias de referencia
-
-Medidas en una Mac con M4 y `qwen2.5:0.5b`, con el modelo ya cargado. En otra máquina pueden variar mucho.
-
-| Qué | Tiempo |
+| Threshold | Value |
 |---|---|
-| Rescatar intención | ~0,5 s |
-| Completar un slot | ~0,4 s |
-| Respuesta de la base de conocimiento | 0,2–0,3 s |
-| Un turno del paso `agent` | 1,6–2,2 s |
-| Transcribir audio (Whisper `base`, en caliente) | ~0,4 s |
-| Leer en voz alta (piper) | ~0,4 s |
+| Minimum similarity | 0.60 |
+| Lead over the second option | 0.04 |
+| Lead "another action" needs over the best answer | 0.10 |
 
-## Voz
+If it decides, the turn has `via: "significado"` and the trace says which phrase it matched.
 
-Instalá los extras:
+### Understanding the turn with AI
+
+When the bot is waiting for an option (list, format or date), the answer doesn't contain it and the previous steps
+weren't enough, the AI reads the turn along with the recent conversation and picks what the person did: answered
+with an option, asked something, asked for something else (an intent with a flow) or nothing (said hello, said
+thanks). If it picked "another action" or "yes", it's asked again with the list reversed and only counts if it
+matches: a bad reading could confirm an appointment.
+
+### Questions in the middle of a question
+
+If the answer looks like a question («¿qué es presencial?», «cuánto sale»), the knowledge base is searched first
+(this works without AI). With AI, if the knowledge base has nothing, the model decides whether it's a question or an
+answer with question marks («¿y el jueves hay algo?»); if it's a question, the bot says it can't answer that here
+(it never makes things up) and asks again.
+
+### Knowledge base (`use_knowledge`)
+
+You load documents in **Inteligencia → Conocimiento** (Intelligence → Knowledge): text, HTML, a PDF or a URL (a
+page of up to 3 MB). Parla splits them into chunks of about 500 characters ("P: / R:" FAQs stay together) and
+searches them with the same embedding model as the NLU.
+
+- It **also works without AI**: if a chunk reaches `knowledge_threshold` (0.75 by default), it replies with that
+  chunk (up to 600 characters, without repeating the question).
+- **With AI**: it writes a one- or two-sentence answer using only the 2 best chunks. The answer is discarded (and
+  the chunk is shown as-is) if it has numbers that aren't in the text, a negation the text doesn't have, too many
+  new words, more than 400 characters or leftovers from the prompt.
+- The response has `via: "knowledge"` and `sources` with title and score.
+
+### Generative re-prompt (`generative_fallback`)
+
+If it didn't understand and there's nothing in the knowledge base, the AI writes a short, friendly follow-up
+question.
+
+- It has to be a question and can't contain numbers, `$`, `@` or links (that would be made-up data); otherwise a
+  fixed phrase is used. It's trimmed to two sentences.
+- The «Puedo ayudarte con: …» (I can help you with: …) list is built by the engine from the names of the first 8
+  intents, not by the model.
+- If the model isn't available, the usual `fallback` is used.
+
+### `agent` step
+
+An AI island inside a flow (see [concepts.md](concepts.md#agent-let-the-ai-converse)). The model returns JSON:
+either it calls a function, or it replies.
+
+- It can only call the functions listed in the step; a made-up name is rejected.
+- Up to 4 function calls per turn; if it repeats the same call, it's reminded of the result and forced to answer.
+  It remembers the latest results across turns.
+- It only saves the slots listed in the step.
+- It ends when it meets the `goal` or reaches `max_turns` (8 by default).
+- With `knowledge: true` it receives, as "trusted information", the chunks scoring at least 80% of
+  `knowledge_threshold`.
+
+## Reference latencies
+
+Measured on an M4 Mac with `qwen2.5:0.5b`, with the model already loaded. They can vary a lot on another machine.
+
+| What | Time |
+|---|---|
+| Rescuing an intent | ~0.5 s |
+| Filling a slot | ~0.4 s |
+| Knowledge base answer | 0.2–0.3 s |
+| One turn of the `agent` step | 1.6–2.2 s |
+| Transcribing audio (Whisper `base`, warm) | ~0.4 s |
+| Reading aloud (piper) | ~0.4 s |
+
+## Voice
+
+Install the extras:
 
 ```sh
 scripts/setup.sh --voice
-# o: .venv/bin/pip install -r requirements-voice.txt
+# or: .venv/bin/pip install -r requirements-voice.txt
 ```
 
-Hace falta `ffmpeg` en el sistema para algunos formatos de audio del navegador (Parla lo busca en
-`/opt/homebrew/bin`, `/usr/local/bin` y `/usr/bin`, o en el `PATH`).
+You need `ffmpeg` on the system for audio formats PyAV can't open (Parla looks for it in `/opt/homebrew/bin`,
+`/usr/local/bin` and `/usr/bin`, or on the `PATH`).
 
-- **Transcripción**: [faster-whisper](https://github.com/SYSTRAN/faster-whisper) modelo `base`, CPU, int8.
-  `PARLA_WHISPER=tiny` si la máquina es lenta. Las palabras del bot (valores y sinónimos de entidades) se pasan
-  como pista, para que escriba «muzzarella» y no «multareza». Audios de hasta 60 segundos.
-- **Voz**: [piper](https://github.com/rhasspy/piper). Voces: `es_AR-daniela-high` (con `es_MX-claude-high` y
-  `es_ES-davefx-medium` de respaldo), `pt_BR-faber-medium`, `en_US-lessac-medium`.
-- La primera vez se bajan los modelos (~150 MB) a la carpeta de modelos de Parla.
-- Un solo audio se procesa a la vez (alcanza para un servidor local).
+- **Transcription**: [faster-whisper](https://github.com/SYSTRAN/faster-whisper) `base` model, CPU, int8, with a
+  silence filter (VAD). `PARLA_WHISPER=tiny` if the machine is slow. The bot's words (entity values and synonyms,
+  up to 600 characters) are passed as `hotwords`, so it writes «muzzarella» and not «multareza». Segments the
+  model itself flags as "not speech" or as abnormal repetition are discarded (Whisper makes things up with nearly
+  silent audio). Audio from 0.3 to 60 seconds.
+- **Speech**: [piper](https://github.com/rhasspy/piper). Voices: `es_AR-daniela-high` (with `es_MX-claude-high` and
+  `es_ES-davefx-medium` as fallbacks), `pt_BR-faber-medium`, `en_US-lessac-medium`. Any other language uses the
+  Spanish voice.
+- **Pre-generated phrases**: once some voice has been downloaded, every time an agent is saved Parla generates in
+  the background the audio for the fixed phrases (messages, questions, handoffs to a person, the `fallback` and «No
+  reconocí ese dato»), in the default language and sentence by sentence. Phrases with `{{ }}` are generated on the
+  fly and aren't saved. The cache lives in `<PARLA_DATA>/models/tts-cache/` and isn't cleared automatically.
+- The first time, the models (~150 MB) are downloaded to `<PARLA_DATA>/models/`.
+- Only one audio is processed at a time (enough for a local server).
 
-Dónde se usa: el micrófono del chat de prueba, el widget con `data-voice="true"` y el endpoint
-`POST /api/v1/bots/{bot}/audio` (ver [api.md](api.md#audio-post-botsbotaudio)).
+Where it's used:
+
+- **Test chat**: when you click **Probar** (Test) you choose **Chat** or **Llamada (voz)** (Call (voice)). The
+  chat has a microphone for dictation and a button to read replies aloud.
+- **Llamada (voz)**: the whole conversation by voice, like a phone call. The browser listens with its own voice
+  detector (it cuts off after ~0.5 s of silence; if you don't speak for 15 s, it keeps waiting without sending
+  anything), the server transcribes, the bot replies and the reply is read sentence by sentence while the next one
+  is requested. The bot's voice goes through a local WebRTC connection so the browser's echo canceller subtracts it
+  from the microphone: that way you can interrupt the bot by talking. If that doesn't connect, the bot plays
+  directly and doesn't hear you while it's speaking. It shows subtitles and can be muted. If the server doesn't
+  have piper, it uses the browser's voice. With `localStorage['parla.voice.debug'] = '1'` the console shows levels
+  and timings for each turn.
+- **Widget** with `data-voice="true"`: a microphone button that records, sends to
+  `POST /api/v1/bots/{bot}/audio` with `speak: true` and plays the reply.
+- **API**: `POST /api/v1/bots/{bot}/audio` (see [api.md](api.md#post-apiv1botsbotaudio)).

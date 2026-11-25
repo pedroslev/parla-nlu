@@ -1,39 +1,45 @@
-# MCP y «Conectar con IA»
+# MCP and «Conectar con IA»
 
-Parla trae un servidor [MCP](https://modelcontextprotocol.io) que le da a un asistente (Claude Code, Codex, Claude
-Desktop, Cursor o claude.ai) herramientas para armar bots: leer la guía del formato, validar, crear, entrenar,
-probar conversaciones, publicar y revisar conversaciones reales. Así le podés pedir «armame un bot que tome turnos
-para la peluquería» y lo diseña, lo crea, lo prueba y lo corrige.
+**English** · [Español](mcp_es.md)
 
-Parla tiene que estar corriendo mientras lo usás.
+Parla ships an [MCP](https://modelcontextprotocol.io) server that gives an assistant (Claude Code, Codex, Claude
+Desktop, Cursor or claude.ai) tools to build bots: read the format guide, validate, create, train, test
+conversations, publish and review real conversations. So you can ask it «armame un bot que tome turnos para la
+peluquería» ("build me a bot that books appointments for the hair salon") and it designs it, creates it, tests it
+and fixes it.
 
-## «Conectar con IA» (un clic)
+Parla has to be running while you use it.
 
-En la interfaz, **Conectar con IA** muestra Claude Code, Codex, Claude Desktop y Cursor, si están instalados y si
-ya están conectados. Al conectar:
+## «Conectar con IA» (one click)
 
-- **Claude Code**: corre `claude mcp add --scope user parla ...` (si ya estaba, lo saca y lo vuelve a agregar con
-  la ruta y el puerto actuales).
-- **Codex**: agrega la tabla `[mcp_servers.parla]` a `~/.codex/config.toml`.
-- **Claude Desktop**: agrega `parla` a `mcpServers` en `claude_desktop_config.json` (en macOS
-  `~/Library/Application Support/Claude/`, en Windows `%APPDATA%\Claude\`, en Linux `~/.config/Claude/`).
-- **Cursor**: agrega `parla` a `~/.cursor/mcp.json`.
+In the interface, **Conectar con IA** (Connect to AI) shows Claude Code, Codex, Claude Desktop and Cursor, whether
+they're installed and whether they're already connected. When you connect:
 
-Antes de tocar un archivo guarda una copia `*.parla-backup`; si el archivo no se puede leer, no lo toca y te
-muestra qué pegar a mano («Hacerlo a mano»). Si Parla tiene usuarios, crea una clave de API para tu usuario
-(«Conectar con …») y la deja en `PARLA_TOKEN`. Después reiniciá el asistente (Claude Desktop, Codex y Cursor)
-y pedile «armame un bot que…».
+- **Claude Code**: runs `claude mcp add --scope user parla ...` (if it was already there, it removes it and adds it
+  again with the current path and port).
+- **Codex**: adds the `[mcp_servers.parla]` table to `~/.codex/config.toml`.
+- **Claude Desktop**: adds `parla` to `mcpServers` in `claude_desktop_config.json` (on macOS
+  `~/Library/Application Support/Claude/`, on Windows `%APPDATA%\Claude\`, on Linux `~/.config/Claude/`).
+- **Cursor**: adds `parla` to `~/.cursor/mcp.json`.
 
-Esta función solo responde a pedidos hechos a `127.0.0.1`/`localhost`.
+Before touching a file it saves a `*.parla-backup` copy; if the file can't be read, it leaves it alone and shows
+you what to paste by hand («Hacerlo a mano», Do it by hand). If Parla has users, it creates an API key for your
+user («Conectar con …») and puts it in `PARLA_TOKEN`. Then restart the assistant (Claude Desktop, Codex and Cursor)
+and ask it «armame un bot que…» ("build me a bot that…").
 
-## Instalación a mano
+This feature only answers requests made to `127.0.0.1`/`localhost`.
+
+## Manual installation
+
+The `mcp` package is already in `requirements.txt`. There are two ways to run it:
 
 ```sh
-.venv/bin/pip install mcp        # si todavía no está instalado
-make mcp                          # o: .venv/bin/python mcp_server.py   (stdio)
+.venv/bin/python mcp_server.py                         # stdio: the assistant starts it (the usual way)
+make mcp                                               # HTTP at http://127.0.0.1:8001/mcp (see «Hosted»)
 ```
 
-Usa el SDK oficial `mcp` 2.x (`MCPServer`).
+It uses the official `mcp` 2.x SDK (`MCPServer`). It doesn't talk to the files directly: it calls Parla's HTTP API
+(`PARLA_URL`), so it respects users and roles.
 
 ### Claude Code
 
@@ -42,7 +48,7 @@ claude mcp add --scope user parla -e PARLA_URL=http://127.0.0.1:8000 -- \
   /ruta/a/parla/.venv/bin/python /ruta/a/parla/mcp_server.py
 ```
 
-Después: «armame un bot que …» o `/mcp__parla__build_bot`.
+Then: «armame un bot que …» ("build me a bot that …") or `/mcp__parla__build_bot`.
 
 ### Claude Desktop / Cursor
 
@@ -67,9 +73,9 @@ args = ["/ruta/a/parla/mcp_server.py"]
 env = { PARLA_URL = "http://127.0.0.1:8000" }
 ```
 
-### Hosteado (claude.ai, conector personalizado)
+### Hosted (claude.ai, custom connector)
 
-En el mismo servidor que Parla:
+On the same server as Parla:
 
 ```sh
 .venv/bin/python app.py 8000 &
@@ -77,87 +83,90 @@ PARLA_URL=http://127.0.0.1:8000 PARLA_TOKEN=parla_... PARLA_MCP_ALLOWED_HOSTS=bo
   .venv/bin/python mcp_server.py --http --port 8001
 ```
 
-Escucha en `http://127.0.0.1:8001/mcp` (streamable HTTP; `--host` cambia la interfaz). Publicalo con un proxy
-HTTPS en `https://bots.midominio.com/mcp` y agregá esa URL como conector personalizado en claude.ai. **El servidor
-MCP con `--http` no tiene autenticación propia**: quien llegue a él actúa con la clave de `PARLA_TOKEN`. Protegelo
-en el proxy (ver [security.md](security.md)).
+It listens on `http://127.0.0.1:8001/mcp` (streamable HTTP; `--host` changes the interface). Publish it behind an
+HTTPS proxy at `https://bots.midominio.com/mcp` and add that URL as a custom connector in claude.ai. **The MCP
+server with `--http` has no authentication of its own**: whoever reaches it acts with the `PARLA_TOKEN` key.
+Protect it at the proxy (see [security.md](security.md)).
 
-## Variables de entorno
+## Environment variables
 
-| Variable | Por defecto | Qué es |
+| Variable | Default | What it is |
 |---|---|---|
-| `PARLA_URL` | `http://127.0.0.1:8000` | Dónde está Parla. |
-| `PARLA_TOKEN` | vacío | Se manda como `Authorization: Bearer <token>`. Hace falta si Parla tiene usuarios: rol `owner` o `editor` para armar bots; `analyst` solo puede leer. |
-| `PARLA_MCP_ALLOWED_HOSTS` | vacío | Solo con `--http` detrás de un proxy: dominios públicos separados por coma (el SDK rechaza Host desconocidos para evitar DNS rebinding). |
+| `PARLA_URL` | `http://127.0.0.1:8000` | Where Parla is. |
+| `PARLA_TOKEN` | empty | Sent as `Authorization: Bearer <token>`. Required if Parla has users: `owner` or `editor` role to build and test bots; with `analyst` only the read tools work (`list_*`, `get_*`, `diff_agent`, `agent_format_guide`, `validate_agent`). The key only sees the bots its user sees. |
+| `PARLA_MCP_ALLOWED_HOSTS` | empty | Only with `--http` behind a proxy: comma-separated public domains (the SDK rejects unknown Host headers to prevent DNS rebinding). |
 
-## Herramientas
+## Tools
 
-**Armar**
+25 tools, one resource (`parla://format-guide`) and one prompt (`build_bot`). In all of them, `agent` can be the
+id, the exact name or the slug. The ones that change something work on the **draft**.
 
-| Herramienta | Qué hace |
+**Build**
+
+| Tool | What it does |
 |---|---|
-| `list_agents` | Lista los bots. |
-| `get_agent(agent)` | La definición completa. |
-| `agent_format_guide` | La guía del formato de agente (también como recurso `parla://format-guide`). |
-| `validate_agent(agent_json)` | Valida sin guardar: pasos, flujos de `call`/`goto`, funciones y slots del paso `agent`, botones con label, idiomas de `translations`, claves. |
-| `create_agent(agent_json)` | Crea un bot (valida antes). |
-| `update_agent(agent, agent_json)` | Reemplaza el borrador. |
-| `train_agent(agent)` | Entrena. |
-| `delete_agent(agent, confirm)` | Borra; pide `confirm=True`. |
+| `list_agents()` | Lists the bots: id, name, slug, when it was trained, intents and which version each environment has. |
+| `get_agent(agent)` | The full definition of the draft. |
+| `agent_format_guide()` | The agent format guide with complete examples (also as the `parla://format-guide` resource). |
+| `validate_agent(agent_json)` | Validates without saving and returns `{ok, errors, warnings}`: step types, slots used in steps, `{{ }}` and conditions, triggers, `goto`/`call` flows, entities in markings, regex, `interrupts`, `also`, functions (language, `run()`, Python syntax, inputs), slots and functions of the `agent` step, buttons with label, `translations` languages, `{{ secret.X }}` outside an `http` step. |
+| `create_agent(agent_json)` | Validates, creates and trains a new bot. Fills in the regex of `number`, `email`, `phone` and `dni` entities if missing. Returns `{id, name, slug, trained, warnings}` (`trained.log` includes the self-evaluation). |
+| `update_agent(agent, agent_json)` | Replaces the whole draft (whatever you don't send goes back to empty) and retrains. Validates first, including that the files of `file` steps exist. Production and staging don't change. |
+| `train_agent(agent)` | Retrains the draft. |
+| `delete_agent(agent, confirm)` | Deletes the bot with its conversations; requires `confirm=True`. |
 
-**Probar**
+**Test**
 
-| Herramienta | Qué hace |
+| Tool | What it does |
 |---|---|
-| `test_conversation(agent, messages, start_data, keep, environment)` | Corre una conversación (`draft` por defecto, o `staging` / `production`). Devuelve por turno `buttons`, `language`, `handoff`, `via` y `sources`. Para tocar un botón, mandá su `value`; para otro idioma, `start_data={"idioma": "pt"}`. |
-| `test_function(agent, function, inputs)` | Corre una función (por nombre o con la definición completa antes de guardarla): `ok`, `result`/`error`, `logs`, `ms`. |
+| `test_conversation(agent, messages, start_data=None, keep=False, environment="draft")` | Starts a conversation through the API (`mcp` channel) with `start_data` and sends each message. Returns per turn: intent, confidence, entities, `answer_to`, replies, flow, awaited slot, classifications, `language`, `handoff` and, if present, `buttons`, `via`, `sources` and `files` (names of files sent); at the end, the slots, the version used and `problems` (the «⚠» messages). The conversation is deleted unless `keep=True`. To press a button, send its `value`; for another language, `start_data={"idioma": "pt"}`. |
+| `test_function(agent, function, inputs=None)` | Runs a function (by name, or with the full definition before saving it) with only the inputs it declares: `ok`, `result`/`error`, `traceback`, `logs`, `ms`, `sent` and `ignored_inputs`. |
 
-**Versiones**
+**Versions**
 
-| Herramienta | Qué hace |
+| Tool | What it does |
 |---|---|
-| `publish_agent(agent, note, environment, confirm)` | Congela el borrador como versión; opcionalmente la pone en `staging` o `production` (esta con `confirm=True`). |
-| `deploy_version(agent, environment, version, confirm)` | Apunta un entorno a una versión (a production pide `confirm=True`). |
-| `list_versions(agent)` | Versiones, entornos y registro de despliegues. |
-| `diff_agent(agent, from_ref, to_ref)` | Qué cambia entre production, staging, draft o una versión. |
-| `restore_version(agent, version, confirm)` | Vuelve el borrador a una versión. |
+| `publish_agent(agent, note, environment=None, confirm=False)` | Freezes the draft as a new version; optionally puts it in `staging` or `production` (the latter with `confirm=True`). |
+| `deploy_version(agent, environment, version, confirm=False)` | Points an environment to a version (`None` empties it). Production requires `confirm=True`. |
+| `list_versions(agent)` | Versions, environments and deployment log (with `previous` for rolling back). |
+| `diff_agent(agent, from_ref="production", to_ref="draft")` | What changes between `production`, `staging`, `draft` or a version number. |
+| `restore_version(agent, version, confirm=False)` | Resets the draft to a version and retrains it; requires `confirm=True` (unpublished changes are lost). |
 
-**Conversaciones y métricas**
+**Conversations and metrics**
 
-| Herramienta | Qué hace |
+| Tool | What it does |
 |---|---|
-| `list_sessions(agent, channel, classification, date_from, date_to)` | Conversaciones guardadas. |
-| `get_session(agent, session_id)` | Una conversación con su historial. |
-| `get_report(agent, date_from, date_to, channel)` | Conversaciones por clasificación y por día. |
-| `get_analytics(agent, date_from, date_to)` | Contención, derivaciones, fallbacks, CSAT, abandono por flujo y pregunta. |
+| `list_sessions(agent, channel, classification, date_from, date_to)` | Saved conversations, most recent first. |
+| `get_session(agent, session_id)` | One conversation with its history. |
+| `get_report(agent, date_from, date_to, channel)` | Conversations by classification and by day. |
+| `get_analytics(agent, date_from, date_to)` | Containment, handoffs, fallbacks, CSAT, drop-off by flow and question. |
 
-**Conocimiento y mejora**
+**Knowledge and improvement**
 
-| Herramienta | Qué hace |
+| Tool | What it does |
 |---|---|
-| `add_knowledge(agent, title, text \| url)` | Suma un documento (con `url`, baja la página y saca el texto). Mismo título = reemplaza. |
-| `search_knowledge(agent, query)` | Busca como el bot; `answers` dice si llegaría a contestar (puntaje ≥ `knowledge_threshold`). |
-| `list_unrecognized(agent, date_from, date_to)` | Lo que no entendió, agrupado y con intención sugerida. |
-| `teach_phrases(agent, intent, phrases)` | Agrega frases a una intención (saltea repetidas). No reentrena: después `train_agent`. |
-| `list_files(agent)` | Los archivos que la persona subió al agente (id, nombre, tipo, tamaño), para usarlos en un paso `file`. El MCP no sube archivos. |
-| `list_secret_names(agent)` | Los **nombres** de las claves, cuáles usa y cuáles faltan. El MCP nunca lee ni escribe valores. |
+| `add_knowledge(agent, title="", text=None, url=None)` | Adds a document with `text` or with `url` (one of the two; with `url` it downloads the page and extracts the text). Same title = replaces (`replaced: true`). No retraining needed. |
+| `search_knowledge(agent, query, k=3)` | Searches the way the bot does; `answers` says whether it would answer (score ≥ `knowledge_threshold`). |
+| `list_unrecognized(agent, date_from, date_to)` | What it didn't understand, grouped and with a suggested intent. |
+| `teach_phrases(agent, intent, phrases)` | Adds phrases to an existing intent (skips duplicates; markings must use existing entities). Doesn't retrain: run `train_agent` afterwards. |
+| `list_files(agent)` | The files the person uploaded to the agent (id, name, type, size), for use in a `file` step. The MCP doesn't upload files. |
+| `list_secret_names(agent)` | The **names** of the secrets, which ones are used and which are missing. The MCP never reads or writes values. |
 
-**Prompt**: `build_bot(description)` enseña buenas prácticas: botones para opciones cerradas, conocimiento para
-preguntas frecuentes, `handoff` para reclamos, flujos del sistema prendidos, claves siempre por
-`{{ secret.X }}` y probar cada función con `test_function`.
+**Prompt**: `build_bot(description)` guides the AI step by step: varied and balanced phrases, the entity type
+according to the data, functions tested with `test_function`, buttons for closed options, knowledge for frequent
+questions, `handoff` for complaints, system flows turned on, secrets always via `{{ secret.X }}`, classifications,
+reviewing the self-evaluation, testing the draft, publishing to staging and moving to production only with the
+person's OK.
 
-## Flujo recomendado
+## Recommended workflow
 
-`create_agent` y `update_agent` solo cambian el **borrador**: los usuarios reales no ven nada hasta que se
-publica.
+`create_agent` and `update_agent` only change the **draft**: real users see nothing until it's published.
 
-1. Editar el borrador → `test_conversation` (borrador).
+1. Edit the draft → `test_conversation` (draft).
 2. `diff_agent` → `publish_agent(note, environment="staging")` → `test_conversation(environment="staging")`.
-3. Con el visto bueno de la persona: `deploy_version(environment="production", version=N, confirm=True)`.
-4. Rollback: `deploy_version` a production con la versión anterior (`list_versions` muestra `previous`).
+3. With the person's approval: `deploy_version(environment="production", version=N, confirm=True)`.
+4. Rollback: `deploy_version` to production with the previous version (`list_versions` shows `previous`).
 
-## Antes de usarlo con datos reales
+## Before using it with real data
 
-- Revisá los pasos `http` que arme la IA: un bot puede llamar a cualquier URL desde tu servidor, incluida tu red
-  interna.
-- Las funciones corren código en la máquina de Parla. En un Parla compartido, arrancalo con `PARLA_FUNCTIONS=0`.
+- Review the `http` steps the AI builds: a bot can call any URL from your server, including your internal network.
+- Functions run code on Parla's machine. On a shared Parla, start it with `PARLA_FUNCTIONS=0`.

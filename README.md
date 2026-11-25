@@ -1,254 +1,279 @@
 # Parla
 
-> **English summary.** Parla is a local, CPU-friendly conversational bot builder in the spirit of Rasa, with a
-> no-code web UI in Spanish. You define intents, entities, slots and flows; Parla trains a multilingual
-> embedding kNN classifier plus a CRF entity extractor in seconds, lets you test in a chat panel, publish
-> immutable versions to staging/production, and serve the bot over a small HTTP API or an embeddable web widget.
-> Optional local AI via Ollama (default `qwen2.5:0.5b`) rescues intents, fills slots and answers from a knowledge
-> base, always with guardrails. Optional local voice (faster-whisper + piper). It also ships an MCP server so
-> Claude Code, Codex, Claude Desktop or Cursor can design and test bots for you. Everything runs on your machine,
-> bound to `127.0.0.1`. Docs are in Spanish under [`docs/`](docs/README.md).
+**English** · [Español](README_es.md)
 
-**Parla** es un armador de bots conversacionales que corre en tu compu, sin GPU y sin nube. Armás el bot desde
-una interfaz web sin escribir código: qué cosas tiene que entender (intenciones), qué datos sacar del mensaje
-(entidades), qué recordar (slots) y qué hacer en cada caso (flujos). Entrenás en segundos, lo probás en un chat al
-costado, publicás una versión y lo conectás a tu web, a tu sistema o a un IVR por una API HTTP simple.
+**Parla** is a conversational bot builder that runs on your computer, with no GPU and no cloud. You build the bot
+from a web interface without writing code: what it has to understand (intents), what data to pull out of a
+message (entities), what to remember (slots) and what to do in each case (flows). You train in seconds, test it in
+a side chat panel, publish a version and connect it to your website, your system or an IVR through a simple HTTP
+API.
 
-**¿Para quién es?**
+The interface is in Spanish, and Parla is aimed at bots for Spanish-speaking users.
 
-- Equipos chicos y pymes que quieren un bot de atención (turnos, pedidos, preguntas frecuentes) sin depender de
-  una plataforma paga ni mandar las conversaciones afuera.
-- Desarrolladores que quieren algo tipo Rasa pero más liviano: un solo proceso Python, archivos JSON en disco,
-  sin base de datos, con una API para integrarlo.
-- Quien quiera que una IA (Claude, Codex, Cursor) le arme el bot: Parla trae un servidor MCP.
+**Who is it for?**
 
-## Qué trae
+- Small teams and businesses that want a customer-service bot (appointments, orders, FAQs) without depending on a
+  paid platform or sending conversations to third parties.
+- Developers who want something like Rasa but lighter: a single Python process, JSON files on disk, no database,
+  with an API for integration.
+- Anyone who wants an AI (Claude, Codex, Cursor) to build the bot for them: Parla ships an MCP server.
 
-### Comprensión
-- Intenciones por similitud: embeddings multilingües (`google/embeddinggemma-300m` vía fastembed) y
-  vecino más cercano. Sumar una frase no requiere reentrenar un modelo pesado.
-- Entidades de varios tipos: por ejemplos marcados en las frases (`[pedro](nombre)`, aprendidas con un CRF de
-  python-crfsuite), listas de opciones con sinónimos, formatos (número, email, teléfono, DNI, regex propia) y
-  fechas en lenguaje natural en español rioplatense («el jueves que viene a la tarde»).
-- Entrenamiento con autoevaluación (deja una frase afuera y mira a dónde la manda), matriz de confusión,
-  consejos concretos y registro de lo que hizo cada paso.
-- Multilingüe: español, portugués e inglés en la misma charla (traducciones por mensaje, detección de idioma).
+## Features
 
-### Conversaciones
-- Flujos con pasos: mensaje, pregunta, guardar valor, consulta HTTP, condición, saltar, subflujo, fin,
-  clasificar, función, pasar con una persona y paso de IA.
-- Plantillas `{{ }}` con expresiones CEL, botones de respuesta rápida, flujo de inicio con datos precargados.
-- Flujos del sistema editables: cancelar, repetir, «¿quisiste decir…?», retomar lo de antes, corregir un dato,
-  pasar con una persona, «¿algo más?» y encuesta de satisfacción (CSAT).
+### Understanding
+- Intents by similarity: multilingual embeddings (`google/embeddinggemma-300m` via fastembed) and nearest
+  neighbour. Adding a phrase doesn't require retraining a heavy model.
+- Answers understood by meaning, without generative AI: given «¿presencial o virtual?» ("in person or online?"),
+  the reply «la quiero desde mi casa» ("I want it from home") picks «virtual» if you taught it those ways of
+  saying it (`phrasings` in the entity JSON; the interface doesn't edit it yet).
+- Several entity types: from examples marked in phrases (`[pedro](nombre)`, learned with a python-crfsuite CRF),
+  option lists with synonyms, formats (number, email, phone, DNI, custom regex) and natural-language dates in
+  Rioplatense Spanish («el jueves que viene a la tarde», "next Thursday afternoon").
+- Training with self-evaluation (leaves one phrase out and checks where it gets sent), confusion matrix, concrete
+  tips and a log of what each step did.
+- Multilingual: Spanish, Portuguese and English in the same conversation (per-message translations, language
+  detection).
 
-### IA local (opcional)
-- Con Ollama (o un servidor local compatible con OpenAI como LM Studio o llama.cpp). Modelo por defecto
+### Conversations
+- Flows with steps: message, question, set value, HTTP request, condition, jump, subflow, end, classify, send a
+  file (PDF, image, spreadsheet…), function, hand off to a person, and AI step.
+- While it's asking something, it understands corrections, side questions («¿qué es presencial?», "what does in
+  person mean?", answered from the knowledge base) and interruptions (it handles the other thing and then goes back
+  to the question).
+- `{{ }}` templates with CEL expressions, quick-reply buttons, a start flow with preloaded data.
+- Editable system flows: cancel, repeat, "did you mean…?", resume what was going on before, correct a value, hand
+  off to a person, "anything else?" and a satisfaction survey (CSAT).
+
+### Local AI (optional)
+- With Ollama (or a local OpenAI-compatible server such as LM Studio or llama.cpp). Default model
   `qwen2.5:0.5b`, ~400 MB.
-- Rescata intenciones dudosas, completa slots a partir de una descripción, responde desde la base de
-  conocimiento, repregunta cuando no entiende y conversa en un paso `agent` con funciones como herramientas.
-- La IA propone y el motor decide: solo se aceptan intenciones de la lista, valores que están en el texto y
-  funciones permitidas. Si la IA está apagada o no responde, el bot sigue funcionando igual.
-- Voz local (opcional): transcripción con faster-whisper y lectura en voz alta con piper (voz `es_AR`).
+- Rescues uncertain intents, fills slots from a description, reads an answer together with the recent
+  conversation (did they answer, ask something else or request a different action), answers from the knowledge
+  base, asks again when it doesn't understand, and converses in an `agent` step with functions as tools.
+- The AI proposes and the engine decides: only intents from the list, values that appear in the text and allowed
+  functions are accepted. If the AI is off or doesn't respond, the bot keeps working the same.
+- Local voice (optional): transcription with faster-whisper and text-to-speech with piper (`es_AR` voice). The test
+  chat has a **voice call** you can interrupt by speaking; the bot's fixed phrases are pre-generated so they play
+  instantly.
 
-### Operación
-- Bandeja: tomar una conversación, responderle a la persona y devolverla al bot.
-- Conversaciones guardadas con filtros, clasificaciones y reportes por día.
-- «Para enseñar»: lo que la gente escribió y el bot no entendió, agrupado por parecido y con la intención sugerida.
-- Analítica: contención, derivaciones, fallbacks, CSAT y abandono por flujo y pregunta.
+### Operations
+- **Bandeja** (Inbox): take over a conversation, reply to the person and hand it back to the bot.
+- Saved conversations with filters, classifications and daily reports. Each one can be replayed as a test against
+  another version, or you can keep talking as that customer.
+- **Para enseñar** (To teach): what people wrote that the bot didn't understand, grouped by similarity and with a
+  suggested intent.
+- Analytics: containment, handoffs, fallbacks, CSAT and drop-off by flow and question.
 
-### Publicación
-- Borrador → versiones numeradas inmutables → entornos `staging` y `production`. Diff antes de publicar,
-  rollback apuntando a una versión anterior, y cada conversación queda atada a la versión con la que empezó.
-- API HTTP pública (`/api/v1`), widget web embebible con un `<script>`, exportar e importar agentes.
-- Temas claro, oscuro y colorido en la interfaz.
+### Publishing
+- Draft → immutable numbered versions → `staging` and `production` environments. Diff before publishing, rollback
+  by pointing to an earlier version, and each conversation stays tied to the version it started with.
+- Public HTTP API (`/api/v1`), web widget embeddable with a `<script>`, agent export and import.
+- Light, dark and colorful themes in the interface.
 
-### Seguridad
-- Usuarios con roles (dueño, editor, analista, atención), bots visibles por usuario y claves de API.
-- Bóveda de claves por agente (`{{ secret.NOMBRE }}`): los valores no viajan en el JSON del bot y se tapan en
-  las trazas.
-- Escucha solo en `127.0.0.1` y rechaza pedidos de otros sitios web salvo los autorizados para el widget.
+### Security
+- Users with roles (owner, editor, analyst, support agent), per-user bot visibility and API keys.
+- Per-agent secret vault (`{{ secret.NOMBRE }}`): values don't travel in the bot JSON and are masked in traces.
+- Listens on `127.0.0.1` (unless you change `PARLA_HOST`) and rejects requests from other websites except those
+  authorized for the widget.
 
-### Integraciones
-- Servidor MCP con 25 herramientas para armar, validar, entrenar, probar, publicar y analizar bots.
-- «Conectar con IA»: un botón registra Parla en Claude Code, Codex, Claude Desktop o Cursor.
-- Funciones en Python o JavaScript para la lógica que un paso HTTP no resuelve.
+### Integrations
+- MCP server with 25 tools to build, validate, train, test, publish and analyze bots.
+- **Conectar con IA** (Connect to AI): one button registers Parla in Claude Code, Codex, Claude Desktop or Cursor.
+- Functions in Python or JavaScript for logic that an HTTP step can't handle.
 
-## Capturas
+## Screenshots
 
-| Entrada | Tus agentes |
+| Login | Your agents |
 |---|---|
-| ![Pantalla de entrada](docs/img/login.png) | ![Inicio con los agentes](docs/img/inicio.png) |
-| **Editor de flujos** (con los flujos del sistema) | **Entidades con sinónimos** (tema oscuro) |
-| ![Editor de flujos](docs/img/flujos.png) | ![Entidades en tema oscuro](docs/img/oscuro.png) |
+| ![Login screen](docs/img/login.png) | ![Home with the agents](docs/img/inicio.png) |
+| **Flow editor** (with the system flows) | **Entities with synonyms** (dark theme) |
+| ![Flow editor](docs/img/flujos.png) | ![Entities in dark theme](docs/img/oscuro.png) |
 
-Tres temas: claro, oscuro y colorido.
+Three themes: light, dark and colorful.
 
-![Inicio en tema colorido](docs/img/colorido.png)
+![Home in colorful theme](docs/img/colorido.png)
 
-## Arranque rápido
+## Quick start
 
-Requisitos:
+Requirements:
 
-- **Python 3.11 o más nuevo** (obligatorio).
-- Node.js (opcional): solo para funciones escritas en JavaScript.
-- [Ollama](https://ollama.com) (opcional): para las funciones de IA local.
-- Extras de voz (opcional): `requirements-voice.txt` y `ffmpeg` en el sistema.
+- **Python 3.11 or newer** (required).
+- Node.js (optional): only for functions written in JavaScript.
+- [Ollama](https://ollama.com) (optional): for the local AI features.
+- Voice extras (optional): `requirements-voice.txt` and `ffmpeg` on the system.
 
-Con el script (recomendado):
+With the script (recommended):
 
 ```sh
-scripts/setup.sh            # crea .venv e instala las dependencias
-scripts/setup.sh --voice    # además instala la voz local
-make run                    # abre Parla en http://127.0.0.1:8000
+scripts/setup.sh            # creates .venv and installs the dependencies
+scripts/setup.sh --voice    # also installs local voice
+make run                    # opens Parla at http://127.0.0.1:8000
 ```
 
-O con `make`:
+Or with `make`:
 
 ```sh
 make setup
 make run
 ```
 
-A mano:
+By hand:
 
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
-.venv/bin/pip install -r requirements-voice.txt     # opcional
-.venv/bin/python app.py                              # o: .venv/bin/python app.py 8080
+.venv/bin/pip install -r requirements-voice.txt     # optional
+.venv/bin/python app.py                              # or: .venv/bin/python app.py 8080
 ```
 
-Abrí `http://127.0.0.1:8000`. La primera vez se crea un bot de ejemplo («Seguimiento de pedidos») y se baja el
-modelo de vectores (unos cientos de MB, una sola vez). Para probar algo más completo, importá
-`examples/pizzeria.json` o `examples/turnos-clinica.json` con «Importar agente».
+Open `http://127.0.0.1:8000`. The first time, a sample bot is created («Seguimiento de pedidos», order tracking)
+and, when you train, the embedding model is downloaded (~1.2 GB, only once). To try something more complete,
+import `examples/pizzeria.json` or `examples/turnos-clinica.json` with **Importar agente** (Import agent).
 
-**Login:** mientras no exista ningún usuario, Parla está abierto: cualquiera que llegue a la página puede ver y
-cambiar todo. El primer usuario que crees (en «Usuarios») queda como dueño y desde ahí se pide iniciar sesión.
+**Login:** as long as no user exists, Parla is open: anyone who reaches the page can see and change everything.
+The first user you create (in **Usuarios**, Users) becomes the owner, and from then on login is required.
 
-IA local (opcional):
+Local AI (optional):
 
 ```sh
-ollama pull qwen2.5:0.5b
+ollama pull qwen2.5:0.5b          # or: scripts/setup.sh --ollama
 ```
 
-Después prendela en la sección **IA** del agente. Más en [docs/ai-and-voice.md](docs/ai-and-voice.md).
+Then turn it on in the agent's **IA** (AI) section. More in [docs/ai-and-voice.md](docs/ai-and-voice.md).
 
-## Arquitectura
+With Docker:
+
+```sh
+docker compose up -d              # http://127.0.0.1:8000; with --profile ai it adds Ollama
+```
+
+There are also Kubernetes (and k3s) manifests in `deploy/`. How to use them, the proxy and backups are covered in
+[docs/deployment.md](docs/deployment.md).
+
+## Architecture
 
 ```mermaid
 flowchart LR
-    UI["Interfaz web<br/>web/index.html + web/static/*.js"] -->|/api/agents, /api/users| S
-    W["Widget web<br/>web/static/widget.js"] -->|/api/v1 events, audio, messages| S
-    EXT["Tu sistema / IVR / CRM"] -->|/api/v1| S
+    UI["Web interface<br/>web/index.html + web/static/*.js"] -->|/api/agents, /api/users| S
+    W["Web widget<br/>web/static/widget.js"] -->|/api/v1 events, audio, messages| S
+    EXT["Your system / IVR / CRM"] -->|/api/v1| S
     MCP["parla/mcp_server.py<br/>(Claude Code, Codex, Cursor...)"] -->|HTTP + PARLA_TOKEN| S
-    S["parla/server.py<br/>HTTP + motor de flujos + NLU"] --> AUTH[auth.py<br/>usuarios y roles]
-    S --> NLU["fastembed kNN<br/>+ CRF + regex/listas"]
-    S --> BR[brain.py<br/>IA con guardas]
-    BR --> LLM[llm.py] --> OLL[(Ollama local)]
+    S["parla/server.py<br/>HTTP + flow engine + NLU"] --> AUTH[auth.py<br/>users and roles]
+    S --> NLU["fastembed kNN<br/>+ CRF + regex/lists"]
+    S --> BR[brain.py<br/>AI with guardrails]
+    BR --> LLM[llm.py] --> OLL[(local Ollama)]
     S --> KB[knowledge.py]
-    S --> RUN[runner.py<br/>funciones Python/JS]
+    S --> FI[files.py<br/>files for the file step]
+    S --> RUN[runner.py<br/>Python/JS functions]
     S --> V[voice.py<br/>whisper + piper]
-    S --> VAULT[vault.py<br/>claves]
+    S --> VAULT[vault.py<br/>secrets]
     S --> INS[insights.py]
-    S --> D[(data/<br/>agentes, versiones,<br/>conversaciones, usuarios)]
+    S --> D[(data/<br/>agents, versions,<br/>conversations, files, users)]
 ```
 
-## Estructura del proyecto
+## Project structure
 
 ```
-app.py                  entrada: python app.py [puerto]
-mcp_server.py           atajo al servidor MCP (parla/mcp_server.py)
+app.py                  entry point: python app.py [port]
+mcp_server.py           shortcut to the MCP server (parla/mcp_server.py)
 parla/
-  server.py             HTTP, motor (handle/run/begin), NLU, versiones, API pública
-  auth.py               usuarios, roles, sesiones y claves de API
-  brain.py              IA encima del motor (rescate, slots, fallback, paso agent)
-  llm.py                cliente de modelos locales (Ollama / compatible OpenAI)
-  knowledge.py          base de conocimiento: extraer texto y buscar
-  dates.py              fechas en lenguaje natural, por reglas
-  insights.py           «para enseñar» y analítica
-  runner.py             funciones en un proceso aparte
-  vault.py              claves secretas por agente
-  voice.py              voz local
-  connect.py            «Conectar con IA»
-  mcp_server.py         servidor MCP
-web/index.html          la interfaz
-web/static/*.js         secciones de la interfaz y el widget
-tests/                  test_*.py y run_all.py
-examples/               bots de ejemplo para importar: pizzeria.json y turnos-clinica.json (botones, conocimiento, pase a persona, fechas)
-data/                   datos en tiempo de ejecución (no se versiona)
+  server.py             HTTP, engine (handle/run/begin), NLU, versions, public API
+  auth.py               users, roles, sessions and API keys
+  brain.py              AI on top of the engine (rescue, slots, reading answers, fallback, agent step)
+  llm.py                client for local models (Ollama / OpenAI-compatible)
+  knowledge.py          knowledge base: text extraction and search
+  files.py              files sent by the «Enviar un archivo» (Send a file) step
+  dates.py              rule-based natural-language dates
+  insights.py           «para enseñar» (to teach) and analytics
+  runner.py             functions in a separate process
+  vault.py              per-agent secrets
+  voice.py              local voice (and cache of pre-generated phrases)
+  connect.py            «Conectar con IA» (Connect to AI)
+  mcp_server.py         MCP server
+web/index.html          the interface
+web/static/*.js         interface sections and the widget
+tests/                  test_*.py and run_all.py
+examples/               sample bots to import: pizzeria.json and turnos-clinica.json (buttons, knowledge, handoff, dates)
+data/                   runtime data (not versioned)
+deploy/                 Kubernetes (k8s/) and k3s (k3s/) manifests
+Dockerfile, docker-compose.yml
 scripts/setup.sh, Makefile, requirements*.txt, .env.example
 ```
 
-## Configuración
+## Configuration
 
-Todo es opcional. Copiá `.env.example` para ver los valores.
+Everything is optional. Copy `.env.example` to see the values.
 
-| Variable | Por defecto | Para qué |
+| Variable | Default | Purpose |
 |---|---|---|
-| `PARLA_DATA` | `data/` | Dónde se guardan agentes, versiones, conversaciones, usuarios y modelos. |
-| `PARLA_USERS` | dentro de la carpeta de datos (`users.json`) | Archivo de usuarios. |
-| `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` u `off` apagan las funciones de los agentes. |
-| `PARLA_WHISPER` | `base` | Modelo de faster-whisper (`tiny` si la máquina es lenta). |
-| `PARLA_URL` | `http://127.0.0.1:8000` | (MCP) dónde está Parla. |
-| `PARLA_TOKEN` | vacío | (MCP) clave de API que se manda como `Authorization: Bearer`. |
-| `PARLA_MCP_ALLOWED_HOSTS` | vacío | (MCP con `--http`) dominios públicos aceptados detrás de un proxy. |
+| `PARLA_DATA` | `data/` | Where agents, versions, conversations, users and models are stored. |
+| `PARLA_USERS` | inside the data folder (`users.json`) | Users file. |
+| `PARLA_HOST` | `127.0.0.1` | Address it listens on (the Docker image uses `0.0.0.0`). |
+| `PARLA_EMBED_CACHE` | the repo's `data/models/embeddings` | Where the embedding model (~1.2 GB) is stored. |
+| `PARLA_HOSTS` | empty | Extra hostnames used to reach Parla behind a proxy (see [docs/deployment.md](docs/deployment.md)). |
+| `PARLA_SECURE_COOKIE` | empty | `1` marks the session cookie as `Secure` (behind HTTPS). |
+| `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` or `off` disable agent functions. |
+| `PARLA_WHISPER` | `base` | faster-whisper model (`tiny` if the machine is slow). |
+| `PARLA_URL` | `http://127.0.0.1:8000` | (MCP) where Parla is. |
+| `PARLA_TOKEN` | empty | (MCP) API key sent as `Authorization: Bearer`. |
+| `PARLA_MCP_ALLOWED_HOSTS` | empty | (MCP with `--http`) public domains accepted behind a proxy. |
 
-El puerto se pasa como argumento: `python app.py 8080`. La dirección es siempre `127.0.0.1`.
+The port is passed as an argument: `python app.py 8080`.
 
-## Pruebas
+## Tests
 
 ```sh
-make test                         # o: .venv/bin/python tests/run_all.py
-.venv/bin/python tests/test_app.py   # una sola
+make test                         # or: .venv/bin/python tests/run_all.py
+.venv/bin/python tests/test_app.py   # a single one
 ```
 
-Son scripts con `assert`, sin framework. `test_app.py`, `test_insights.py`, `test_connect.py` y
-`test_knowledge.py` no necesitan nada externo; `test_auth.py` levanta su propio servidor en el puerto 8124;
-`test_ai.py` saltea lo que necesita Ollama si no está; `test_voice.py` necesita los extras de voz;
-`test_mcp.py` necesita Parla corriendo (`PARLA_URL`) y el paquete `mcp`.
+They are scripts with `assert`, no framework, and they never touch your `data/`. `test_app.py`,
+`test_insights.py`, `test_connect.py` and `test_auth.py` need nothing external (`test_auth.py` starts its own
+server on a free port); `test_knowledge.py` and `test_mcp.py` need the embedding model (`test_mcp.py` starts its
+own temporary Parla); `test_ai.py` skips what needs Ollama if it isn't there; `test_voice.py` is skipped without
+the voice extras. Details in [docs/development.md](docs/development.md#tests).
 
-## Hoja de ruta
+## Roadmap
 
-Lo que **todavía no** hace:
+What it does **not** do yet:
 
-- Canal de WhatsApp.
-- Endpoint público o túnel integrado (hoy lo publicás vos con un proxy).
-- Plantillas de bots y campañas salientes.
-- Memoria por usuario entre conversaciones.
-- Tapado automático de datos personales (PII) en las conversaciones guardadas.
-- Política de retención (las conversaciones no se borran solas).
-- Telefonía (la API sirve para un IVR, pero no hay integración directa).
+- WhatsApp channel.
+- Built-in public endpoint or tunnel (today you publish it yourself with a proxy).
+- Bot templates and outbound campaigns.
+- Per-user memory across conversations.
+- Automatic masking of personal data (PII) in saved conversations.
+- Retention policy (conversations aren't deleted automatically).
+- Telephony (the API works for an IVR, but there's no direct integration).
 
-## Comparación
+## Comparison
 
-Una mirada general, no un benchmark. Cada herramienta tiene muchas más opciones de las que entran acá.
+A general overview, not a benchmark. Each tool has many more options than fit here.
 
 | | Parla | Rasa | Dialogflow (Google) | Botpress |
 |---|---|---|---|---|
-| Dónde corre | Tu compu, un proceso Python | Self-hosted | Nube de Google | Nube (también tuvo versión self-hosted) |
-| Interfaz sin código | Sí, incluida | Principalmente archivos YAML y CLI; interfaces visuales en la edición comercial | Sí (consola; flujos visuales en CX) | Sí, editor visual |
-| NLU | Embeddings + kNN, CRF, reglas | Pipeline de ML configurable y enfoques con LLM | Gestionado por Google | Basado en LLM en las versiones actuales |
-| LLM | Opcional, local (Ollama) | Opcional, configurable | Integrado con modelos de Google | Central en la plataforma |
-| Escala y ecosistema | Pensado para un servidor chico | Maduro, producción a gran escala | Gestionado, escala de Google | Gran ecosistema de integraciones |
-| Canales | API HTTP y widget web | Muchos conectores | Muchas integraciones | Muchos canales |
-| Costo | Gratis, local | Open source + edición paga | Pago por uso | Plan gratis + planes pagos |
+| Where it runs | Your computer (or a container), one Python process | Self-hosted | Google Cloud | Cloud (it also had a self-hosted version) |
+| No-code interface | Yes, included | Mainly YAML files and CLI; visual interfaces in the commercial edition | Yes (console; visual flows in CX) | Yes, visual editor |
+| NLU | Embeddings + kNN, CRF, rules | Configurable ML pipeline and LLM-based approaches | Managed by Google | LLM-based in current versions |
+| LLM | Optional, local (Ollama) | Optional, configurable | Integrated with Google models | Central to the platform |
+| Scale and ecosystem | Designed for a small server | Mature, large-scale production | Managed, Google scale | Large integration ecosystem |
+| Channels | HTTP API and web widget | Many connectors | Many integrations | Many channels |
+| Cost | Free, local | Open source + paid edition | Pay per use | Free plan + paid plans |
 
-Si necesitás muchos canales, alta disponibilidad o un equipo grande, las otras opciones son más maduras.
-Parla apunta a que un bot útil quede andando en una tarde, en tu máquina y sin mandar datos afuera.
+If you need many channels, high availability or a large team, the other options are more mature. Parla aims to
+get a useful bot running in an afternoon, on your machine and without sending data elsewhere.
 
-## Documentación
+## Documentation
 
-Todo en [`docs/`](docs/README.md): primeros pasos, conceptos, API, MCP, IA y voz, seguridad, despliegue,
-desarrollo y preguntas frecuentes.
+Everything is in [`docs/`](docs/README.md): getting started, concepts, API, MCP, AI and voice, security,
+deployment, development and FAQ.
 
-## Contribuir
+## Contributing
 
-1. Abrí un issue contando qué querés cambiar.
-2. Seguí el estilo del código: funciones chicas, comentarios en español, la solución más simple que funcione y
-   comentarios `ponytail:` cuando se toma un atajo con un límite conocido (ver
-   [docs/development.md](docs/development.md)).
-3. Sumá o ajustá una prueba en `tests/` y corré `make test` antes de mandar el cambio.
+1. Open an issue describing what you want to change.
+2. Follow the code style: small functions, comments in Spanish, the simplest solution that works, and `ponytail:`
+   comments when taking a shortcut with a known limit (see [docs/development.md](docs/development.md)).
+3. Add or adjust a test in `tests/` and run `make test` before submitting the change.
 
-## Licencia
+## License
 
-Pendiente de definir.
+To be defined.

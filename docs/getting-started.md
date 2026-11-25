@@ -1,102 +1,112 @@
-# Primeros pasos: tu primer bot
+# Getting started: your first bot
 
-Vamos a armar un bot de pizzería que toma pedidos: entiende «quiero una pizza de muzza», pregunta lo que falta
-y confirma. Toma unos 15 minutos. (Si querés ver uno terminado, importá `examples/pizzeria.json` con
-«Importar agente».)
+**English** · [Español](getting-started_es.md)
 
-## 0. Instalar y abrir
+We're going to build a pizzeria bot that takes orders: it understands «quiero una pizza de muzza» ("I want a
+mozzarella pizza"), asks for whatever is missing and confirms. It takes about 15 minutes. (If you want to see a
+finished one, import `examples/pizzeria.json` with **Importar agente** (Import agent).)
+
+The bot's phrases below are in Spanish, since Parla bots are aimed at Spanish-speaking users.
+
+## 0. Install and open
 
 ```sh
-scripts/setup.sh     # o: make setup
-make run             # o: .venv/bin/python app.py
+scripts/setup.sh     # or: make setup
+make run             # or: .venv/bin/python app.py
 ```
 
-Abrí `http://127.0.0.1:8000`. La primera vez Parla baja el modelo de vectores (una sola vez).
+Open `http://127.0.0.1:8000`. The first time it trains, Parla downloads the embedding model (~1.2 GB, only once).
+Python 3.11 or newer is required. If you prefer a container, see [deployment.md](deployment.md).
 
-En «Tus agentes» creá un agente nuevo y ponele un nombre, por ejemplo «Pizzería».
+In **Tus agentes** (Your agents), create a new agent and give it a name, for example «Pizzería».
 
-## 1. Intenciones: qué tiene que entender
+## 1. Intents: what it has to understand
 
-En **Construir → Intenciones** creá dos:
+In **Construir → Intenciones** (Build → Intents), create two:
 
-- `Saludar`: «hola», «buenas», «buen día», «qué tal».
-- `Pedir pizza`: «quiero una pizza», «me mandás una de muzza», «quiero pedir», «dos de fugazza», «quiero hacer un
-  pedido».
+- `Saludar` (greet): «hola», «buenas», «buen día», «qué tal».
+- `Pedir pizza` (order pizza): «quiero una pizza», «me mandás una de muzza», «quiero pedir», «dos de fugazza»,
+  «quiero hacer un pedido».
 
-Con 5 a 10 frases distintas por intención ya anda bien. Variá las palabras, no solo el final.
+5 to 10 different phrases per intent already work well. Vary the words, not just the ending.
 
-## 2. Entidades: qué datos sacar del mensaje
+## 2. Entities: what data to pull out of the message
 
-En **Entidades** creá:
+In **Entidades** (Entities), create:
 
-- `gusto`, del tipo **De una lista de opciones**, con valores `muzzarella`, `fugazza`, `napolitana`. En
-  sinónimos poné que «muzza» quiere decir `muzzarella`.
-- `cantidad`, del tipo **Un número**.
+- `gusto` (flavor), of type **De una lista de opciones** (From a list of options), with values `muzzarella`,
+  `fugazza`, `napolitana`. In synonyms, set «muzza» to mean `muzzarella`.
+- `cantidad` (quantity), of type **Un número** (A number).
 
-Ahora marcá los datos dentro de las frases. En la intención `Pedir pizza`, seleccioná «muzza» en «me mandás una
-de muzza» y elegí `gusto`. Por dentro queda así:
+Now mark the data inside the phrases. In the `Pedir pizza` intent, select «muzza» in «me mandás una de muzza» and
+choose `gusto`. Internally it looks like this:
 
 ```
 me mandás una de [muzza](gusto)
 [dos](cantidad) de [fugazza](gusto)
 ```
 
-Marcar importa sobre todo para las entidades **Por los ejemplos que marco en las frases** (por ejemplo un
-nombre): ahí Parla aprende del contexto y reconoce valores nuevos. Con 3 o más ejemplos marcados en frases
-distintas la reconoce mejor.
+Marking matters most for entities of type **Por los ejemplos que marco en las frases** (From the examples I mark
+in the phrases), for example a name: there Parla learns from context and recognizes new values. With 3 or more
+marked examples in different phrases it recognizes them better.
 
-## 3. Slots: qué recordar
+## 3. Slots: what to remember
 
-En **Slots** creá `gusto` (conectado a la entidad `gusto`) y `cantidad` (conectado a `cantidad`). Un slot es la
-memoria de la conversación: cuando la persona dice un gusto, queda guardado en el slot `gusto`.
+In **Slots**, create `gusto` (connected to the `gusto` entity) and `cantidad` (connected to `cantidad`). A slot is
+the conversation's memory: when the person says a flavor, it is stored in the `gusto` slot.
 
-## 4. Flujos: qué hacer
+## 4. Flows: what to do
 
-En **Flujos** creá:
+In **Flujos** (Flows), create:
 
-**Saludo** (se dispara con `Saludar`):
-1. Enviar un mensaje: «¡Hola! ¿Qué pizza querés?»
+**Saludo** (Greeting; triggered by `Saludar`):
+1. Send a message: «¡Hola! ¿Qué pizza querés?» ("Hi! Which pizza do you want?")
 
-**Pedido** (se dispara con `Pedir pizza`):
-1. Hacer una pregunta → slot `gusto`: «¿De qué gusto?» (sumá botones Muzzarella, Fugazza, Napolitana).
-2. Hacer una pregunta → slot `cantidad`: «¿Cuántas?»
-3. Enviar un mensaje: «Listo: {{ cantidad }} de {{ gusto }}. ¡Ya sale!»
-4. Guardar un valor → `gusto`, modo vaciar; lo mismo con `cantidad` (para el próximo pedido).
+**Pedido** (Order; triggered by `Pedir pizza`):
+1. Ask a question → slot `gusto`: «¿De qué gusto?» ("Which flavor?") (add buttons Muzzarella, Fugazza,
+   Napolitana).
+2. Ask a question → slot `cantidad`: «¿Cuántas?» ("How many?")
+3. Send a message: «Listo: {{ cantidad }} de {{ gusto }}. ¡Ya sale!» ("Done: {{ cantidad }} {{ gusto }}. Coming
+   right up!")
+4. Set a value → `gusto`, clear mode; the same with `cantidad` (for the next order).
 
-Una pregunta se saltea sola si el slot ya tiene valor: si la persona dijo «dos de fugazza», el bot va directo a
-la confirmación.
+A question skips itself if the slot already has a value: if the person said «dos de fugazza» ("two fugazza"), the
+bot goes straight to the confirmation.
 
-## 5. Entrenar
+## 5. Train
 
-Arriba a la derecha tocá **Entrenar**. Tarda segundos. El registro de entrenamiento muestra:
+At the top right, click **Entrenar** (Train). It takes seconds. The training log shows:
 
-- cuántas frases se pasaron a vectores,
-- si hizo falta entrenar el modelo de entidades,
-- la **autoevaluación**: para cada frase, «si no la conociera, ¿a qué intención la mandaría?», con porcentaje de
-  acierto y matriz de confusión,
-- consejos («`Saludar` tiene 2 frases: sumale al menos 3 más»).
+- how many phrases were turned into vectors,
+- whether the entity model needed training,
+- the **self-evaluation**: for each phrase, "if I didn't know it, which intent would I send it to?", with accuracy
+  percentage and confusion matrix,
+- tips («`Saludar` tiene 2 frases: sumale al menos 3 más», "`Saludar` has 2 phrases: add at least 3 more").
 
-## 6. Probar
+## 6. Test
 
-Tocá **Probar** para abrir el chat de prueba. Escribí «hola», después «quiero dos de muzza». En cada mensaje
-podés ver qué intención entendió, con qué confianza, qué entidades encontró y la traza del flujo.
+Click **Probar** (Test) to open the test chat and choose **Chat** (or **Llamada (voz)**, Call (voice), if you
+installed voice, see [ai-and-voice.md](ai-and-voice.md#voice)). Type «hola», then «quiero dos de muzza». For each
+message you can see which intent it understood, with what confidence, which entities it found and the flow trace.
+With **Empezar con datos** (Start with data) you start the conversation with preloaded slots, as an IVR would.
 
-Probá también: «cancelar» a mitad del pedido, «¿cómo?» (repite lo último) o «mejor de fugazza» mientras te
-pregunta la cantidad (corrige el dato).
+Also try: «cancelar» (cancel) in the middle of the order, «¿cómo?» ("what?", repeats the last message) or «mejor
+de fugazza» ("make it fugazza") while it's asking for the quantity (corrects the value).
 
-## 7. Publicar
+## 7. Publish
 
-Lo que editás es el **borrador**. Tocá **Publicar**: se congela una versión numerada (v1) con su propio modelo
-entrenado. Podés ponerla primero en **Pruebas (staging)**, probarla eligiendo ese entorno en el chat y después
-pasarla a **Producción**. En **Versiones** ves qué cambia entre lo publicado y el borrador, y para volver atrás
-apuntás producción a la versión anterior.
+What you edit is the **draft**. Click **Publicar** (Publish): a numbered version (v1) is frozen with its own
+trained model. You can first put it in **Pruebas (staging)**, test it by choosing that environment in the chat and
+then move it to **Producción** (Production). In **Versiones** (Versions) you see what changes between the
+published version and the draft, and to roll back you point production to the previous version.
 
-Mientras producción no tenga ninguna versión, la API responde con el borrador.
+As long as production has no version, the API answers with the draft.
 
-## 8. Conectarlo
+## 8. Connect it
 
-- **Widget web**: en **Publicar → Widget web** prendelo, agregá la dirección de tu sitio y copiá el `<script>`.
-- **API**: en **Publicar → API** está la referencia; ver también [api.md](api.md).
+- **Web widget**: in **Publicar → Widget web** (Publish → Web widget), turn it on, add your site's address and
+  copy the `<script>`.
+- **API**: the reference is in **Publicar → API** (Publish → API); see also [api.md](api.md).
 
 ```sh
 curl -s http://127.0.0.1:8000/api/v1/bots/pizzeria/events \
@@ -104,8 +114,8 @@ curl -s http://127.0.0.1:8000/api/v1/bots/pizzeria/events \
   -d '{"type": "message", "sessionId": "prueba-1", "text": "quiero dos de muzza"}'
 ```
 
-## Lo que sigue
+## Next steps
 
-- [Conceptos](concepts.md): todos los tipos de paso y los flujos del sistema.
-- [IA local](ai-and-voice.md): que el bot entienda más con un modelo chico.
-- [Seguridad](security.md): creá un usuario antes de compartir Parla con alguien.
+- [Concepts](concepts.md): all the step types and the system flows.
+- [Local AI](ai-and-voice.md): make the bot understand more with a small model.
+- [Security](security.md): create a user before sharing Parla with anyone.

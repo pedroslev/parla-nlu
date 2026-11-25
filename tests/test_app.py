@@ -46,6 +46,19 @@ assert [(e["entity"], e["value"]) for e in app.extract(nums, "quiero 2 pizzas")]
 # CEL, plantillas y condiciones armadas en la interfaz
 assert app.cel("r.body.items.size() + 1", {"r": {"body": {"items": [1, 2]}}}) == 3
 assert app.render("hola {{ n }}{{ vacio }}, {{ x > 1 ? 'sí' : 'no' }}", {"n": "Ana", "x": 2, "vacio": None}) == "hola Ana, sí"
+# en una URL los slots van codificados (no pueden cambiar la dirección); los secret.* y el texto fijo, tal cual
+assert app.render("https://x/a?q={{ n }}&k={{ secret.K }}", {"n": "1/../b?c=d#e", "secret": {"K": "a/b"}}, url=True) == "https://x/a?q=1%2F..%2Fb%3Fc%3Dd%23e&k=a/b"
+try:
+    app.http_step({"url": "https://x", "headers": [{"key": "X", "value": "{{ n }}"}]}, {"n": "a\r\nEvil: 1"})
+    raise AssertionError("encabezado con salto de línea")
+except ValueError:
+    pass
+for bad in ("../users", "abc", None):          # ids de agente: nada que salga de la carpeta
+    try:
+        app.path(bad)
+        raise AssertionError(bad)
+    except ValueError:
+        pass
 slots = {"a": "12", "b": 200, "c": True, "d": None, "e": "Hola Mundo"}
 for var, op, value, expected in [("a", "gt", "5", True), ("a", "lt", "5", False), ("b", "eq", "200", True),
                                  ("c", "eq", "TRUE", True), ("d", "empty", "", True), ("d", "filled", "", False),
@@ -134,11 +147,12 @@ assert all("id" in a for a in app.all_agents())
 os.remove(os.path.join(app.AGENTS, "cccc3333.secrets.json"))
 # API pública: slug, y una conversación completa por eventos (sin modelo: se reemplaza converse)
 assert app.slug("Pizzería Don Luis") == "pizzeria-don-luis"
-saved = app.all_agents, app.load, app.model, app.parse
+saved = app.all_agents, app.load, app.model, app.parse, app.agent_index
+app.agent_index = lambda: [(a["id"], a["id"], a["name"]) for a in app.all_agents()]   # find_bot sigue a los agentes de mentira
 app.all_agents = lambda: [dict(AGENT, id="aaaa1111", name="Pizzería"), dict(AGENT, id="bbbb2222", name="Soporte")]
 app.load = lambda agent_id: next(a for a in app.all_agents() if a["id"] == agent_id)
 app.model = lambda agent_id: {"data": app.load(agent_id), "tagger": None}
-app.parse = lambda data, text, tagger: fake("pedir" if "pizza" in text else None)(data, text)
+app.parse = lambda data, text, tagger, index=None: fake("pedir" if "pizza" in text else None)(data, text)
 status, body = app.api_v1("GET", ["bots"], {})
 assert status == 200 and [b["slug"] for b in body["bots"]] == ["pizzeria", "soporte"]
 assert app.api_v1("GET", ["bots", "PIZZERIA"], {})[1]["id"] == "aaaa1111"          # por slug, sin importar mayúsculas
@@ -217,7 +231,7 @@ for bad in ["con espacios", "../../etc", ".oculto", "wa:549"]:
 status, body = app.api_v1("POST", ["bots", "pizzeria", "events"], {"text": "quiero pizza"})   # sin id: se crea uno
 assert len(body["sessionId"]) == 16
 assert [x["channel"] for x in app.api_v1("GET", ["bots", "pizzeria", "sessions"], {}, {"channel": "prueba"})[1]["sessions"]] == []
-app.all_agents, app.load, app.model, app.parse = saved
+app.all_agents, app.load, app.model, app.parse, app.agent_index = saved
 # autoevaluación del entrenamiento con vectores de juguete: una frase de "pedir" cae más cerca de "saludar"
 import numpy as np
 toy = {"hola": [1, 0], "buenas": [0.9, 0.1], "quiero pizza": [0, 1], "una pizza": [0.1, 0.9], "hola quiero algo": [0.7, 0.3],
@@ -236,7 +250,7 @@ assert any("tiene 1 frase" in w for w in warn) and any("nombre" in w for w in wa
 saved_v = app.classify, app.parse, app.self_check
 app.classify = lambda data, text: []
 app.self_check = lambda data: {"summary": "", "accuracy": None}
-app.parse = lambda data, text, tagger: fake("pedir" if "pizza" in text else None)(data, text)
+app.parse = lambda data, text, tagger, index=None: fake("pedir" if "pizza" in text else None)(data, text)
 app.AGENTS = tempfile.mkdtemp()
 bot = app.create(dict(app.BLANK, name="Turnero", intents=[{"name": "pedir", "examples": ["pizza"]}],
                       flows=[{"name": "f", "trigger": "pedir", "steps": [{"type": "message", "text": "versión uno"}]}]))
@@ -563,6 +577,17 @@ st = {}
 assert say(st, "ver planes", helper)["messages"] == ["¿Qué buscás?"] and st["agent"]["turns"] == 1
 assert say(st, "uno barato", helper)["messages"] == ["Listo", "Plan pro"] and "agent" not in st and st["flow"] is None
 assert calls[0]["ok"] and calls[0]["result"] == {"precio": 10}, calls
+def counting_turn(agent, step, st, text, ctx, call_function):      # como brain.agent_turn: cuenta el turno en st["agent"]
+    mem = st.setdefault("agent", {})
+    mem["turns"] = mem.get("turns", 0) + 1
+    return {"messages": ["¿Y?"], "done": False}
+brain.agent_turn = counting_turn
+st = {}
+say(st, "ver planes", helper)
+assert st["agent"]["turns"] == 1, st["agent"]            # una vez por turno, no dos: así max_turns corta a los 4
+for _ in range(3):
+    say(st, "sigo", helper)
+assert "agent" not in st, st
 brain.rescue_intent, brain.fill_slot, brain.fallback, brain.agent_turn = saved_brain
 saved_dates = dates.extract
 dates.extract = lambda text, today=None: [{"start": 4, "end": 10, "value": "2026-11-25", "text": "mañana"}] if "mañana" in text else []
@@ -574,11 +599,12 @@ for _ in range(10):
     say(st, "horario")
 assert len(st["recent"]) == 12 and st["recent"][-1] == {"role": "bot", "text": "Abrimos de 9 a 18"}
 # 9-10. API: campos nuevos, historial, bandeja, mensajes desde N y audio
-saved = app.all_agents, app.load, app.model, app.parse
+saved = app.all_agents, app.load, app.model, app.parse, app.agent_index
+app.agent_index = lambda: [(a["id"], a["id"], a["name"]) for a in app.all_agents()]   # find_bot sigue a los agentes de mentira
 app.all_agents = lambda: [dict(BOT, id="eeee5555", name="Mesa")]
 app.load = lambda agent_id: app.all_agents()[0]
 app.model = lambda agent_id: {"data": app.load(agent_id), "tagger": None}
-app.parse = lambda data, text, tagger: R(data, text)
+app.parse = lambda data, text, tagger, index=None: R(data, text)
 app.AGENTS = tempfile.mkdtemp()
 ev = lambda body: app.api_v1("POST", ["bots", "mesa", "events"], dict(body, sessionId="s1"))[1]
 body = ev({"type": "start"})
@@ -648,7 +674,7 @@ for name, data in (("virus.html", "PGI+"), ("foto.svg", "PHN2Zz4="), ("vacio.pdf
         raise AssertionError(name)
     except ValueError:
         pass
-app.all_agents, app.load, app.model, app.parse = saved
+app.all_agents, app.load, app.model, app.parse, app.agent_index = saved
 print("ok")
 
 # frases fijas para la llamada: se cortan igual que en static/voice.js y las que tienen {{ }} no se pregeneran

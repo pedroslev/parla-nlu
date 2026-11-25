@@ -422,7 +422,6 @@
     setTimeout(() => URL.revokeObjectURL(url), 0);
   }
   const fileBase = () => 'parla-' + (botSlug() || agent.id);
-  window.apiDocsExport = { postmanCollection, openApi };   // para probar desde la consola o node
 
   function exportSection() {
     return h('section', { class: 'panel ad-panel' },

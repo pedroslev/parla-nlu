@@ -3,6 +3,7 @@
 
     .venv/bin/python app.py [puerto]   ->   http://127.0.0.1:8000
 """
+import base64
 import json
 import random
 import os
@@ -18,7 +19,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import DATA, ROOT, auth, brain, connect, dates, files, insights, knowledge, llm, runner, vault, voice
+from . import DATA, ROOT, write_json, auth, brain, connect, dates, files, insights, knowledge, llm, runner, vault, voice
 
 import celpy
 import pycrfsuite
@@ -85,6 +86,7 @@ def hook(fn, *args, default=None):
 # ---------- NLU: intención por vecino más cercano + entidades por formato y valores ----------
 
 _model = None
+_model_lock = threading.Lock()   # dos pedidos a la vez no cargan el modelo dos veces
 _vectors = {}  # frase de entrenamiento -> vector. ponytail: nunca se vacía; purgar si hay miles de frases borradas
 
 
@@ -92,9 +94,25 @@ def _encode(texts):
     global _model
     import numpy as np
     if _model is None:
-        from fastembed import TextEmbedding
-        _model = TextEmbedding(MODEL, cache_dir=EMBED_CACHE)
+        with _model_lock:
+            if _model is None:
+                from fastembed import TextEmbedding
+                _model = TextEmbedding(MODEL, cache_dir=EMBED_CACHE)
     return [v / np.linalg.norm(v) for v in _model.embed([EMBED_PREFIX + t for t in texts])]
+
+
+_queries = {}   # texto de la persona -> (_encode que lo calculó, vector): classify y read_answer lo piden en el mismo turno
+
+
+def _query(text):
+    hit = _queries.get(text)
+    if hit is None or hit[0] is not _encode:       # las pruebas cambian _encode por vectores de juguete
+        if len(_queries) >= 256:
+            _queries.clear()
+        vector = _encode([text])[0]
+        vector.setflags(write=False)               # compartido entre llamadas: que nadie lo modifique
+        hit = _queries[text] = (_encode, vector)
+    return hit[1]
 
 
 knowledge.encode = _encode   # la base de conocimiento usa el mismo modelo, cargado una sola vez
@@ -110,7 +128,7 @@ def classify(agent, text):
     missing = sorted({p for p, _ in pairs if p not in _vectors})
     if missing:
         _vectors.update(zip(missing, _encode(missing)))
-    query = _encode([text.strip().lower()])[0]
+    query = _query(text.strip().lower())
     best = {}
     for phrase, intent in pairs:
         sim = float(_vectors[phrase] @ query)
@@ -153,7 +171,7 @@ def read_answer(agent, entity, text, current_flow=None, lang="es"):
     missing = sorted({w for w, _ in labeled if w not in _vectors})
     if missing:
         _vectors.update(zip(missing, _encode(missing)))
-    query = _encode([text])[0]
+    query = _query(text)
     best = {}
     for phrase, label in labeled:
         sim = float(_vectors[phrase] @ query)
@@ -263,12 +281,12 @@ def train_tagger(data, model_path, info=None):
     return tagger
 
 
-def tag(data, text, tagger):
+def tag(text, tagger, index):
     toks = tokenize(text)
     if not tagger or not toks:
         return []
-    found, names = [], learned(data)
-    for (word, start, end), label in zip(toks, tagger.tag(features(toks, lookup_table(data)))):
+    found, names = [], index["learned"]
+    for (word, start, end), label in zip(toks, tagger.tag(features(toks, index["lookup"]))):
         name = label[2:]
         if label.startswith("I-") and found and found[-1]["entity"] == name and found[-1]["open"]:
             found[-1]["end"] = end
@@ -280,11 +298,10 @@ def tag(data, text, tagger):
     return [{"entity": f["entity"], "value": text[f["start"]:f["end"]], "start": f["start"], "end": f["end"]} for f in found]
 
 
-def extract(agent, text, tagger=None):
-    """Entidades en el texto: por el formato (regex), por valores conocidos (la lista, sus otras
-    formas de decirlo y lo marcado en las frases) y por lo que aprendió el CRF del contexto."""
-    defs = {e["name"]: e for e in agent["entities"]}
+def nlu_index(data):
+    """Lo que extract necesita de las entidades: se calcula una vez por foto entrenada (va en MODELS, junto al tagger)."""
     known = {}          # entidad -> {forma en que se dice: valor que se guarda}
+    defs = {e["name"]: e for e in data["entities"]}
     for name, e in defs.items():
         forms = known.setdefault(name, {})
         for value in e.get("values") or []:
@@ -292,10 +309,18 @@ def extract(agent, text, tagger=None):
         for value, others in (e.get("synonyms") or {}).items():      # "muzza" -> "muzzarella"
             for other in others:
                 forms.setdefault(other.lower(), value)
-    for example in training_phrases(agent):
+    for example in training_phrases(data):
         for value, name in ANNOT.findall(example):
             known.setdefault(name, {}).setdefault(value.lower(), value)
-    found, guesses, free = [], tag(agent, text, tagger), learned(agent)
+    return {"defs": defs, "known": known, "lookup": lookup_table(data), "learned": learned(data)}
+
+
+def extract(agent, text, tagger=None, index=None):
+    """Entidades en el texto: por el formato (regex), por valores conocidos (la lista, sus otras
+    formas de decirlo y lo marcado en las frases) y por lo que aprendió el CRF del contexto."""
+    index = index or nlu_index(agent)
+    defs, known = index["defs"], index["known"]
+    found, guesses, free = [], tag(text, tagger, index), index["learned"]
     for name, e in defs.items():       # fechas en lenguaje natural ("el martes a las 10") -> "YYYY-MM-DD[THH:MM]"
         if e.get("kind") == "date":
             found += [{"entity": name, "value": d["value"], "start": d["start"], "end": d["end"]} for d in hook(dates.extract, text, default=[])]
@@ -328,15 +353,20 @@ def extract(agent, text, tagger=None):
     return sorted(unique.values(), key=lambda f: f["start"])
 
 
-def parse(agent, text, tagger=None):
+def parse(agent, text, tagger=None, index=None):
     ranking = classify(agent, text)
     intent, confidence = ranking[0] if ranking else (None, 0.0)
-    return {"intent": intent, "confidence": confidence, "ranking": ranking[:5], "entities": extract(agent, text, tagger)}
+    return {"intent": intent, "confidence": confidence, "ranking": ranking[:5], "entities": extract(agent, text, tagger, index)}
 
 
 # ---------- Entrenamiento: el chat usa la última versión entrenada, el resto del agente es en vivo ----------
 
-MODELS = {}  # agente -> {"data": frases y entidades entrenadas, "tagger": CRF o None}
+MODELS = {}  # agente -> {"data": frases y entidades entrenadas, "tagger": CRF o None, "index": nlu_index(data)}
+TRAINING = threading.RLock()   # ponytail: un lock global para entrenar/cargar modelos; por agente si entrenan muchos a la vez
+
+
+def model_entry(data, tagger):
+    return {"data": data, "tagger": tagger, "index": nlu_index(data)}
 
 
 def nlu_data(agent):
@@ -347,6 +377,11 @@ def nlu_data(agent):
 def train(agent_id, fingerprint=None):
     """Toma una foto de las frases y entidades, entrena el CRF y deja listos los vectores.
     El bot sigue atendiendo con la versión anterior hasta que termina: entrenar no lo apaga."""
+    with TRAINING:          # dos chats a la vez sin modelo no entrenan dos veces ni pisan el .crfsuite
+        return _train(agent_id, fingerprint)
+
+
+def _train(agent_id, fingerprint):
     started = time.perf_counter()
     clock = lambda since: round((time.perf_counter() - since) * 1000)
     agent = load(agent_id)
@@ -367,9 +402,8 @@ def train(agent_id, fingerprint=None):
     t = time.perf_counter()
     check = self_check(data)
     steps.append({"name": "Autoevaluación", "ms": clock(t), "detail": check["summary"]})
-    with open(path(agent_id, ".model.json"), "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False)
-    MODELS[agent_id] = {"data": data, "tagger": tagger}
+    write_json(path(agent_id, ".model.json"), data)
+    MODELS[agent_id] = model_entry(data, tagger)
     phrases = training_phrases(data)
     log = {"duration_ms": clock(started), "steps": steps, "crf": crf, "self_check": check,
            "entities": entity_report(data), "warnings": training_warnings(agent, data)}
@@ -385,11 +419,18 @@ def self_check(data):
     per = {i["name"]: {"name": i["name"], "phrases": len(i["examples"]), "checked": 0, "right": 0} for i in data["intents"]}
     mistakes = []
     confusion = {}     # intención esperada -> {a cuál la mandó: cuántas frases}
+    if pairs:          # todas contra todas de una: sin la misma frase (ni la propia ni repetidas en otra intención)
+        import numpy as np
+        vecs = np.stack([_vectors[key] for key, _, _ in pairs])
+        sims = vecs @ vecs.T
+        same = np.array([[key] for key, _, _ in pairs], dtype=object)
+        sims[same == same.T] = -np.inf
     for k, (key, raw, intent) in enumerate(pairs):
-        others = [(float(_vectors[key] @ _vectors[o]), name, o) for j, (o, _, name) in enumerate(pairs) if j != k and o != key]
-        if per[intent]["phrases"] < 2 or not others:
+        row = sims[k]
+        if per[intent]["phrases"] < 2 or np.isneginf(row).all():
             continue                                # con una sola frase no hay contra qué comparar
-        score, got, closest = max(others)
+        top = row.max()                             # empate: gana la misma que con max() de tuplas
+        score, got, closest = max((float(top), pairs[j][2], pairs[j][0]) for j in np.flatnonzero(row == top))
         per[intent]["checked"] += 1
         row = confusion.setdefault(intent, {})
         row[got] = row.get(got, 0) + 1
@@ -459,11 +500,18 @@ def versions(agent_id):
     return numbers
 
 
+_versions = {}   # archivo -> versión publicada: no cambian nunca (se borran con el agente, ver DELETE)
+
+
 def load_version(agent_id, number):
-    if not os.path.exists(version_path(agent_id, number)):
-        raise ValueError("no existe la versión %s" % number)
-    with open(version_path(agent_id, number), encoding="utf-8") as f:
-        return json.load(f)
+    """Compartida entre llamadas: quien la use la lee o la copia ({**v["agent"], ...}), no la modifica."""
+    file = version_path(agent_id, number)
+    if file not in _versions:
+        if not os.path.exists(file):
+            raise ValueError("no existe la versión %s" % number)
+        with open(file, encoding="utf-8") as f:
+            _versions[file] = json.load(f)
+    return _versions[file]
 
 
 def publish(agent_id, note="", environment=None):
@@ -533,7 +581,7 @@ def trained_for(agent_id, number):
         if os.path.exists(version_path(agent_id, number, ".crfsuite")):
             tagger = pycrfsuite.Tagger()
             tagger.open(version_path(agent_id, number, ".crfsuite"))
-        MODELS[key] = {"data": nlu_data(snapshot), "tagger": tagger}
+        MODELS[key] = model_entry(nlu_data(snapshot), tagger)
     return MODELS[key]
 
 
@@ -566,16 +614,19 @@ def diff(old, new):
 
 def model(agent_id):
     if agent_id not in MODELS:
-        if not os.path.exists(path(agent_id, ".model.json")):
-            train(agent_id)
-        else:
-            with open(path(agent_id, ".model.json"), encoding="utf-8") as f:
-                data = json.load(f)
-            tagger = None
-            if os.path.exists(path(agent_id, ".crfsuite")):
-                tagger = pycrfsuite.Tagger()
-                tagger.open(path(agent_id, ".crfsuite"))
-            MODELS[agent_id] = {"data": data, "tagger": tagger}
+        with TRAINING:
+            if agent_id in MODELS:
+                pass                        # lo cargó otro pedido mientras esperaba
+            elif not os.path.exists(path(agent_id, ".model.json")):
+                train(agent_id)
+            else:
+                with open(path(agent_id, ".model.json"), encoding="utf-8") as f:
+                    data = json.load(f)
+                tagger = None
+                if os.path.exists(path(agent_id, ".crfsuite")):
+                    tagger = pycrfsuite.Tagger()
+                    tagger.open(path(agent_id, ".crfsuite"))
+                MODELS[agent_id] = model_entry(data, tagger)
     return MODELS[agent_id]
 
 
@@ -592,13 +643,16 @@ def cel(expr, ctx):
         raise ValueError("no pude resolver «%s». Revisá que los slots que usa existan." % expr) from error
 
 
-def render(template, ctx):
-    """Reemplaza cada {{ expr }} por su valor. Un slot vacío queda como texto vacío."""
+def render(template, ctx, url=False):
+    """Reemplaza cada {{ expr }} por su valor. Un slot vacío queda como texto vacío.
+    url=True: los valores van codificados (lo que escribió la persona no puede cambiar la dirección); secret.* no."""
     def show(match):
-        value = cel(match.group(1).strip(), ctx)
+        expr = match.group(1).strip()
+        value = cel(expr, ctx)
         if value is None:
             return ""
-        return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+        return urllib.parse.quote(text, safe="") if url and not expr.startswith("secret.") else text
     return TEMPLATE.sub(show, template or "")
 
 
@@ -625,11 +679,13 @@ def check(cond, slots):
 
 def http_step(step, ctx):
     """Hace la consulta y devuelve {status, body}. status 0 = no se pudo conectar."""
-    url = render(step.get("url"), ctx).strip()
+    url = render(step.get("url"), ctx, url=True).strip()
     if not url.startswith(("http://", "https://")):
         raise ValueError("la dirección tiene que empezar con http:// o https://")
     headers = {render(h.get("key"), ctx).strip(): render(h.get("value"), ctx)
                for h in step.get("headers") or [] if (h.get("key") or "").strip()}
+    if any(re.search(r"[\r\n]", k + v) for k, v in headers.items()):
+        raise ValueError("un encabezado no puede tener saltos de línea")
     body = render(step.get("body"), ctx).encode() or None
     if body:
         headers.setdefault("Content-Type", "application/json")
@@ -793,12 +849,13 @@ def agent_step(agent, st, step, text, ctx, out, trace):
         trace.append(mask(agent, "la IA usó «%s» → %s" % (name, "bien" if res["ok"] else "error: " + res["error"])))
         return res
 
+    turns = (st.get("agent") or {}).get("turns", 0)
     res = hook(brain.agent_turn, agent, step, st, text, ctx, call_function) or {"messages": [], "done": True, "trace": ["la IA falló"]}
     out += [m for m in res.get("messages") or [] if isinstance(m, str)]
     st["slots"].update(res.get("slots") or {})
     trace += [mask(agent, str(t)) for t in res.get("trace") or []]
-    state = st.setdefault("agent", {"turns": 0})
-    state["turns"] += 1
+    state = st.setdefault("agent", {"turns": turns})
+    state["turns"] = max(state.get("turns", 0), turns + 1)   # una vez por turno: brain.agent_turn ya lo cuenta (si no falló)
     if res.get("done") or state["turns"] >= int(step.get("max_turns") or 8):
         st.pop("agent", None)
         return False
@@ -838,7 +895,7 @@ def run(agent, st, nlu, text, out, trace):
             elif kind == "http":
                 scope = dict(ctx, secret=secrets(agent))       # {{ secret.X }} vale acá, nunca en mensajes
                 response = http_step(step, scope)
-                trace.append(mask(agent, "%s %s → %s" % (step.get("method") or "GET", render(step.get("url"), scope), response["status"])))
+                trace.append(mask(agent, "%s %s → %s" % (step.get("method") or "GET", render(step.get("url"), scope, url=True), response["status"])))
                 for save in step.get("saves") or []:
                     if not save.get("slot"):
                         continue
@@ -895,7 +952,7 @@ def run(agent, st, nlu, text, out, trace):
                 st["flow"] = None
                 return "done"
         except Exception as error:  # noqa: BLE001 - un paso mal armado no tira el server: se ve en el chat
-            out.append("⚠ Hay un problema en el flujo «%s», paso «%s»: %s" % (flow["name"], STEP_NAMES.get(kind, kind), error))
+            out.append(mask(agent, "⚠ Hay un problema en el flujo «%s», paso «%s»: %s" % (flow["name"], STEP_NAMES.get(kind, kind), error)))
             stop(st)
             return "error"
     out.append("⚠ El flujo dio más de %d pasos seguidos: ¿hay flujos que se llaman entre sí sin parar?" % MAX_STEPS)
@@ -1242,6 +1299,8 @@ SESSION_ID = re.compile(r"[A-Za-z0-9_@+-][A-Za-z0-9_.@+-]{0,99}")   # sirve tal 
 
 
 def path(agent_id, ext=".json"):
+    if not (isinstance(agent_id, str) and re.fullmatch(r"[0-9a-f]{8}", agent_id)):
+        raise ValueError("no existe ese agente")      # ni «../users» ni nada que salga de la carpeta
     return os.path.join(AGENTS, agent_id + ext)
 
 
@@ -1252,12 +1311,36 @@ def load(agent_id):
     return agent
 
 
+_voiced = {}                 # agente -> hash de las frases que ya se mandaron a pregenerar
+_warming = {}                # agente -> (frases, idioma) pendientes, o None: su hilo está trabajando y no hay nada nuevo
+_warming_lock = threading.Lock()
+
+
 def store(agent):
-    with open(path(agent["id"]), "w", encoding="utf-8") as f:
-        json.dump(agent, f, ensure_ascii=False, indent=2)
+    write_json(path(agent["id"]), agent, indent=2)
     if any(voice.PIPER_DIR.glob("*.onnx")):       # con voz instalada: las frases fijas quedan listas para las llamadas
-        threading.Thread(target=voice.prewarm, args=(spoken_texts(agent), languages(agent)[0]), daemon=True).start()
+        job = (spoken_texts(agent), languages(agent)[0])
+        key = hash((tuple(job[0]), job[1]))
+        with _warming_lock:                       # la interfaz guarda cada ~400 ms: un hilo por agente y solo si cambió algo
+            if _voiced.get(agent["id"]) == key:
+                return agent
+            _voiced[agent["id"]] = key
+            start = agent["id"] not in _warming
+            _warming[agent["id"]] = job
+        if start:
+            threading.Thread(target=_prewarm, args=(agent["id"],), daemon=True).start()
     return agent
+
+
+def _prewarm(agent_id):
+    while True:
+        with _warming_lock:
+            job = _warming[agent_id]
+            if job is None:
+                del _warming[agent_id]
+                return
+            _warming[agent_id] = None
+        voice.prewarm(*job)
 
 
 def spoken_texts(agent):
@@ -1299,13 +1382,32 @@ def slug(text):
     return re.sub(r"[^a-z0-9]+", "-", plain.lower()).strip("-")
 
 
+_names = {}   # archivo -> ((mtime, tamaño), (id del archivo, id, nombre)): find_bot corre hasta 3 veces por pedido del widget
+
+
+def agent_index():
+    """[(id del archivo, id, nombre)] de todos los agentes, sin leer de nuevo los que no cambiaron."""
+    out = []
+    for name in sorted(os.listdir(AGENTS)):
+        if not re.fullmatch(r"[0-9a-f]{8}\.json", name):
+            continue
+        stat = os.stat(os.path.join(AGENTS, name))
+        stamp = (stat.st_mtime_ns, stat.st_size)
+        hit = _names.get(os.path.join(AGENTS, name))
+        if hit is None or hit[0] != stamp:
+            agent = load(name[:-5])
+            hit = _names[os.path.join(AGENTS, name)] = (stamp, (name[:-5], agent["id"], agent["name"]))
+        out.append(hit[1])
+    return out
+
+
 def find_bot(ref):
     """Un bot por id, por nombre exacto (sin importar mayúsculas) o por slug. None si no existe o es ambiguo."""
-    agents = all_agents()
-    for test in (lambda a: a["id"] == ref, lambda a: a["name"].lower() == ref.lower(), lambda a: slug(a["name"]) == slug(ref)):
+    agents = agent_index()
+    for test in (lambda a: a[1] == ref, lambda a: a[2].lower() == ref.lower(), lambda a: slug(a[2]) == slug(ref)):
         matches = [a for a in agents if test(a)]
         if len(matches) == 1:
-            return matches[0]
+            return load(matches[0][0])
         if matches:
             return None
     return None
@@ -1328,8 +1430,7 @@ def load_session(agent_id, sid):
 
 def save_session(agent_id, record):
     os.makedirs(os.path.dirname(session_path(agent_id, record["sessionId"])), exist_ok=True)
-    with open(session_path(agent_id, record["sessionId"]), "w", encoding="utf-8") as f:
-        json.dump(record, f, ensure_ascii=False)
+    write_json(session_path(agent_id, record["sessionId"]), record)
 
 
 def open_session(agent_id, sid, channel, environment="production"):
@@ -1387,10 +1488,10 @@ def sync(record):
 def converse(agent_id, record, text):
     """Un turno contra la última versión entrenada. Lo usan el chat de prueba y la API; queda guardado."""
     number, agent = session_agent(agent_id, record)
-    trained = trained_for(agent_id, number)
+    snap = trained_for(agent_id, number)
     state = record["state"]
     before = {"flow": state.get("flow"), "waiting": state.get("waiting") if state.get("flow") else None}   # para medir abandono
-    result = handle(agent, state, text, parse=lambda a, t: parse(trained["data"], t, trained["tagger"]))
+    result = handle(agent, state, text, parse=lambda a, t: parse(snap["data"], t, snap["tagger"], snap.get("index")))
     nlu = result["nlu"]
     record["updated"] = now()
     record["history"].append({"from": "user", "text": text, "at": record["updated"], "intent": nlu["intent"],
@@ -1438,12 +1539,27 @@ def session_summary(record):
             "environment": record.get("environment", "production"), "version": record.get("version")}
 
 
+_sessions = {}   # archivo -> ((mtime, tamaño), registro): la Bandeja pide la lista cada 3 s. Los que llaman solo leen.
+# ponytail: no se purga al borrar conversaciones; limpiar si se borran miles
+
+
 def sessions_of(agent_id, query):
     """Conversaciones guardadas, filtradas por channel, classification ("__none__" = sin clasificar) y
     fechas from/to (YYYY-MM-DD, por el día en que empezaron)."""
     folder = os.path.join(AGENTS, agent_id + ".sessions")
     names = sorted(os.listdir(folder)) if os.path.isdir(folder) else []
-    records = [r for r in (load_session(agent_id, n[:-5]) for n in names if n.endswith(".json")) if r]
+    records = []
+    for name in names:
+        file = os.path.join(folder, name)
+        if not name.endswith(".json") or not os.path.isfile(file):
+            continue
+        stat = os.stat(file)
+        stamp = (stat.st_mtime_ns, stat.st_size)
+        hit = _sessions.get(file)
+        if hit is None or hit[0] != stamp:
+            hit = _sessions[file] = (stamp, load_session(agent_id, name[:-5]))
+        if hit[1]:
+            records.append(hit[1])
     marks = lambda r: [m["name"] for m in r.get("classifications", [])]
     if query.get("channel"):
         records = [r for r in records if r["channel"] == query["channel"]]
@@ -1481,9 +1597,10 @@ def report(agent, query):
             "by_day": [days[d] for d in sorted(days)]}
 
 
-def api_v1(method, parts, data, query=None, user=None):
+def api_v1(method, parts, data, query=None, user=None, public=False):
     """API pública: /api/v1/bots[/{bot}[/events | /sessions[/{sessionId}]]]. Devuelve (status, cuerpo).
-    user: quien llama, para listar solo sus bots (auth.guard ya cortó los pedidos a bots que no ve)."""
+    user: quien llama, para listar solo sus bots (auth.guard ya cortó los pedidos a bots que no ve).
+    public: el chat del widget sin sesión: solo canal «web», producción, sin datos iniciales ni traza."""
     query = query or {}
     if parts == ["bots"] and method == "GET":
         return 200, {"bots": [bot_info(a) for a in all_agents() if auth.allowed_bot(user, a["id"])]}
@@ -1498,20 +1615,23 @@ def api_v1(method, parts, data, query=None, user=None):
     if rest == ["events"] and method == "POST":
         kind = data.get("type") or ("message" if "text" in data else None)
         sid = data.get("sessionId")
-        environment = data.get("environment") or "production"
+        environment = "production" if public else data.get("environment") or "production"
+        channel = "web" if public else str(data.get("channel") or "api")[:30]
         try:
             target(agent, environment)
         except ValueError as error:
             return 400, {"error": str(error)}
         if sid is not None and not (isinstance(sid, str) and SESSION_ID.fullmatch(sid)):
             return 400, {"error": "«sessionId» tiene que ser un texto de hasta 100 letras sin tildes, números o . @ + - _ (sin espacios)"}
+        if public and sid and (load_session(agent["id"], sid) or {}).get("channel", "web") != "web":
+            return 403, {"error": "esa conversación no es del widget web"}
         if kind in ("start", "online"):
-            initial = data.get("data") or {}
+            initial = {} if public else data.get("data") or {}
             if not isinstance(initial, dict):
                 return 400, {"error": "«data» tiene que ser un objeto, por ejemplo {\"dni\": \"30123456\"}"}
             sid = sid or uuid.uuid4().hex[:16]
             end_session(agent["id"], sid)                 # si ya existía, arranca de cero pero conserva lo charlado
-            record = open_session(agent["id"], sid, str(data.get("channel") or "api")[:30], environment)
+            record = open_session(agent["id"], sid, channel, environment)
             result, ignored = begin(session_agent(agent["id"], record)[1], record["state"], initial)
             record["updated"] = now()
             record["history"].append({"from": "event", "text": "Empezó la conversación", "at": record["updated"],
@@ -1519,14 +1639,17 @@ def api_v1(method, parts, data, query=None, user=None):
             record["history"] += bot_entries(result, record["updated"])
             collect(record)
             save_session(agent["id"], record)
-            return 200, dict(session_info(agent, record), messages=result["messages"], understood=None,
-                             ignored_data=ignored, trace=result["trace"], **turn_fields(result, record))
+            body = dict(session_info(agent, record), messages=result["messages"], understood=None,
+                        ignored_data=ignored, trace=result["trace"], **turn_fields(result, record))
+            if public:
+                body.pop("trace")
+            return 200, body
         if kind == "message":
             text = data.get("text")
             if not isinstance(text, str) or not text.strip():
                 return 400, {"error": "falta «text» con el mensaje de la persona"}
             sid = sid or uuid.uuid4().hex[:16]
-            record = open_session(agent["id"], sid, str(data.get("channel") or "api")[:30], environment)
+            record = open_session(agent["id"], sid, channel, environment)
             result = converse(agent["id"], record, text.strip()[:4000])
             return 200, dict(session_info(agent, record), messages=result["messages"], understood={
                 key: next(h for h in reversed(record["history"]) if h["from"] == "user")[key]
@@ -1538,7 +1661,7 @@ def api_v1(method, parts, data, query=None, user=None):
             return (200, {"sessionId": sid, "ended": True}) if record else (404, {"error": "no hay una conversación «%s» con este bot" % sid})
         return 400, {"error": "«type» tiene que ser start (u online), message o end"}
     if rest == ["audio"] and method == "POST":
-        return audio_event(agent, data)
+        return audio_event(agent, data, public)
     if len(rest) == 3 and rest[0] == "sessions" and rest[2] == "messages" and method == "GET":
         # lo nuevo desde el índice «after»: así el widget recibe lo que escribe la persona de la bandeja
         # ponytail: el historial se recorta a MAX_HISTORY y corre los índices; usar ids si las charlas son muy largas
@@ -1578,16 +1701,25 @@ def vocabulary(agent):
     return ", ".join(dict.fromkeys(w for w in words if isinstance(w, str) and w.strip()))[:600] or None
 
 
-def audio_event(agent, data):
+def audio_of(data):
+    """data["audio"] en base64, con o sin «data:audio/webm;base64,» adelante (como lo manda el navegador)."""
+    try:
+        return base64.b64decode(str(data.get("audio") or "").rpartition(",")[2], validate=True)
+    except ValueError:
+        raise ValueError("«audio» tiene que ser el audio en base64") from None
+
+
+def audio_event(agent, data, public=False):
     """Un mensaje de voz: se transcribe localmente, se atiende como un mensaje y (si speak) vuelve la respuesta en audio."""
-    import base64
     sid = data.get("sessionId")
     record = load_session(agent["id"], sid) if isinstance(sid, str) else None
+    if public and record and record.get("channel") != "web":
+        return 403, {"error": "esa conversación no es del widget web"}
     language = ((record or {}).get("state") or {}).get("lang") or languages(agent)[0]
     try:
-        audio = base64.b64decode(str(data.get("audio") or "").rpartition(",")[2], validate=True)   # acepta "data:audio/webm;base64,..."
-    except ValueError:
-        return 400, {"error": "«audio» tiene que ser el audio en base64"}
+        audio = audio_of(data)
+    except ValueError as error:
+        return 400, {"error": str(error)}
     if not audio:
         return 400, {"error": "falta «audio» con la grabación en base64"}
     try:
@@ -1598,7 +1730,8 @@ def audio_event(agent, data):
     if not text:
         return 400, {"error": "no se entendió nada en el audio, probá de nuevo"}
     status, body = api_v1("POST", ["bots", agent["id"], "events"],
-                          {k: data[k] for k in ("sessionId", "channel", "environment") if k in data} | {"type": "message", "text": text})
+                          {k: data[k] for k in ("sessionId", "channel", "environment") if k in data} | {"type": "message", "text": text},
+                          public=public)
     if status != 200:
         return status, body
     body["heard"] = text
@@ -1647,7 +1780,15 @@ def create(template, **changes):
     return store({**json.loads(json.dumps(template)), **changes, "id": uuid.uuid4().hex[:8]})
 
 
+CODE_ONLY_OWNER = "Solo el dueño puede crear, cambiar o probar el código de las funciones (corre en esta compu). Pedíselo al dueño o apagá las funciones con PARLA_FUNCTIONS=0."
+
+
+NOT_JSON = {"error": "mandá el pedido como JSON (Content-Type: application/json)"}
+
+
 class Handler(BaseHTTPRequestHandler):
+    timeout = 30        # segundos sin datos y se corta la conexión (slowloris)
+
     def reply(self, data, status=200, ctype="application/json"):
         body = data if isinstance(data, bytes) else json.dumps(data, ensure_ascii=False).encode()
         self.send_response(status)
@@ -1676,21 +1817,19 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and static and os.path.exists(os.path.join(HERE, "static", static.group(1))):
             with open(os.path.join(HERE, "static", static.group(1)), "rb") as f:
                 return self.reply(f.read(), ctype="text/javascript; charset=utf-8")
-        length = int(self.headers.get("Content-Length") or 0)
-        if length > 25_000_000:          # PDFs y audios van en base64
-            return self.reply({"error": "demasiado grande"}, 413)
-        try:
-            data = json.loads(self.rfile.read(length) or b"{}") if length else {}
-        except ValueError:
-            return self.reply({"error": "el cuerpo tiene que ser un JSON válido"}, 400)
-        if not isinstance(data, dict):
-            return self.reply({"error": "el cuerpo tiene que ser un objeto JSON"}, 400)
+        raw = self.headers.get("Content-Length") or "0"
+        if not (raw.isascii() and raw.isdigit()):
+            return self.reply({"error": "Content-Length inválido"}, 400)
+        length = int(raw)
         url = urllib.parse.urlsplit(self.path).path
+        query = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(self.path).query))
+        as_json = (self.headers.get("Content-Type") or "").startswith("application/json")
         port = self.server.server_address[1]
         ours = {"127.0.0.1:%d" % port, "localhost:%d" % port}
         origin = self.headers.get("Origin")
         self.cors = self.widget_origin(url, origin)
-        if url.startswith("/api/") and origin is not None and urllib.parse.urlsplit(origin).netloc not in ours and not self.cors:
+        self.user, self.public = None, False
+        if url.startswith("/api/") and origin is not None and urllib.parse.urlsplit(origin).netloc.lower() not in ours | set(auth.hosts()) and not self.cors:
             return self.reply({"error": "pedido de otro sitio web rechazado"}, 403)   # cualquier página podría pegarle a localhost
         if method == "OPTIONS":
             if not self.cors:
@@ -1698,15 +1837,35 @@ class Handler(BaseHTTPRequestHandler):
             self.extra_headers = {"Access-Control-Allow-Methods": "POST, GET, OPTIONS",
                                   "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Max-Age": "600"}
             return self.reply(b"", 204, "text/plain")
+        mine = url.startswith("/api/auth/") or url == "/api/users" or url.startswith("/api/users/")    # rutas de auth.handle
+        if url.startswith("/api/") and not mine:
+            stop = auth.guard(self, method, url, {})        # antes de leer el cuerpo: sin sesión no se lee nada
+            if stop is not None:
+                return self.reply(stop[1], stop[0])
+        if url.startswith("/api/") and not self.local_host():
+            # DNS rebinding: una página que hace apuntar su dominio a 127.0.0.1 no manda Origin en todo, pero sí su Host
+            bearer = self.user and (self.headers.get("Authorization") or "").lower().startswith("bearer ")
+            widget = auth._public_widget(method, url)
+            if not (bearer or widget):
+                return self.reply({"error": "pedido rechazado: ese Host no está permitido (sumalo a PARLA_HOSTS)"}, 403)
+            self.public = self.public or (widget and not self.user)
+        big = re.fullmatch(r"/api/agents(/[0-9a-f]{8}(/files|/knowledge/extract|/voice/transcribe)?)?|/api/v1/bots/[^/]+/audio", url)
+        limit = 2_000_000 if self.public and url.endswith("/audio") else 25_000_000 if big else 1_000_000   # PDFs y audios van en base64
+        if length > limit:
+            return self.reply({"error": "demasiado grande"}, 413)
+        try:
+            data = json.loads(self.rfile.read(length) or b"{}") if length else {}
+        except ValueError:
+            return self.reply({"error": "el cuerpo tiene que ser un JSON válido"}, 400)
+        if not isinstance(data, dict):
+            return self.reply({"error": "el cuerpo tiene que ser un objeto JSON"}, 400)
         own = auth.handle(self, method, url, data)       # /api/auth/* y /api/users*
         if own is not None:
             status, body, headers = own
             self.extra_headers = headers
             return self.reply(body, status)
-        if url.startswith("/api/"):
-            stop = auth.guard(self, method, url, data)
-            if stop is not None:
-                return self.reply(stop[1], stop[0])
+        if url == "/api/ai/status" and method == "POST" and data.get("agent") and not auth.allowed_bot(self.user, str(data["agent"])):
+            return self.reply({"error": "no existe ese agente"}, 404)
         if url == "/api/ai/status" and method == "POST":       # {"ai": config} o {"agent": id}
             cfg = data.get("ai") if isinstance(data.get("ai"), dict) else llm.settings(load(data["agent"])) if data.get("agent") else llm.settings({})
             return self.reply(llm.status(cfg))
@@ -1726,8 +1885,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(connect.clients_status("http://127.0.0.1:%d" % port))
             if method != "POST":
                 return self.reply({"error": "método no permitido"}, 405)
-            if not (self.headers.get("Content-Type") or "").startswith("application/json"):
-                return self.reply({"error": "mandá el pedido como JSON (Content-Type: application/json)"}, 415)
+            if not as_json:
+                return self.reply(NOT_JSON, 415)
             try:
                 if url == "/api/connect":
                     user = getattr(self, "user", None)     # con usuarios, el MCP necesita una clave de API propia
@@ -1737,8 +1896,7 @@ class Handler(BaseHTTPRequestHandler):
             except (ValueError, OSError) as error:
                 return self.reply({"ok": False, "error": str(error)}, 400)
         if url.startswith("/api/v1/"):
-            query = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(self.path).query))
-            return self.reply(*reversed(api_v1(method, [p for p in url[len("/api/v1/"):].split("/") if p], data, query, self.user)))
+            return self.reply(*reversed(api_v1(method, [p for p in url[len("/api/v1/"):].split("/") if p], data, query, self.user, self.public)))
         match = re.fullmatch(r"/api/agents(?:/([0-9a-f]{8})(?:/(chat|reset|http|train|versions|deploy|diff|versions/\d+|versions/\d+/restore|functions/test"
                              r"|knowledge/extract|knowledge/search|voice/transcribe|secrets|files|files/[A-Za-z0-9_-]{22}|insights/unrecognized|insights/analytics"
                              r"|inbox|sessions/[A-Za-z0-9_.@+-]+/(?:reply|release|take)))?)?", url)
@@ -1752,7 +1910,10 @@ class Handler(BaseHTTPRequestHandler):
             if method == "POST" and "import" in data:
                 if not isinstance(data["import"], dict):
                     return self.reply({"error": "el archivo no es un agente de Parla"}, 400)
-                made = create(imported(data["import"]))
+                made = imported(data["import"])
+                if self.code_blocked([], made.get("functions")):
+                    return self.reply({"error": CODE_ONLY_OWNER}, 403)
+                made = create(made)
                 auth.grant(self.user, made["id"])
                 return self.reply(made)
             if method == "POST":
@@ -1779,7 +1940,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(deploy(agent_id, data.get("environment"), data.get("version")))
         elif action == "diff" and method == "GET":
             # ?from=production|staging|<n>&to=draft|<n>: qué cambia, para revisar antes de publicar
-            agent, query = load(agent_id), dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(self.path).query))
+            agent = load(agent_id)
             def side(ref):
                 if ref in (None, "", "draft"):
                     return definition(agent), None
@@ -1791,14 +1952,19 @@ class Handler(BaseHTTPRequestHandler):
             # volver el borrador a lo que tenía una versión (deshacer cambios sin publicar)
             snapshot = load_version(agent_id, int(action.split("/")[1]))["agent"]
             agent = load(agent_id)
-            return self.reply(store({**snapshot, **{k: agent[k] for k in EDITABLE_ONLY if k in agent}}))
+            if self.code_blocked(agent.get("functions"), snapshot.get("functions")):
+                return self.reply({"error": CODE_ONLY_OWNER}, 403)
+            store({**snapshot, **{k: agent[k] for k in EDITABLE_ONLY if k in agent}})
+            return self.reply(load(agent_id))       # con agent["system"] completo, como GET
         elif action and action.startswith("versions/") and method == "GET":
             record = load_version(agent_id, int(action.split("/")[1]))
             return self.reply(dict(version_summary(record, load(agent_id)), agent=record["agent"]))
         elif action == "functions/test" and method == "POST":
             # «Probar» del editor de funciones: corre la definición que manda la interfaz (puede no estar guardada)
-            if not (self.headers.get("Content-Type") or "").startswith("application/json"):
-                return self.reply({"error": "mandá el pedido como JSON (Content-Type: application/json)"}, 415)
+            if not as_json:
+                return self.reply(NOT_JSON, 415)
+            if self.code_blocked([], [True]):
+                return self.reply({"error": CODE_ONLY_OWNER}, 403)
             fn, inputs = data.get("function"), data.get("inputs") or {}
             if not isinstance(fn, dict) or not isinstance(inputs, dict):
                 return self.reply({"error": "mandá «function» (la definición) e «inputs» (un objeto)"}, 400)
@@ -1808,8 +1974,7 @@ class Handler(BaseHTTPRequestHandler):
         elif action == "knowledge/search" and method == "POST":      # prueba de la base desde la interfaz
             return self.reply({"results": knowledge.search(load(agent_id), str(data.get("query") or ""), int(data.get("k") or 3))})
         elif action == "voice/transcribe" and method == "POST":      # {"audio": base64, "mime"}
-            import base64
-            return self.reply(voice.transcribe(base64.b64decode(str(data.get("audio") or "")), str(data.get("mime") or "audio/webm"),
+            return self.reply(voice.transcribe(audio_of(data), str(data.get("mime") or "audio/webm"),
                                                str(data.get("language") or "es"), vocabulary(load(agent_id))))
         elif action == "files" and method == "GET":                  # archivos para el paso «Enviar un archivo»
             return self.reply({"files": files.listing(agent_id)})
@@ -1821,18 +1986,16 @@ class Handler(BaseHTTPRequestHandler):
         elif action == "secrets" and method == "GET":                # solo los nombres: los valores nunca vuelven
             return self.reply({"secrets": vault.names(agent_id)})
         elif action == "secrets" and method == "PUT":
-            if not (self.headers.get("Content-Type") or "").startswith("application/json"):
-                return self.reply({"error": "mandá el pedido como JSON (Content-Type: application/json)"}, 415)
+            if not as_json:
+                return self.reply(NOT_JSON, 415)
             vault.put(agent_id, str(data.get("name") or ""), str(data.get("value") or ""))
             return self.reply({"secrets": vault.names(agent_id)})
         elif action == "secrets" and method == "DELETE":
             vault.delete(agent_id, str(data.get("name") or ""))
             return self.reply({"secrets": vault.names(agent_id)})
         elif action == "insights/unrecognized" and method == "GET":
-            query = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(self.path).query))
             return self.reply(insights.unrecognized(load(agent_id), sessions_of(agent_id, query)))
         elif action == "insights/analytics" and method == "GET":
-            query = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(self.path).query))
             return self.reply(insights.analytics(load(agent_id), sessions_of(agent_id, query)))
         elif action == "train" and method == "POST":
             return self.reply(train(agent_id, data.get("fingerprint")))
@@ -1854,13 +2017,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply({"error": "no existe esa conversación"}, 404)
             return self.reply(dict(session_info(load(agent_id), record), history=record["history"]))
         elif action is None and method == "GET":
-            return self.reply(load(agent_id))
+            agent = load(agent_id)
+            if (self.user or {}).get("role") == "agent":     # atención: solo lo que lee la Bandeja, no la definición del bot
+                return self.reply({"id": agent["id"], "name": agent["name"], "environments": agent.get("environments") or {},
+                                   "classifications": agent.get("classifications") or [], "languages": languages(agent),
+                                   **{k: [] for k in ("intents", "entities", "slots", "flows", "functions", "knowledge")}})
+            return self.reply(agent)
         elif action is None and method == "PUT":
             current = load(agent_id)     # la interfaz no maneja versiones: no puede pisar entornos ni el registro
+            if self.code_blocked(current.get("functions"), data.get("functions")):
+                return self.reply({"error": CODE_ONLY_OWNER}, 403)
             keep = {k: current[k] for k in ("environments", "deployments") if k in current}
             return self.reply(store({**BLANK, **data, **keep, "id": agent_id}))
         elif action is None and method == "DELETE":
-            for ext in (".json", ".model.json", ".crfsuite"):
+            for ext in (".json", ".model.json", ".crfsuite", ".secrets.json"):
                 if os.path.exists(path(agent_id, ext)):
                     os.remove(path(agent_id, ext))
             shutil.rmtree(os.path.join(AGENTS, agent_id + ".sessions"), ignore_errors=True)
@@ -1868,9 +2038,24 @@ class Handler(BaseHTTPRequestHandler):
             shutil.rmtree(os.path.join(AGENTS, agent_id + ".files"), ignore_errors=True)
             for key in [k for k in MODELS if k.startswith(agent_id + "@")]:
                 MODELS.pop(key)
+            for file in [f for f in _versions if f.startswith(os.path.join(AGENTS, agent_id + ".versions") + os.sep)]:
+                _versions.pop(file)
             MODELS.pop(agent_id, None)
             return self.reply({})
         return self.reply({"error": "método no permitido"}, 405)
+
+    def code_blocked(self, before, after):
+        """Con funciones prendidas, escribir su código es correr código en esta compu: solo el dueño (o sin usuarios).
+        Borrar o reordenar sí puede cualquiera que edite; lo que bloquea es una función nueva o cambiada."""
+        if not runner.enabled() or (self.user or {}).get("role") in (None, "owner"):
+            return False
+        return any(f not in (before or []) for f in (after or []))
+
+    def local_host(self):
+        """¿El Host del pedido es esta compu (127.0.0.1, localhost, [::1], cualquier puerto) o uno de PARLA_HOSTS?"""
+        host = (self.headers.get("Host") or "").lower()
+        name = re.sub(r":\d+$", "", host)
+        return name in ("127.0.0.1", "localhost", "[::1]") or host in auth.hosts() or name in auth.hosts()
 
     def widget_origin(self, url, origin):
         """El Origin si es un sitio que el dueño del bot autorizó para su widget (y la ruta es de conversación)."""
@@ -1885,8 +2070,12 @@ class Handler(BaseHTTPRequestHandler):
     def safely(self, method):
         try:
             self.route(method)
-        except Exception as error:  # noqa: BLE001 - JSON roto, agente corrupto: responder en vez de cortar
+        except (ValueError, llm.LLMError) as error:      # mensajes pensados para la persona
             self.reply({"error": str(error)}, 400)
+        except Exception:  # noqa: BLE001 - agente corrupto, disco: responder sin mostrar rutas ni detalles internos
+            import traceback
+            traceback.print_exc(file=sys.stderr)
+            self.reply({"error": "Algo falló en el servidor. El detalle quedó en la consola de Parla."}, 500)
 
     def do_GET(self): self.safely("GET")
     def do_POST(self): self.safely("POST")
@@ -1917,7 +2106,7 @@ def main():
     print("Listo: http://127.0.0.1:%d  (Ctrl+C para salir)" % port, flush=True)
     # ponytail: un hilo por pedido (la IA y la voz tardan segundos); dos mensajes a la vez en la MISMA conversación
     # pueden pisarse: agregar un lock por sessionId si algún canal los manda en paralelo
-    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+    ThreadingHTTPServer((os.environ.get("PARLA_HOST", "127.0.0.1"), port), Handler).serve_forever()
 
 
 if __name__ == "__main__":

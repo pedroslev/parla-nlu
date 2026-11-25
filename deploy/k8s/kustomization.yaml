@@ -1,0 +1,8 @@
+# No fixed namespace: kubectl apply -n <ns> -k deploy/k8s
+# The Ingress (ingress.yaml) is a separate example: edit it and apply it by hand.
+resources:
+  - parla.yaml
+# images:
+#   - name: parla
+#     newName: registry.example.com/parla
+#     newTag: "1.0.0"

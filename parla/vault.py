@@ -2,19 +2,17 @@
 import json
 import os
 import re
-import sys
 import unicodedata
 
-from . import DATA
+from . import agents_dir, write_json
 
-AGENTS = os.path.join(DATA, "agents")
+_cache = {}     # ruta -> ((mtime_ns, tamaño, inodo), valores): mask() corre en cada respuesta
 
 
 def _path(agent_id):
     if not re.fullmatch(r"[0-9a-f]{8}", str(agent_id)):
         raise ValueError("agente inválido")
-    main = sys.modules.get("parla.server") or sys.modules.get("__main__")      # sigue a app.AGENTS (los tests lo cambian)
-    return os.path.join(getattr(main, "AGENTS", None) or AGENTS, agent_id + ".secrets.json")
+    return os.path.join(agents_dir(), agent_id + ".secrets.json")
 
 
 def _normal(name):
@@ -26,10 +24,17 @@ def _normal(name):
 def values(agent_id):
     """{NOMBRE: valor} para el motor ({{ secret.NOMBRE }}). Vacío si no hay."""
     try:
-        with open(_path(agent_id), encoding="utf-8") as f:
-            return json.load(f)
+        path = _path(agent_id)
+        st = os.stat(path)
+        stamp = (st.st_mtime_ns, st.st_size, st.st_ino)   # os.replace cambia el inodo
+        if path in _cache and _cache[path][0] == stamp:
+            return dict(_cache[path][1])
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
     except (OSError, ValueError):
         return {}
+    _cache[path] = (stamp, data)
+    return dict(data)
 
 
 def names(agent_id):
@@ -42,10 +47,7 @@ def _save(agent_id, data):
         if os.path.exists(path):
             os.remove(path)
         return
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    os.chmod(path, 0o600)       # por si el archivo ya existía con otros permisos
+    write_json(path, data, 0o600, indent=2)
 
 
 def put(agent_id, name, value):
