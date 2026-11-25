@@ -9,7 +9,8 @@ document.head.append(h('style', {}, `
 `));
 
 const WG_DEFAULT = { enabled: false, origins: [], title: 'Hablá con nosotros', color: '#2f6bff', greeting: '', position: 'right', voice: false };
-const wgConf = () => (agent.widget = { ...WG_DEFAULT, ...(agent.widget || {}) });
+// el título de fábrica va en el idioma del bot (lo ve quien visita el sitio), no en el de la interfaz
+const wgConf = () => (agent.widget = { ...WG_DEFAULT, ...({ en: { title: 'Chat with us' }, pt: { title: 'Fale com a gente' } }[String(agent.languages?.[0] || 'es').slice(0, 2)] || {}), ...(agent.widget || {}) });
 let wgPreview = true, wgError = '', wgTimer = null;
 
 // «https://www.misitio.com/contacto» → «https://www.misitio.com». null si no es una dirección web.
@@ -24,7 +25,7 @@ function wgOrigin(raw) {
 
 function wgAttrs(w) {                       // los data-* del <script>, en el orden en que se leen mejor
   return [['data-bot', agent.id], ['data-title', w.title], ['data-color', w.color], ['data-greeting', w.greeting],
-    ['data-position', w.position], ['data-voice', String(!!w.voice)]].filter(([, v]) => v !== '' && v != null);
+    ['data-position', w.position], ['data-voice', String(!!w.voice)], ['data-lang', agent.languages?.[0] || 'es']].filter(([, v]) => v !== '' && v != null);
 }
 const wgEsc = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 const wgSnippet = (w) => '<script src="' + location.origin + '/static/widget.js"\n' +
@@ -50,26 +51,26 @@ new MutationObserver(() => { if (section !== 'widget' && document.querySelector(
 function wgOrigins(w) {
   const add = (input) => {
     const o = wgOrigin(input.value);
-    if (!o) { wgError = 'Eso no parece una dirección web. Escribila como aparece arriba en el navegador, por ejemplo https://www.misitio.com'; return render(); }
+    if (!o) { wgError = t('Eso no parece una dirección web. Escribila como aparece arriba en el navegador, por ejemplo https://www.misitio.com'); return render(); }
     wgError = '';
     if (!w.origins.includes(o)) { w.origins.push(o); touch(); }
     render();
   };
-  const input = h('input', { class: 'grow', placeholder: 'https://www.misitio.com', 'aria-label': 'Dirección del sitio', onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); add(e.target); } } });
+  const input = h('input', { class: 'grow', placeholder: 'https://www.misitio.com', 'aria-label': t('Dirección del sitio'), onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); add(e.target); } } });
   return h('div', { class: 'panel' },
-    h('h2', {}, 'Sitios autorizados'),
-    h('p', { class: 'help' }, 'Solo las páginas de estas direcciones pueden mostrar tu chat. Así nadie lo copia en otro sitio y lo usa a tu nombre. ',
-      'Escribí la dirección tal como aparece arriba en el navegador, sin nada después del dominio: «https://www.misitio.com». ',
-      'Si tu sitio se abre con y sin «www», agregá las dos.'),
+    h('h2', {}, t('Sitios autorizados')),
+    h('p', { class: 'help' }, t('Solo las páginas de estas direcciones pueden mostrar tu chat. Así nadie lo copia en otro sitio y lo usa a tu nombre. '),
+      t('Escribí la dirección tal como aparece arriba en el navegador, sin nada después del dominio: «https://www.misitio.com». '),
+      t('Si tu sitio se abre con y sin «www», agregá las dos.')),
     w.origins.length ? h('div', { class: 'values' }, w.origins.map((o) => h('span', { class: 'value' }, o,
-      h('button', { type: 'button', 'aria-label': 'Quitar ' + o, title: 'Quitar', onclick: () => { w.origins.splice(w.origins.indexOf(o), 1); touch(); render(); } }, icon('x')))))
-      : h('p', { class: 'help' }, 'Todavía no autorizaste ningún sitio.'),
-    h('div', { class: 'row' }, input, h('button', { class: 'btn quiet small', type: 'button', onclick: () => add(input) }, icon('plus'), 'Agregar')),
+      h('button', { type: 'button', 'aria-label': t('Quitar {site}', { site: o }), title: t('Quitar'), onclick: () => { w.origins.splice(w.origins.indexOf(o), 1); touch(); render(); } }, icon('x')))))
+      : h('p', { class: 'help' }, t('Todavía no autorizaste ningún sitio.')),
+    h('div', { class: 'row' }, input, h('button', { class: 'btn quiet small', type: 'button', onclick: () => add(input) }, icon('plus'), t('Agregar'))),
     wgError ? h('p', { class: 'wg-error', role: 'alert' }, wgError) : null);
 }
 
 function wgCopy(text, btn) {
-  const done = () => { btn.lastChild.textContent = '¡Copiado!'; setTimeout(() => { btn.lastChild.textContent = 'Copiar'; }, 1500); };
+  const done = () => { btn.lastChild.textContent = t('¡Copiado!'); setTimeout(() => { btn.lastChild.textContent = t('Copiar'); }, 1500); };
   navigator.clipboard?.writeText(text).then(done, () => {}) ?? (() => {
     const sel = getSelection(), r = document.createRange(); r.selectNodeContents($('.wg-snippet')); sel.removeAllRanges(); sel.addRange(r);
     if (document.execCommand('copy')) done();
@@ -83,31 +84,31 @@ window.widgetView = () => {
     h('input', { type: 'checkbox', checked: !!w[key], onchange: (e) => { w[key] = e.target.checked; wgChanged(); after?.(); } }),
     h('span', {}, text, sub ? h('small', {}, sub) : null));
   const snippet = wgSnippet(w);
-  const copyBtn = h('button', { class: 'btn small', type: 'button', onclick: (e) => wgCopy(snippet, e.currentTarget) }, icon('check'), h('span', {}, 'Copiar'));
+  const copyBtn = h('button', { class: 'btn small', type: 'button', onclick: (e) => wgCopy(snippet, e.currentTarget) }, icon('check'), h('span', {}, t('Copiar')));
   return h('div', { class: 'page' },
-    h('div', { class: 'page-head' }, h('h1', {}, 'Widget web')),
-    h('p', { class: 'help' }, 'Un botón de chat para tu página web: tus clientes hablan con este bot sin salir de tu sitio. Lo configurás acá y pegás un pedacito de código en tu página.'),
+    h('div', { class: 'page-head' }, h('h1', {}, t('Widget web'))),
+    h('p', { class: 'help' }, t('Un botón de chat para tu página web: tus clientes hablan con este bot sin salir de tu sitio. Lo configurás acá y pegás un pedacito de código en tu página.')),
     h('div', { class: 'notice warn' }, icon('globe'),
-      h('span', {}, 'Hoy Parla corre en esta computadora, así que solo la ven las páginas abiertas acá mismo. Para usarlo en tu sitio real, Parla tiene que estar publicado en internet (en un servidor o con un túnel) y el código de abajo tiene que apuntar a esa dirección.')),
+      h('span', {}, t('Hoy Parla corre en esta computadora, así que solo la ven las páginas abiertas acá mismo. Para usarlo en tu sitio real, Parla tiene que estar publicado en internet (en un servidor o con un túnel) y el código de abajo tiene que apuntar a esa dirección.'))),
     h('div', { class: 'panel' },
-      check('enabled', 'Activar el chat en mi sitio', w.enabled ? 'Prendido: los sitios autorizados ya pueden usarlo.' : 'Apagado: ningún sitio externo puede usarlo todavía.', render)),
-    w.enabled && !w.origins.length ? h('div', { class: 'notice warn' }, 'Está prendido pero sin sitios autorizados: agregá la dirección de tu página abajo.') : null,
+      check('enabled', t('Activar el chat en mi sitio'), w.enabled ? t('Prendido: los sitios autorizados ya pueden usarlo.') : t('Apagado: ningún sitio externo puede usarlo todavía.'), render)),
+    w.enabled && !w.origins.length ? h('div', { class: 'notice warn' }, t('Está prendido pero sin sitios autorizados: agregá la dirección de tu página abajo.')) : null,
     wgOrigins(w),
     h('div', { class: 'panel' },
-      h('h2', {}, 'Cómo se ve'),
-      lab('Título', h('input', bind(w, 'title', wgRefresh))),
-      lab('Saludo (opcional, aparece apenas se abre)', h('input', { ...bind(w, 'greeting', wgRefresh), placeholder: '¡Hola! ¿En qué te ayudo?' })),
+      h('h2', {}, t('Cómo se ve')),
+      lab(t('Título'), h('input', bind(w, 'title', wgRefresh))),
+      lab(t('Saludo (opcional, aparece apenas se abre)'), h('input', { ...bind(w, 'greeting', wgRefresh), placeholder: t('¡Hola! ¿En qué te ayudo?') })),
       h('div', { class: 'row' },
-        h('div', { class: 'row', style: 'gap:8px' }, h('span', {}, 'Color'),
-          colorField(w, 'Color del chat', { hex: true, live: wgChanged, done: () => { wgChanged(); render(); } })),
-        lab('Lugar en la pantalla', pick([['right', 'Abajo a la derecha'], ['left', 'Abajo a la izquierda']], w.position, (v) => { w.position = v; wgChanged(); }, 'Lugar en la pantalla'))),
-      check('voice', 'Dejar que hablen por micrófono', 'El bot escucha y contesta también con voz. Se oculta solo si el navegador no lo permite.')),
+        h('div', { class: 'row', style: 'gap:8px' }, h('span', {}, t('Color')),
+          colorField(w, t('Color del chat'), { hex: true, live: wgChanged, done: () => { wgChanged(); render(); } })),
+        lab(t('Lugar en la pantalla'), pick([['right', t('Abajo a la derecha')], ['left', t('Abajo a la izquierda')]], w.position, (v) => { w.position = v; wgChanged(); }, t('Lugar en la pantalla')))),
+      check('voice', t('Dejar que hablen por micrófono'), t('El bot escucha y contesta también con voz. Se oculta solo si el navegador no lo permite.'))),
     h('div', { class: 'panel' },
-      h('div', { class: 'row' }, h('h2', { class: 'grow' }, 'Código para tu página'), copyBtn),
-      h('p', { class: 'help' }, 'Copialo y pegalo en tu sitio, antes de «</body>». Si usás un armador de páginas (WordPress, Wix, Tiendanube…), buscá la opción «agregar código» o «HTML personalizado».'),
+      h('div', { class: 'row' }, h('h2', { class: 'grow' }, t('Código para tu página')), copyBtn),
+      h('p', { class: 'help' }, t('Copialo y pegalo en tu sitio, antes de «</body>». Si usás un armador de páginas (WordPress, Wix, Tiendanube…), buscá la opción «agregar código» o «HTML personalizado».')),
       h('pre', { class: 'wg-snippet' }, snippet)),
     h('div', { class: 'panel' }, h('label', { class: 'wg-check' },
       h('input', { type: 'checkbox', checked: wgPreview, onchange: (e) => { wgPreview = e.target.checked; wgInject(); } }),
-      h('span', {}, 'Ver la vista previa en esta pantalla',
-        h('small', {}, 'Es el chat de verdad, abajo en la esquina. Las charlas de prueba quedan en Conversaciones con el canal «prueba-widget».')))));
+      h('span', {}, t('Ver la vista previa en esta pantalla'),
+        h('small', {}, t('Es el chat de verdad, abajo en la esquina. Las charlas de prueba quedan en Conversaciones con el canal «prueba-widget».'))))));
 };

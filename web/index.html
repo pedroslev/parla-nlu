@@ -381,6 +381,7 @@
 <div id="app"></div>
 
 <script>
+document.querySelector('meta[name="description"]').content = t('Armá bots que entienden: intenciones, entidades y conversaciones, sin programar.');
 const ICONS = {
   chat: 'M4 5h16v11H9l-5 4z', question: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z|M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.7.4-1.1 1-1.1 1.8|M12 17h.01',
   globe: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z|M3 12h18|M12 3c3 3 3 15 0 18|M12 3c-3 3-3 15 0 18', branch: 'M6 3v6a6 6 0 0 0 6 6h6|M6 9v12|M15 12l3 3-3 3',
@@ -397,51 +398,51 @@ const ICONS = {
   call: 'M4 4h7v7H4z|M7.5 11v5a3 3 0 0 0 3 3H17|M14 16l3 3-3 3', lightbulb: 'M9 18h6|M10 21h4|M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z',
 };
 const COLORS = [['#FFE566', '#5C4A00'], ['#FFB8D9', '#7A1447'], ['#B5F0B0', '#14531B'], ['#AEDDFF', '#0B4A75'], ['#FFCF99', '#7A3E00'], ['#D9C7FF', '#452089']];
-const COLOR_NAMES = ['Amarillo', 'Rosa', 'Verde', 'Celeste', 'Naranja', 'Violeta'];
+const COLOR_NAMES = [t('Amarillo'), t('Rosa'), t('Verde'), t('Celeste'), t('Naranja'), t('Violeta')];
 const KINDS = [
-  ['examples', 'Por los ejemplos que marco en las frases', ''],
-  ['list', 'De una lista de opciones', ''],
-  ['number', 'Un número', '\\b\\d+(?:[.,]\\d+)?\\b'],
-  ['email', 'Un email', '[\\w.+-]+@[\\w-]+\\.[\\w.-]+'],
-  ['phone', 'Un teléfono', '\\+?\\d[\\d\\s().-]{6,}\\d'],
-  ['dni', 'Un DNI', '\\b\\d{1,2}\\.?\\d{3}\\.?\\d{3}\\b'],
-  ['date', 'Fecha u hora (mañana, el jueves que viene…)', ''],
-  ['custom', 'Un formato propio (regex, avanzado)', null],
+  ['examples', t('Por los ejemplos que marco en las frases'), ''],
+  ['list', t('De una lista de opciones'), ''],
+  ['number', t('Un número'), '\\b\\d+(?:[.,]\\d+)?\\b'],
+  ['email', t('Un email'), '[\\w.+-]+@[\\w-]+\\.[\\w.-]+'],
+  ['phone', t('Un teléfono'), '\\+?\\d[\\d\\s().-]{6,}\\d'],
+  ['dni', t('Un DNI'), '\\b\\d{1,2}\\.?\\d{3}\\.?\\d{3}\\b'],
+  ['date', t('Fecha u hora (mañana, el jueves que viene…)'), ''],
+  ['custom', t('Un formato propio (regex, avanzado)'), null],
 ];
 const STEP_MENU = [
-  ['message', 'chat', 'Enviar un mensaje', 'El bot dice algo'],
-  ['file', 'clip', 'Enviar un archivo', 'Manda un PDF, una imagen o un documento que subiste'],
-  ['ask', 'question', 'Hacer una pregunta', 'Pregunta y guarda la respuesta en un slot'],
-  ['http', 'globe', 'Consultar un servicio', 'Trae o envía datos por internet (HTTP)'],
-  ['function', 'braces', 'Ejecutar una función', 'Corre código propio con los slots que elijas'],
-  ['if', 'branch', 'Tomar un camino', 'Hace una cosa u otra según un slot'],
-  ['set', 'pencil', 'Guardar un valor', 'Anota o vacía un slot'],
-  ['goto', 'arrow', 'Seguir con otro flujo', 'Continúa en otra conversación y no vuelve'],
-  ['call', 'call', 'Usar otro flujo y volver', 'Hace otro flujo y después sigue acá'],
-  ['agent', 'spark', 'Conversar con IA', 'La IA charla, usa funciones y completa slots'],
-  ['handoff', 'hand', 'Pasar a una persona', 'El bot se pausa y responde alguien del equipo'],
-  ['classify', 'bookmark', 'Clasificar la conversación', 'Anota cómo terminó, para los reportes'],
-  ['end', 'stop', 'Terminar', 'El flujo se corta acá'],
+  ['message', 'chat', t('Enviar un mensaje'), t('El bot dice algo')],
+  ['file', 'clip', t('Enviar un archivo'), t('Manda un PDF, una imagen o un documento que subiste')],
+  ['ask', 'question', t('Hacer una pregunta'), t('Pregunta y guarda la respuesta en un slot')],
+  ['http', 'globe', t('Consultar un servicio'), t('Trae o envía datos por internet (HTTP)')],
+  ['function', 'braces', t('Ejecutar una función'), t('Corre código propio con los slots que elijas')],
+  ['if', 'branch', t('Tomar un camino'), t('Hace una cosa u otra según un slot')],
+  ['set', 'pencil', t('Guardar un valor'), t('Anota o vacía un slot')],
+  ['goto', 'arrow', t('Seguir con otro flujo'), t('Continúa en otra conversación y no vuelve')],
+  ['call', 'call', t('Usar otro flujo y volver'), t('Hace otro flujo y después sigue acá')],
+  ['agent', 'spark', t('Conversar con IA'), t('La IA charla, usa funciones y completa slots')],
+  ['handoff', 'hand', t('Pasar a una persona'), t('El bot se pausa y responde alguien del equipo')],
+  ['classify', 'bookmark', t('Clasificar la conversación'), t('Anota cómo terminó, para los reportes')],
+  ['end', 'stop', t('Terminar'), t('El flujo se corta acá')],
 ];
-const OPS = [['eq', 'es igual a'], ['ne', 'es distinto de'], ['contains', 'contiene'], ['gt', 'es mayor que'], ['lt', 'es menor que'], ['empty', 'está vacío'], ['filled', 'tiene un valor']];
+const OPS = [['eq', t('es igual a')], ['ne', t('es distinto de')], ['contains', t('contiene')], ['gt', t('es mayor que')], ['lt', t('es menor que')], ['empty', t('está vacío')], ['filled', t('tiene un valor')]];
 const RESERVED = new Set(['intent', 'confidence', 'text', 'entities', 'status', 'body', 'true', 'false', 'null', 'in']);
 const ANNOT = /\[([^\]]+)\]\(([^)]+)\)/g;
 const $ = (s) => document.querySelector(s);
-const LANGS = { es: 'Español', pt: 'Portugués', en: 'Inglés' };
+const LANGS = { es: t('Español'), pt: t('Portugués'), en: t('Inglés') };
 const langs = () => agent?.languages?.length ? agent.languages : ['es'];
 let editLang = null;                       // idioma que se está editando en mensajes y botones (null = el principal)
 const curLang = () => langs().includes(editLang) ? editLang : langs()[0];
 const translating = () => curLang() !== langs()[0];
 // "Flujos del sistema": comportamientos que el bot ya trae. Los valores de fábrica los pone el servidor (completa agent.system al cargar).
 const SYSTEM = [
-  ['cancel', 'Cancelar', 'Cuando la persona quiere dejar lo que está haciendo, por ejemplo «cancelar» u «olvidalo».'],
-  ['repeat', 'Repetir', 'Cuando la persona pide que repita («¿cómo?», «repetí»): el bot vuelve a decir su último mensaje.'],
-  ['clarify', 'Preguntar si duda', 'Cuando dos intenciones se parecen mucho, el bot pregunta cuál de las dos quiso decir.'],
-  ['anything_else', '¿Algo más?', 'Al terminar un flujo, el bot pregunta si puede ayudar con otra cosa.'],
-  ['resume', 'Retomar', 'Cuando la persona se va por las ramas en medio de un flujo: al terminar eso, el bot vuelve a lo que estaban haciendo.'],
-  ['correction', 'Corregir un dato', 'Cuando la persona corrige algo que ya dijo («no, mi DNI es otro»): el bot cambia el dato y sigue.'],
-  ['handoff', 'Hablar con una persona', 'Cuando la persona pide hablar con alguien del equipo: la charla pasa a Bandeja y el bot se pausa.'],
-  ['csat', 'Encuesta al final', 'Al terminar la conversación, el bot pide una nota del 1 al 5 (la ves en Reportes).'],
+  ['cancel', t('Cancelar'), t('Cuando la persona quiere dejar lo que está haciendo, por ejemplo «cancelar» u «olvidalo».')],
+  ['repeat', t('Repetir'), t('Cuando la persona pide que repita («¿cómo?», «repetí»): el bot vuelve a decir su último mensaje.')],
+  ['clarify', t('Preguntar si duda'), t('Cuando dos intenciones se parecen mucho, el bot pregunta cuál de las dos quiso decir.')],
+  ['anything_else', t('¿Algo más?'), t('Al terminar un flujo, el bot pregunta si puede ayudar con otra cosa.')],
+  ['resume', t('Retomar'), t('Cuando la persona se va por las ramas en medio de un flujo: al terminar eso, el bot vuelve a lo que estaban haciendo.')],
+  ['correction', t('Corregir un dato'), t('Cuando la persona corrige algo que ya dijo («no, mi DNI es otro»): el bot cambia el dato y sigue.')],
+  ['handoff', t('Hablar con una persona'), t('Cuando la persona pide hablar con alguien del equipo: la charla pasa a Bandeja y el bot se pausa.')],
+  ['csat', t('Encuesta al final'), t('Al terminar la conversación, el bot pide una nota del 1 al 5 (la ves en Reportes).')],
 ];
 const sysOf = (key) => agent.system?.[key] || {};   // el servidor manda agent.system completo (load); {} solo si una versión vieja restaurada no lo trae
 // roles (static/users.js deja window.me; null o undefined = sin usuarios, todo abierto)
@@ -496,7 +497,7 @@ async function api(method, path, body) {
 }
 function touch() {                       // algo cambió: se guarda solo; las frases y entidades además piden entrenar
   dirty = true;
-  if ($('#status')) $('#status').textContent = 'Guardando…';
+  if ($('#status')) $('#status').textContent = t('Guardando…');
   renderTrain();
   clearTimeout(timer);
   timer = setTimeout(saveNow, 400);
@@ -505,8 +506,8 @@ async function saveNow() {
   clearTimeout(timer);
   if (!dirty || !agent || !canEdit()) return;     // analista o persona de Bandeja: solo mira
   dirty = false;
-  try { await api('PUT', '/' + agent.id, agent); if ($('#status')) $('#status').textContent = 'Cambios guardados'; }
-  catch (e) { dirty = true; if ($('#status')) $('#status').textContent = 'No se pudo guardar: ' + e.message; }
+  try { await api('PUT', '/' + agent.id, agent); if ($('#status')) $('#status').textContent = t('Cambios guardados'); }
+  catch (e) { dirty = true; if ($('#status')) $('#status').textContent = t('No se pudo guardar: {error}', { error: e.message }); }
 }
 function slug(raw) {
   let s = String(raw).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
@@ -517,7 +518,7 @@ const grow = (t) => { t.style.height = 'auto'; t.style.height = t.scrollHeight +
 const bind = (obj, key, after) => ({ value: obj[key] ?? '', oninput: (e) => { obj[key] = e.target.value; touch(); after?.(e); } });
 const area = (obj, key, props) => h('textarea', { rows: 1, ...props, ...bind(obj, key, (e) => grow(e.target)) });
 const pick = (options, value, onchange, label) => h('select', { value: value ?? '', 'aria-label': label, onchange: (e) => onchange(e.target.value) },
-  options.map(([v, t]) => h('option', { value: v }, t)));
+  options.map(([v, txt]) => h('option', { value: v }, txt)));
 const lab = (text, control, cls) => h('label', { class: 'f ' + (cls || '') }, text, control);
 const entityOf = (name) => agent.entities.find((e) => e.name === name);
 // color: un índice de COLORS (paleta) o un «#rrggbb» elegido a mano, con la tinta que más contraste le dé (WCAG)
@@ -540,21 +541,21 @@ function colorField(obj, label, opts = {}) {
   return h('span', { class: 'color-field' },
     h('input', { type: 'color', class: 'swatch', value: bg, title: label, 'aria-label': label,
       oninput: (ev) => { obj.color = ev.target.value; live(); }, onchange: () => done() }),   // redibuja al soltar: no cierra el selector
-    h('span', { class: 'swatches', role: 'group', 'aria-label': label + ': colores rápidos' }, COLORS.map(([c], i) => h('button', {
+    h('span', { class: 'swatches', role: 'group', 'aria-label': t('{label}: colores rápidos', { label }) }, COLORS.map(([c], i) => h('button', {
       type: 'button', style: 'background:' + c, 'aria-label': COLOR_NAMES[i], title: COLOR_NAMES[i], 'aria-pressed': String(bg === c.toLowerCase()),
       onclick: () => { obj.color = opts.hex ? c : i; live(); done(); } }))));
 }
 const fold = (t) => String(t ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 const query = { slots: '', entities: '', flows: '' };    // lo que se busca en Slots, Entidades y Flujos; sobrevive a los redibujos
 function searchBox(key, label, rows) {        // rows: [[elemento, texto]]. Filtra en el lugar, sin redibujar, así no se pierde el foco
-  const none = h('div', { class: 'empty', hidden: true }, 'Nada coincide con «', h('span'), '».');
+  const none = h('div', { class: 'empty', hidden: true }, t('Nada coincide con «'), h('span'), t('».'));
   const apply = () => {
     const q = fold(query[key]).trim();
     let shown = 0;
     rows.forEach(([el, text]) => { const ok = !q || fold(text).includes(q); el.hidden = !ok; shown += ok; });
     none.hidden = !!shown || !rows.length; none.children[0].textContent = query[key].trim();
   };
-  const input = h('input', { type: 'search', placeholder: 'Buscar', 'aria-label': label, value: query[key], oninput: (e) => { query[key] = e.target.value; apply(); } });
+  const input = h('input', { type: 'search', placeholder: t('Buscar'), 'aria-label': label, value: query[key], oninput: (e) => { query[key] = e.target.value; apply(); } });
   apply();
   return [input, none];
 }
@@ -574,23 +575,23 @@ async function trainNow() {
   try {
     await saveNow();
     agent.trained = await api('POST', '/' + agent.id + '/train', { fingerprint: fingerprint() });
-  } catch (e) { if ($('#status')) $('#status').textContent = 'No se pudo entrenar: ' + e.message; }
+  } catch (e) { if ($('#status')) $('#status').textContent = t('No se pudo entrenar: {error}', { error: e.message }); }
   training = false; renderTrain();
   if ($('#chat')) renderChat();
 }
-const trainNote = () => h('div', { class: 'notice warn train-note' }, 'El bot todavía no usa tus últimos cambios en frases y entidades.',
-  h('button', { class: 'link', onclick: trainNow }, 'Entrenar ahora'));
+const trainNote = () => h('div', { class: 'notice warn train-note' }, t('El bot todavía no usa tus últimos cambios en frases y entidades.'),
+  h('button', { class: 'link', onclick: trainNow }, t('Entrenar ahora')));
 function renderTrain() {
   const box = $('#train');
   if (!box || !agent || !canEdit()) return;
-  const t = agent.trained;
-  if (training) return box.replaceChildren(h('span', { class: 'state' }, 'Entrenando…'), h('button', { class: 'btn', disabled: true }, icon('spark'), 'Entrenar'));
+  const tr = agent.trained;
+  if (training) return box.replaceChildren(h('span', { class: 'state' }, t('Entrenando…')), h('button', { class: 'btn', disabled: true }, icon('spark'), t('Entrenar')));
   if (untrained()) {
     const form = $('#chat form');
     if (form && testEnv === 'draft' && !$('.train-note')) form.before(trainNote());     // sin redibujar el chat, para no robar el foco
-    return box.replaceChildren(h('span', { class: 'state pending' }, 'Hay cambios sin entrenar'), h('button', { class: 'btn', onclick: trainNow }, icon('spark'), 'Entrenar'));
+    return box.replaceChildren(h('span', { class: 'state pending' }, t('Hay cambios sin entrenar')), h('button', { class: 'btn', onclick: trainNow }, icon('spark'), t('Entrenar')));
   }
-  box.replaceChildren(h('button', { class: 'state done', title: 'Ver el detalle del último entrenamiento', onclick: () => window.trainLogView() }, icon('check'), 'Entrenado ' + t.at.slice(11)));
+  box.replaceChildren(h('button', { class: 'state done', title: t('Ver el detalle del último entrenamiento'), onclick: () => window.trainLogView() }, icon('check'), t('Entrenado {time}', { time: tr.at.slice(11) })));
   const note = $('.train-note'); if (note) note.remove();
 }
 
@@ -613,7 +614,7 @@ function nameForm(placeholder, cta, done) {
 }
 function confirmBox(title, text, cta, done) {
   const d = h('dialog', {}, h('form', { method: 'dialog' }, h('h2', {}, title), h('p', { class: 'help' }, text),
-    h('div', { class: 'row' }, h('button', { class: 'btn', style: 'background:var(--warn)', value: 'ok' }, cta), h('button', { class: 'btn quiet', value: '' }, 'Cancelar'))));
+    h('div', { class: 'row' }, h('button', { class: 'btn', style: 'background:var(--warn)', value: 'ok' }, cta), h('button', { class: 'btn quiet', value: '' }, t('Cancelar')))));
   d.onclose = () => { d.remove(); if (d.returnValue === 'ok') done(); };
   document.body.append(d); d.showModal();
 }
@@ -671,7 +672,7 @@ async function exportAgent() {
   const a = h('a', { href: URL.createObjectURL(blob), download: (slug(agent.name) || 'agente') + '.parla.json' });
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  if ($('#status')) $('#status').textContent = 'Agente exportado';
+  if ($('#status')) $('#status').textContent = t('Agente exportado');
 }
 function importAgent() {
   const input = h('input', { type: 'file', accept: '.json,application/json' });
@@ -681,10 +682,10 @@ function importAgent() {
     const error = $('.import-error');
     try {
       let data;
-      try { data = JSON.parse(await file.text()); } catch { throw new Error('el archivo no es un agente de Parla (no es un JSON válido)'); }
+      try { data = JSON.parse(await file.text()); } catch { throw new Error(t('el archivo no es un agente de Parla (no es un JSON válido)')); }
       const created = await api('POST', '', { import: data });
       openAgent(created.id);
-    } catch (e) { error.textContent = 'No se pudo importar «' + file.name + '»: ' + e.message + '.'; }
+    } catch (e) { error.textContent = t('No se pudo importar «{file}»: {error}.', { file: file.name, error: e.message }); }
   };
   input.click();
 }
@@ -694,25 +695,27 @@ function importRasa() {      // el proyecto de Rasa comprimido en .zip: POST /ap
     const file = input.files[0];
     if (!file) return;
     const error = $('.import-error');
-    if (file.size > 18 * 1024 * 1024) { error.textContent = 'El .zip es muy grande (máximo 18 MB). Dejá solo los .yml del proyecto.'; return; }
-    error.textContent = 'Importando «' + file.name + '»… (también lo entrena)';
+    if (file.size > 18 * 1024 * 1024) { error.textContent = t('El .zip es muy grande (máximo 18 MB). Dejá solo los .yml del proyecto.'); return; }
+    error.textContent = t('Importando «{file}»… (también lo entrena)', { file: file.name });
     const r = new FileReader();
     r.onload = async () => {
       try {
         const out = await api('POST', '/import/rasa', { zip: String(r.result).split(',')[1], name: file.name.replace(/\.zip$/i, '') });
         error.textContent = '';
         const d = h('dialog', {}, h('form', { method: 'dialog' },
-          h('h2', {}, 'Importado de Rasa: ' + out.agent.name),
-          h('p', { class: 'help' }, out.agent.intents.length + ' intenciones, ' + out.agent.entities.length + ' entidades, ' + out.agent.slots.length + ' slots y ' + out.agent.flows.length + ' flujos.'),
-          out.warnings.length ? [h('p', {}, 'Revisá lo que no se pudo pasar tal cual (' + out.warnings.length + '):'),
+          h('h2', {}, t('Importado de Rasa: {name}', { name: out.agent.name })),
+          h('p', { class: 'help' }, t('{intents}, {entities}, {slots} y {flows}.', {
+            intents: t.plural(out.agent.intents.length, '{n} intención', '{n} intenciones'), entities: t.plural(out.agent.entities.length, '{n} entidad', '{n} entidades'),
+            slots: t.plural(out.agent.slots.length, '{n} slot', '{n} slots'), flows: t.plural(out.agent.flows.length, '{n} flujo', '{n} flujos') })),
+          out.warnings.length ? [h('p', {}, t('Revisá lo que no se pudo pasar tal cual ({n}):', { n: out.warnings.length })),
             h('ul', { class: 'help', style: 'max-height:45vh;overflow:auto;padding-left:20px' }, out.warnings.map((w) => h('li', {}, w)))]
-            : h('p', { class: 'help' }, 'Se pasó todo sin avisos.'),
-          h('div', { class: 'row' }, h('button', { class: 'btn', value: 'ok' }, 'Abrir agente'))));
+            : h('p', { class: 'help' }, t('Se pasó todo sin avisos.')),
+          h('div', { class: 'row' }, h('button', { class: 'btn', value: 'ok' }, t('Abrir agente')))));
         d.onclose = () => { d.remove(); openAgent(out.agent.id); };
         document.body.append(d); d.showModal();
-      } catch (e) { error.textContent = 'No se pudo importar «' + file.name + '»: ' + e.message + '.'; }
+      } catch (e) { error.textContent = t('No se pudo importar «{file}»: {error}.', { file: file.name, error: e.message }); }
     };
-    r.onerror = () => { error.textContent = 'No se pudo leer «' + file.name + '».'; };
+    r.onerror = () => { error.textContent = t('No se pudo leer «{file}».', { file: file.name }); };
     r.readAsDataURL(file);
   };
   input.click();
@@ -725,33 +728,32 @@ async function home() {
   history.replaceState(null, '', location.pathname);
   const list = await api('GET', '');
   const create = () => {
-    const input = h('input', { placeholder: 'Por ejemplo: Pizzería Don Luis', 'aria-label': 'Nombre del agente', required: true });
+    const input = h('input', { placeholder: t('Por ejemplo: Pizzería Don Luis'), 'aria-label': t('Nombre del agente'), required: true });
     const d = h('dialog', {}, h('form', { onsubmit: async (e) => { e.preventDefault(); const a = await api('POST', '', { name: input.value }); d.remove(); openAgent(a.id); } },
-      h('h2', {}, 'Crear agente'), lab('¿Cómo se llama?', input),
-      h('div', { class: 'row' }, h('button', { class: 'btn' }, 'Crear agente'), h('button', { class: 'btn quiet', type: 'button', onclick: () => d.remove() }, 'Cancelar'))));
+      h('h2', {}, t('Crear agente')), lab(t('¿Cómo se llama?'), input),
+      h('div', { class: 'row' }, h('button', { class: 'btn' }, t('Crear agente')), h('button', { class: 'btn quiet', type: 'button', onclick: () => d.remove() }, t('Cancelar')))));
     document.body.append(d); d.showModal();
   };
   const app = $('#app');
   app.className = 'home';
   const HUES = ['#6A4CF5', '#1FA9C9', '#E8559B', '#3346D3', '#E38B12', '#17A06B'];
-  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : many);
   app.replaceChildren(
     h('header', { class: 'home-hero' }, h('div', { class: 'home-in' },
       h('div', { class: 'home-top' }, h('span', { class: 'home-logo' }, 'Parla', h('i', {}, '.')), h('div', { class: 'row' }, window.langSwitcher?.(), window.themeSwitcher?.(), window.userAvatar?.())),
-      h('h1', {}, window.me?.name ? 'Hola, ' + window.me.name : 'Tus agentes'),
-      h('p', { class: 'home-lead' }, 'Armá bots que entienden cómo habla tu gente: intenciones, datos, flujos y respuestas, todo en tu compu.'),
-      h('div', { class: 'home-actions' }, h('button', { class: 'btn', onclick: create }, icon('plus'), 'Crear agente'),
-        h('button', { class: 'btn quiet', onclick: () => connectView() }, icon('spark'), 'Conectar con IA'),
-        h('button', { class: 'btn quiet', onclick: importAgent }, icon('up'), 'Importar agente'),
-        h('button', { class: 'btn quiet', onclick: importRasa, title: 'Subí tu proyecto de Rasa comprimido en .zip' }, icon('up'), 'Importar de Rasa')))),
+      h('h1', {}, window.me?.name ? t('Hola, {name}', { name: window.me.name }) : t('Tus agentes')),
+      h('p', { class: 'home-lead' }, t('Armá bots que entienden cómo habla tu gente: intenciones, datos, flujos y respuestas, todo en tu compu.')),
+      h('div', { class: 'home-actions' }, h('button', { class: 'btn', onclick: create }, icon('plus'), t('Crear agente')),
+        h('button', { class: 'btn quiet', onclick: () => connectView() }, icon('spark'), t('Conectar con IA')),
+        h('button', { class: 'btn quiet', onclick: importAgent }, icon('up'), t('Importar agente')),
+        h('button', { class: 'btn quiet', onclick: importRasa, title: t('Subí tu proyecto de Rasa comprimido en .zip') }, icon('up'), t('Importar de Rasa'))))),
     h('main', { class: 'home-in home-body' },
-      h('h2', {}, 'Tus agentes', h('span', { class: 'count' }, list.length)),
+      h('h2', {}, t('Tus agentes'), h('span', { class: 'count' }, list.length)),
       h('p', { class: 'import-error', role: 'alert' }),
       h('div', { class: 'agents' },
         list.map((a, i) => h('button', { class: 'agent', style: '--hue:' + HUES[i % HUES.length], onclick: () => openAgent(a.id) },
           h('span', { class: 'agent-av', 'aria-hidden': 'true' }, (a.name.trim()[0] || 'P').toUpperCase()), h('strong', {}, a.name),
-          h('span', { class: 'agent-meta' }, h('span', {}, plural(a.intents, 'intención', 'intenciones')), h('span', {}, plural(a.flows, 'flujo', 'flujos'))))),
-        h('button', { class: 'agent new', onclick: create }, icon('plus'), 'Crear agente'))));
+          h('span', { class: 'agent-meta' }, h('span', {}, t.plural(a.intents, '{n} intención', '{n} intenciones')), h('span', {}, t.plural(a.flows, '{n} flujo', '{n} flujos'))))),
+        h('button', { class: 'agent new', onclick: create }, icon('plus'), t('Crear agente')))));
 }
 async function openAgent(id, start) {
   agent = await api('GET', '/' + id);
@@ -764,20 +766,20 @@ async function openAgent(id, start) {
   app.replaceChildren(
     h('header', { class: 'top' },
       h('span', { class: 'logo' }, 'Parla'),
-      h('button', { class: 'back', onclick: home }, icon('back'), 'Agentes'),
-      h('input', { class: 'agent-name', 'aria-label': 'Nombre del agente', ...bind(agent, 'name') }),
+      h('button', { class: 'back', onclick: home }, icon('back'), t('Agentes')),
+      h('input', { class: 'agent-name', 'aria-label': t('Nombre del agente'), ...bind(agent, 'name') }),
       h('span', { id: 'status', role: 'status' }), h('div', { id: 'train', hidden: !canEdit() }),
-      h('button', { id: 'live', class: 'rl-chip', onclick: () => window.openReleases() }), h('button', { id: 'chat-toggle', class: 'btn quiet small', 'aria-controls': 'chat', 'aria-expanded': String(chatOpen), title: 'Abrir o cerrar el panel de prueba', onclick: () => setChat(!chatOpen) }, icon('chat'), 'Probar'),
-      canEdit() ? h('button', { class: 'btn', onclick: () => window.publishDialog() }, 'Publicar') : null,
-      h('button', { class: 'icon-btn more', 'aria-label': 'Más opciones', title: 'Más opciones', 'aria-haspopup': 'menu',
+      h('button', { id: 'live', class: 'rl-chip', onclick: () => window.openReleases() }), h('button', { id: 'chat-toggle', class: 'btn quiet small', 'aria-controls': 'chat', 'aria-expanded': String(chatOpen), title: t('Abrir o cerrar el panel de prueba'), onclick: () => setChat(!chatOpen) }, icon('chat'), t('Probar')),
+      canEdit() ? h('button', { class: 'btn', onclick: () => window.publishDialog() }, t('Publicar')) : null,
+      h('button', { class: 'icon-btn more', 'aria-label': t('Más opciones'), title: t('Más opciones'), 'aria-haspopup': 'menu',
         onclick: (e) => openPop(e.currentTarget.getBoundingClientRect(), [
-          h('button', { class: 'opt', onclick: () => { closePop(); connectView(); } }, icon('spark'), h('span', {}, 'Conectar con IA', h('small', {}, 'Claude, Codex o Cursor arman bots por vos'))),
-          h('button', { class: 'opt', onclick: () => { closePop(); exportAgent(); } }, icon('down'), h('span', {}, 'Exportar agente', h('small', {}, 'Un archivo para llevarlo a otra compu'))),
-          h('div', { class: 'opt-theme' }, h('span', {}, 'Tema'), window.themeSwitcher?.()),
-          h('div', { class: 'opt-theme' }, h('span', {}, 'Idioma'), window.langSwitcher?.()),
+          h('button', { class: 'opt', onclick: () => { closePop(); connectView(); } }, icon('spark'), h('span', {}, t('Conectar con IA'), h('small', {}, t('Claude, Codex o Cursor arman bots por vos')))),
+          h('button', { class: 'opt', onclick: () => { closePop(); exportAgent(); } }, icon('down'), h('span', {}, t('Exportar agente'), h('small', {}, t('Un archivo para llevarlo a otra compu')))),
+          h('div', { class: 'opt-theme' }, h('span', {}, t('Tema')), window.themeSwitcher?.()),
+          h('div', { class: 'opt-theme' }, h('span', {}, t('Idioma')), window.langSwitcher?.()),
         ]) }, icon('dots')),
       h('span', { 'data-me-slot': '' }, window.userAvatar?.())),
-    h('nav', { id: 'nav', 'aria-label': 'Secciones' }), h('main', { id: 'center' }), h('aside', { id: 'chat', 'aria-label': 'Probar el agente' }));
+    h('nav', { id: 'nav', 'aria-label': t('Secciones') }), h('main', { id: 'center' }), h('aside', { id: 'chat', 'aria-label': t('Probar el agente') }));
   // un slot que se llama igual que una entidad y no tiene ninguna, la usa
   agent.slots.forEach((v) => { if (!v.entity && entityOf(v.name)) { v.entity = v.name; touch(); } });
   render(); renderChat(); renderTrain(); window.renderLive();
@@ -786,12 +788,12 @@ async function openAgent(id, start) {
 function render() {
   closePop();
   const groups = [
-    ['Construir', [['intents', 'chat', 'Intenciones', agent.intents.length], ['entities', 'tag', 'Entidades', agent.entities.length],
-      ['slots', 'box', 'Slots', agent.slots.length], ['flows', 'flow', 'Flujos', agent.flows.length], ['functions', 'braces', 'Funciones', agent.functions.length],
-      ['classifications', 'bookmark', 'Clasificaciones', agent.classifications.length], ['settings', 'sliders', 'Ajustes']]],
-    ['Inteligencia', [['knowledge', 'book', 'Conocimiento', (agent.knowledge || []).length], ['ai', 'spark', 'IA']]],
-    ['Operar', [['inbox', 'inbox', 'Bandeja'], ['sessions', 'history', 'Conversaciones'], ['improve', 'lightbulb', 'Para enseñar'], ['reports', 'chart', 'Reportes']]],
-    ['Publicar', [['tests', 'check', 'Tests', agent.tests.length], ['releases', 'layers', 'Versiones'], ['widget', 'globe', 'Widget web'], ['channels', 'phone', 'Canales'], ['secrets', 'key', 'Claves'], ['api', 'code', 'API']]],
+    [t('Construir'), [['intents', 'chat', t('Intenciones'), agent.intents.length], ['entities', 'tag', t('Entidades'), agent.entities.length],
+      ['slots', 'box', t('Slots'), agent.slots.length], ['flows', 'flow', t('Flujos'), agent.flows.length], ['functions', 'braces', t('Funciones'), agent.functions.length],
+      ['classifications', 'bookmark', t('Clasificaciones'), agent.classifications.length], ['settings', 'sliders', t('Ajustes')]]],
+    [t('Inteligencia'), [['knowledge', 'book', t('Conocimiento'), (agent.knowledge || []).length], ['ai', 'spark', t('IA')]]],
+    [t('Operar'), [['inbox', 'inbox', t('Bandeja')], ['sessions', 'history', t('Conversaciones')], ['improve', 'lightbulb', t('Para enseñar')], ['reports', 'chart', t('Reportes')]]],
+    [t('Publicar'), [['tests', 'check', t('Tests'), agent.tests.length], ['releases', 'layers', t('Versiones')], ['widget', 'globe', t('Widget web')], ['channels', 'phone', t('Canales')], ['secrets', 'key', t('Claves')], ['api', 'code', t('API')]]],
   ].map(([name, items]) => [name, items.filter(([id]) => !allowed() || allowed().includes(id))]).filter(([, items]) => items.length);
   if (allowed() && !allowed().includes(section)) section = allowed()[0];     // cada rol ve solo lo suyo
   if (!['intents','entities','slots','flows','functions','classifications','settings','knowledge','ai','inbox','sessions','improve','reports','tests','releases','widget','channels','secrets','api'].includes(section)) section = 'intents';
@@ -807,15 +809,15 @@ function render() {
     knowledge: () => window.knowledgeView(), ai: () => window.aiView(), inbox: () => window.inboxView(), improve: () => window.improveView(),
     widget: () => window.widgetView(), channels: () => window.channelsView(), secrets: () => window.secretsView() }[section];
   let view;
-  try { view = fn(); } catch (e) { console.error(e); view = h('div', { class: 'empty' }, 'Esta sección todavía no está lista.'); }   // un módulo que falta no rompe el resto
+  try { view = fn(); } catch (e) { console.error(e); view = h('div', { class: 'empty' }, t('Esta sección todavía no está lista.')); }   // un módulo que falta no rompe el resto
   c.replaceChildren(view);
   c.scrollTop = y;
   c.querySelectorAll('textarea').forEach(grow);
 }
 function side(kind, items, sub, addLabel, blank) {
   return h('div', { class: 'side' },
-    items.map((it, i) => h('button', { class: 'item', 'aria-current': String(i === sel[kind]), onclick: () => { sel[kind] = i; sel.system = null; render(); } }, it.name || 'Sin nombre', h('small', {}, sub(it)))),
-    h('button', { class: 'add', onclick: () => { items.push(blank()); sel[kind] = items.length - 1; sel.system = null; touch(); render(); const t = $('.title'); t.focus(); t.select(); } }, icon('plus'), addLabel));
+    items.map((it, i) => h('button', { class: 'item', 'aria-current': String(i === sel[kind]), onclick: () => { sel[kind] = i; sel.system = null; render(); } }, it.name || t('Sin nombre'), h('small', {}, sub(it)))),
+    h('button', { class: 'add', onclick: () => { items.push(blank()); sel[kind] = items.length - 1; sel.system = null; touch(); render(); const ti = $('.title'); ti.focus(); ti.select(); } }, icon('plus'), addLabel));
 }
 const uniqueName = (items, base) => { let n = base, i = 2; while (items.some((x) => x.name === n)) n = base + ' ' + i++; return n; };
 
@@ -850,9 +852,9 @@ function phraseRow(it, i) {
   let last = 0;
   for (const s of p.spans) {
     const word = p.text.slice(s.start, s.end);
-    el.append(p.text.slice(last, s.start), h('mark', { 'data-entity': s.entity, style: markStyle(entityOf(s.entity)), title: 'Tocá para quitar la marca',
-      onclick: (e) => openPop(e.currentTarget.getBoundingClientRect(), [h('p', { class: 'pop-title' }, '«' + word + '» está marcado como ' + s.entity),
-        h('button', { class: 'opt', onclick: () => { p.spans.splice(p.spans.indexOf(s), 1); save(); } }, icon('x'), 'Quitar la marca')]) }, word));
+    el.append(p.text.slice(last, s.start), h('mark', { 'data-entity': s.entity, style: markStyle(entityOf(s.entity)), title: t('Tocá para quitar la marca'),
+      onclick: (e) => openPop(e.currentTarget.getBoundingClientRect(), [h('p', { class: 'pop-title' }, t('«{word}» está marcado como {entity}', { word, entity: s.entity })),
+        h('button', { class: 'opt', onclick: () => { p.spans.splice(p.spans.indexOf(s), 1); save(); } }, icon('x'), t('Quitar la marca'))]) }, word));
     last = s.end;
   }
   el.append(p.text.slice(last));
@@ -871,15 +873,15 @@ function phraseRow(it, i) {
     if (start >= end) return;
     const apply = (name) => { p.spans = p.spans.filter((s) => s.end <= start || s.start >= end); p.spans.push({ start, end, entity: name }); closePop(); save(); };
     openPop(range.getBoundingClientRect(), [
-      h('p', { class: 'pop-title' }, '«' + p.text.slice(start, end) + '» es…'),
+      h('p', { class: 'pop-title' }, t('«{word}» es…', { word: p.text.slice(start, end) })),
       agent.entities.map((e) => h('button', { class: 'opt', onclick: () => apply(e.name) }, h('span', { class: 'dot', style: markStyle(e) }), e.name)),
       agent.entities.length ? h('hr') : null,
-      h('p', { class: 'pop-title' }, 'Una entidad nueva:'),
-      nameForm('Nombre, por ejemplo: gusto', 'Crear', (raw) => { const name = createEntity(raw); if (name) apply(name); }),
+      h('p', { class: 'pop-title' }, t('Una entidad nueva:')),
+      nameForm(t('Nombre, por ejemplo: gusto'), t('Crear'), (raw) => { const name = createEntity(raw); if (name) apply(name); }),
     ]);
   };
   const edit = () => {
-    const input = h('input', { value: p.text, 'aria-label': 'Editar frase' });
+    const input = h('input', { value: p.text, 'aria-label': t('Editar frase') });
     input.onblur = () => {
       const text = input.value.replace(/[\[\]]/g, '').trim();
       if (!text) { it.examples.splice(i, 1); touch(); return render(); }
@@ -890,15 +892,15 @@ function phraseRow(it, i) {
     input.onkeydown = (e) => { if (e.key === 'Enter') input.blur(); };
     el.replaceWith(input); input.focus();
   };
-  return h('div', { class: 'phrase-row' }, el, iconBtn('pencil', 'Editar frase', edit), iconBtn('trash', 'Borrar frase', () => { it.examples.splice(i, 1); touch(); render(); }));
+  return h('div', { class: 'phrase-row' }, el, iconBtn('pencil', t('Editar frase'), edit), iconBtn('trash', t('Borrar frase'), () => { it.examples.splice(i, 1); touch(); render(); }));
 }
 function intentsView() {
   const it = agent.intents[sel.intents];
-  const list = side('intents', agent.intents, (i) => i.examples.length + (i.examples.length === 1 ? ' frase' : ' frases'), 'Nueva intención',
-    () => ({ name: uniqueName(agent.intents, 'Nueva intención'), examples: [] }));
-  if (!it) return h('div', { class: 'two' }, list, h('div', { class: 'empty' }, h('h2', {}, 'Todavía no hay intenciones'),
-    h('p', {}, 'Una intención es algo que la gente le pide al bot, como "pedir una pizza" o "consultar un pedido".')));
-  const input = h('input', { placeholder: 'Escribí una frase como la diría una persona y apretá Enter', 'aria-label': 'Nueva frase' });
+  const list = side('intents', agent.intents, (i) => t.plural(i.examples.length, '{n} frase', '{n} frases'), t('Nueva intención'),
+    () => ({ name: uniqueName(agent.intents, t('Nueva intención')), examples: [] }));
+  if (!it) return h('div', { class: 'two' }, list, h('div', { class: 'empty' }, h('h2', {}, t('Todavía no hay intenciones')),
+    h('p', {}, t('Una intención es algo que la gente le pide al bot, como "pedir una pizza" o "consultar un pedido".'))));
+  const input = h('input', { placeholder: t('Escribí una frase como la diría una persona y apretá Enter'), 'aria-label': t('Nueva frase') });
   const add = (e) => {
     e.preventDefault();
     const text = input.value.replace(/[\[\]]/g, '').trim();
@@ -914,19 +916,19 @@ function intentsView() {
     it.name = name; touch(); render();
   };
   return h('div', { class: 'two' }, list, h('div', { class: 'page' },
-    h('input', { class: 'title', value: it.name, 'aria-label': 'Nombre de la intención', onchange: rename }),
-    h('p', { class: 'help' }, 'Escribí distintas formas en que alguien pediría esto. Con 5 a 10 frases ya anda bien. Cuando termines, tocá Entrenar arriba a la derecha.'),
-    flow ? h('div', { class: 'notice' }, 'Cuando el bot entiende esto, responde con el flujo', h('button', { class: 'link', onclick: () => openFlow(flow) }, flow.name))
-      : h('div', { class: 'notice warn' }, 'Todavía ningún flujo responde a esta intención.', h('button', { class: 'link', onclick: () => {
-        const f = { name: uniqueName(agent.flows, it.name), trigger: it.name, steps: [] }; agent.flows.push(f); touch(); openFlow(f); } }, 'Armar el flujo')),
-    h('form', { class: 'add-phrase', onsubmit: add }, input, h('button', { class: 'btn' }, 'Agregar frase')),
+    h('input', { class: 'title', value: it.name, 'aria-label': t('Nombre de la intención'), onchange: rename }),
+    h('p', { class: 'help' }, t('Escribí distintas formas en que alguien pediría esto. Con 5 a 10 frases ya anda bien. Cuando termines, tocá Entrenar arriba a la derecha.')),
+    flow ? h('div', { class: 'notice' }, t('Cuando el bot entiende esto, responde con el flujo'), h('button', { class: 'link', onclick: () => openFlow(flow) }, flow.name))
+      : h('div', { class: 'notice warn' }, t('Todavía ningún flujo responde a esta intención.'), h('button', { class: 'link', onclick: () => {
+        const f = { name: uniqueName(agent.flows, it.name), trigger: it.name, steps: [] }; agent.flows.push(f); touch(); openFlow(f); } }, t('Armar el flujo'))),
+    h('form', { class: 'add-phrase', onsubmit: add }, input, h('button', { class: 'btn' }, t('Agregar frase'))),
     it.examples.length ? [
-      h('p', { class: 'help' }, 'Para marcar una entidad, seleccioná la palabra con el mouse.'),
+      h('p', { class: 'help' }, t('Para marcar una entidad, seleccioná la palabra con el mouse.')),
       h('div', { class: 'panel', style: 'padding:4px 14px;gap:0' }, h('div', { class: 'phrases' }, it.examples.map((_, i) => phraseRow(it, i)))),
-    ] : h('div', { class: 'empty' }, 'Todavía no hay frases. Agregá la primera arriba.'),
-    h('div', {}, h('button', { class: 'btn danger', onclick: () => confirmBox('Borrar la intención', 'Se borra «' + it.name + '» con todas sus frases.', 'Borrar intención', () => {
+    ] : h('div', { class: 'empty' }, t('Todavía no hay frases. Agregá la primera arriba.')),
+    h('div', {}, h('button', { class: 'btn danger', onclick: () => confirmBox(t('Borrar la intención'), t('Se borra «{name}» con todas sus frases.', { name: it.name }), t('Borrar intención'), () => {
       agent.flows.forEach((f) => { if (f.trigger === it.name) f.trigger = ''; });
-      agent.intents.splice(sel.intents, 1); sel.intents = 0; touch(); render(); }) }, 'Borrar esta intención'))));
+      agent.intents.splice(sel.intents, 1); sel.intents = 0; touch(); render(); }) }, t('Borrar esta intención')))));
 }
 
 // ---------- entidades ----------
@@ -935,54 +937,54 @@ function entitiesView() {
   const card = (e) => {
     const kind = e.kind || (e.regex ? 'custom' : e.values?.length ? 'list' : 'examples');
     const setKind = (k) => { e.kind = k; const preset = KINDS.find((x) => x[0] === k)[2]; if (preset !== null) e.regex = preset; if (k !== 'list') e.values = []; touch(); render(); };
-    const value = h('input', { placeholder: 'Agregá una opción y apretá Enter', 'aria-label': 'Nueva opción de ' + e.name });
+    const value = h('input', { placeholder: t('Agregá una opción y apretá Enter'), 'aria-label': t('Nueva opción de {name}', { name: e.name }) });
     value.onkeydown = (ev) => {
       if (ev.key !== 'Enter' && ev.key !== ',') return;
       ev.preventDefault();
       const v = value.value.trim();
-      if (v && !e.values.includes(v)) { e.values.push(v); touch(); render(); document.querySelector('[aria-label="Nueva opción de ' + e.name + '"]')?.focus(); }
+      if (v && !e.values.includes(v)) { e.values.push(v); touch(); render(); document.querySelector('[aria-label="' + t('Nueva opción de {name}', { name: e.name }) + '"]')?.focus(); }
     };
     const n = marks(e);
     return h('div', { class: 'panel' },
       h('div', { class: 'row' },
-        h('input', { class: 'grow', value: e.name, 'aria-label': 'Nombre de la entidad', style: 'font-weight:600', onchange: (ev) => { renameEntity(e.name, ev.target.value); touch(); render(); } }),
-        colorField(e, 'Color de la entidad'),
-        iconBtn('trash', 'Borrar entidad', () => confirmBox('Borrar la entidad', 'Se quita «' + e.name + '» y sus marcas en las frases. El slot queda.', 'Borrar entidad', () => { removeEntity(e); touch(); render(); }))),
-      lab('¿Cómo la reconoce el bot?', pick(KINDS.map(([v, t]) => [v, t]), kind, setKind)),
+        h('input', { class: 'grow', value: e.name, 'aria-label': t('Nombre de la entidad'), style: 'font-weight:600', onchange: (ev) => { renameEntity(e.name, ev.target.value); touch(); render(); } }),
+        colorField(e, t('Color de la entidad')),
+        iconBtn('trash', t('Borrar entidad'), () => confirmBox(t('Borrar la entidad'), t('Se quita «{name}» y sus marcas en las frases. El slot queda.', { name: e.name }), t('Borrar entidad'), () => { removeEntity(e); touch(); render(); }))),
+      lab(t('¿Cómo la reconoce el bot?'), pick(KINDS.map(([v, txt]) => [v, txt]), kind, setKind)),
       kind === 'list' ? h('div', { class: 'stack', 'data-values': e.name },
         e.values.map((v, i) => {
           const others = ((e.synonyms ||= {})[v] ||= []);
-          const other = h('input', { placeholder: 'Otra forma de decirlo y Enter', 'aria-label': 'Otra forma de decir ' + v });
+          const other = h('input', { placeholder: t('Otra forma de decirlo y Enter'), 'aria-label': t('Otra forma de decir {value}', { value: v }) });
           other.onkeydown = (ev) => {
             if (ev.key !== 'Enter' && ev.key !== ',') return;
             ev.preventDefault();
-            const t = other.value.trim().toLowerCase();
-            if (t && !others.includes(t)) { others.push(t); touch(); render(); document.querySelector('[aria-label="Otra forma de decir ' + v + '"]')?.focus(); }
+            const syn = other.value.trim().toLowerCase();
+            if (syn && !others.includes(syn)) { others.push(syn); touch(); render(); document.querySelector('[aria-label="' + t('Otra forma de decir {value}', { value: v }) + '"]')?.focus(); }
           };
-          return h('div', { class: 'option' }, h('strong', {}, v), h('div', { class: 'values' }, h('span', { class: 'also' }, 'también'),
-            others.map((o, j) => h('span', { class: 'value' }, o, h('button', { 'aria-label': 'Quitar ' + o, onclick: () => { others.splice(j, 1); touch(); render(); } }, '×'))), other),
-            iconBtn('trash', 'Quitar ' + v, () => { e.values.splice(i, 1); delete e.synonyms[v]; touch(); render(); }));
+          return h('div', { class: 'option' }, h('strong', {}, v), h('div', { class: 'values' }, h('span', { class: 'also' }, t('también')),
+            others.map((o, j) => h('span', { class: 'value' }, o, h('button', { 'aria-label': t('Quitar {name}', { name: o }), onclick: () => { others.splice(j, 1); touch(); render(); } }, '×'))), other),
+            iconBtn('trash', t('Quitar {name}', { name: v }), () => { e.values.splice(i, 1); delete e.synonyms[v]; touch(); render(); }));
         }),
         h('div', { class: 'values' }, value)) : null,
-      kind === 'custom' ? lab('Formato (expresión regular)', h('input', { ...bind(e, 'regex'), placeholder: '\\b[A-Z]{3}-\\d{4}\\b', spellcheck: 'false' })) : null,
-      kind === 'examples' && e.examples?.length ? h('div', { class: 'taught' }, h('p', { class: 'help', style: 'font-size:14px' }, 'Ejemplos que le enseñaste desde el chat:'),
+      kind === 'custom' ? lab(t('Formato (expresión regular)'), h('input', { ...bind(e, 'regex'), placeholder: '\\b[A-Z]{3}-\\d{4}\\b', spellcheck: 'false' })) : null,
+      kind === 'examples' && e.examples?.length ? h('div', { class: 'taught' }, h('p', { class: 'help', style: 'font-size:14px' }, t('Ejemplos que le enseñaste desde el chat:')),
         e.examples.map((x, i) => h('div', { class: 'phrase-row' }, h('div', { class: 'phrase' }, markedView(x)),
-          iconBtn('trash', 'Borrar ejemplo', () => { e.examples.splice(i, 1); touch(); render(); })))) : null,
-      kind === 'date' ? h('p', { class: 'help', style: 'font-size:14px' }, 'Entiende fechas y horas dichas de muchas formas: «mañana a las 10», «el jueves que viene», «12/05». No hace falta cargar opciones ni marcarla en las frases.') : null,
+          iconBtn('trash', t('Borrar ejemplo'), () => { e.examples.splice(i, 1); touch(); render(); })))) : null,
+      kind === 'date' ? h('p', { class: 'help', style: 'font-size:14px' }, t('Entiende fechas y horas dichas de muchas formas: «mañana a las 10», «el jueves que viene», «12/05». No hace falta cargar opciones ni marcarla en las frases.')) : null,
       h('p', { class: 'help', style: 'font-size:14px' }, kind === 'examples'
-        ? (n + (e.examples?.length || 0) ? 'Aprende de las ' + (n + (e.examples?.length || 0)) + ' veces que la marcaste y, después de entrenar, reconoce valores nuevos en frases parecidas: si aprendió «me llamo pedro», entiende «me llamo olivia».'
-          : 'Todavía no la marcaste en ninguna frase. Andá a una intención y seleccioná la palabra en una frase.')
-        : n ? 'Además, la marcaste ' + n + (n === 1 ? ' vez' : ' veces') + ' en las frases.' : null,
-        ' Cuando aparece en un mensaje se guarda en el slot ', h('strong', {}, agent.slots.find((v) => v.entity === e.name)?.name || 'que elijas en Slots'), '.'));
+        ? (n + (e.examples?.length || 0) ? t.plural(n + (e.examples?.length || 0), 'Aprende de la {n} vez que la marcaste y, después de entrenar, reconoce valores nuevos en frases parecidas: si aprendió «me llamo pedro», entiende «me llamo olivia».', 'Aprende de las {n} veces que la marcaste y, después de entrenar, reconoce valores nuevos en frases parecidas: si aprendió «me llamo pedro», entiende «me llamo olivia».')
+          : t('Todavía no la marcaste en ninguna frase. Andá a una intención y seleccioná la palabra en una frase.'))
+        : n ? t.plural(n, 'Además, la marcaste {n} vez en las frases.', 'Además, la marcaste {n} veces en las frases.') : null,
+        t(' Cuando aparece en un mensaje se guarda en el slot '), h('strong', {}, agent.slots.find((v) => v.entity === e.name)?.name || t('que elijas en Slots')), '.'));
   };
   const cards = agent.entities.map((e) => [card(e), [e.name, e.kind, KINDS.find((k) => k[0] === (e.kind || 'examples'))?.[1],
     ...(e.values || []), ...Object.values(e.synonyms || {}).flat()].join(' ')]);
-  const [search, none] = searchBox('entities', 'Buscar entidades', cards);
-  return h('div', { class: 'page' }, h('div', { class: 'page-head' }, h('h1', {}, 'Entidades'), cards.length ? search : null,
+  const [search, none] = searchBox('entities', t('Buscar entidades'), cards);
+  return h('div', { class: 'page' }, h('div', { class: 'page-head' }, h('h1', {}, t('Entidades')), cards.length ? search : null,
       h('button', { class: 'btn', onclick: (e) => openPop(e.currentTarget.getBoundingClientRect(),
-        nameForm('Nombre, por ejemplo: gusto', 'Crear entidad', (raw) => { createEntity(raw); query.entities = ''; touch(); render(); })) }, icon('plus'), 'Nueva entidad')),
-    h('p', { class: 'help' }, 'Una entidad es un dato que el bot saca de lo que le escriben: un número de pedido, un gusto de pizza, un email.'),
-    cards.length ? [cards.map(([el]) => el), none] : h('div', { class: 'empty' }, 'Todavía no hay entidades.'));
+        nameForm(t('Nombre, por ejemplo: gusto'), t('Crear entidad'), (raw) => { createEntity(raw); query.entities = ''; touch(); render(); })) }, icon('plus'), t('Nueva entidad'))),
+    h('p', { class: 'help' }, t('Una entidad es un dato que el bot saca de lo que le escriben: un número de pedido, un gusto de pizza, un email.')),
+    cards.length ? [cards.map(([el]) => el), none] : h('div', { class: 'empty' }, t('Todavía no hay entidades.')));
 }
 
 // ---------- slots ----------
@@ -990,37 +992,37 @@ function slotsView() {
   const uses = (name) => { let n = 0; walkSteps((s) => { if (JSON.stringify({ ...s, then: 0, else: 0 }).includes(name)) n++; }); return n; };
   const rows = agent.slots.map((v, i) => [h('div', { class: 'phrase-row', style: 'padding:10px 0;gap:8px;flex-direction:column;align-items:stretch' },
     h('div', { class: 'row', style: 'flex-wrap:nowrap;gap:12px' },
-      h('input', { value: v.name, 'aria-label': 'Nombre del slot', style: 'flex:0 1 220px;font-weight:600', onchange: (e) => { renameSlot(v.name, e.target.value); touch(); render(); } }),
-      h('span', { class: 'help grow', style: 'font-size:14px' }, v.fill === 'ai' ? 'La IA lo completa con lo que diga la persona.' : v.entity ? ['Se llena solo con la entidad ', h('span', { class: 'tag', style: markStyle(entityOf(v.entity)) }, v.entity)]
-        : 'Se llena con una pregunta, una consulta o un valor guardado.', ' ', uses(v.name) ? 'Usado en ' + uses(v.name) + (uses(v.name) === 1 ? ' paso.' : ' pasos.') : 'Sin usar.'),
-      iconBtn('trash', 'Borrar slot', () => { agent.slots.splice(i, 1); touch(); render(); })),
+      h('input', { value: v.name, 'aria-label': t('Nombre del slot'), style: 'flex:0 1 220px;font-weight:600', onchange: (e) => { renameSlot(v.name, e.target.value); touch(); render(); } }),
+      h('span', { class: 'help grow', style: 'font-size:14px' }, v.fill === 'ai' ? t('La IA lo completa con lo que diga la persona.') : v.entity ? [t('Se llena solo con la entidad '), h('span', { class: 'tag', style: markStyle(entityOf(v.entity)) }, v.entity)]
+        : t('Se llena con una pregunta, una consulta o un valor guardado.'), ' ', uses(v.name) ? t.plural(uses(v.name), 'Usado en {n} paso.', 'Usado en {n} pasos.') : t('Sin usar.')),
+      iconBtn('trash', t('Borrar slot'), () => { agent.slots.splice(i, 1); touch(); render(); })),
     h('div', { class: 'row', style: 'gap:8px 16px' },
-      h('input', { class: 'grow', ...bind(v, 'description'), placeholder: 'Para qué es, por ejemplo: el día que quiere el turno', 'aria-label': 'Descripción de ' + v.name, style: 'font-size:14px;min-width:220px' }),
+      h('input', { class: 'grow', ...bind(v, 'description'), placeholder: t('Para qué es, por ejemplo: el día que quiere el turno'), 'aria-label': t('Descripción de {name}', { name: v.name }), style: 'font-size:14px;min-width:220px' }),
       h('label', { class: 'toggle' }, h('input', { type: 'checkbox', class: 'switch', role: 'switch', checked: v.fill === 'ai',
-        onchange: (e) => { if (e.target.checked) v.fill = 'ai'; else delete v.fill; touch(); render(); } }), 'La IA lo completa leyendo la descripción'),
-      h('label', { class: 'toggle', title: 'Llega al empezar la conversación (IVR, CRM, widget): es lo que se muestra en «Empezar con datos»' },
+        onchange: (e) => { if (e.target.checked) v.fill = 'ai'; else delete v.fill; touch(); render(); } }), t('La IA lo completa leyendo la descripción')),
+      h('label', { class: 'toggle', title: t('Llega al empezar la conversación (IVR, CRM, widget): es lo que se muestra en «Empezar con datos»') },
         h('input', { type: 'checkbox', class: 'switch', role: 'switch', checked: !!v.start,
-          onchange: (e) => { if (e.target.checked) v.start = true; else delete v.start; touch(); render(); } }), 'Dato inicial')),
-    v.fill === 'ai' && !v.description?.trim() ? h('p', { class: 'help', style: 'font-size:13px;color:var(--warn)' }, 'Escribí una descripción: es lo que lee la IA para saber qué buscar.') : null,
-    v.fill === 'ai' && !agent.ai?.enabled ? h('p', { class: 'help', style: 'font-size:13px' }, 'La IA está apagada. ', h('button', { class: 'link', onclick: () => { section = 'ai'; render(); } }, 'Prenderla en IA')) : null),
+          onchange: (e) => { if (e.target.checked) v.start = true; else delete v.start; touch(); render(); } }), t('Dato inicial'))),
+    v.fill === 'ai' && !v.description?.trim() ? h('p', { class: 'help', style: 'font-size:13px;color:var(--warn)' }, t('Escribí una descripción: es lo que lee la IA para saber qué buscar.')) : null,
+    v.fill === 'ai' && !agent.ai?.enabled ? h('p', { class: 'help', style: 'font-size:13px' }, t('La IA está apagada. '), h('button', { class: 'link', onclick: () => { section = 'ai'; render(); } }, t('Prenderla en IA'))) : null),
   [v.name, v.entity, v.description].join(' ')]);
-  const [search, none] = searchBox('slots', 'Buscar slots', rows);
-  return h('div', { class: 'page' }, h('div', { class: 'page-head' }, h('h1', {}, 'Slots'), rows.length ? search : null,
+  const [search, none] = searchBox('slots', t('Buscar slots'), rows);
+  return h('div', { class: 'page' }, h('div', { class: 'page-head' }, h('h1', {}, t('Slots')), rows.length ? search : null,
       h('button', { class: 'btn', onclick: (e) => openPop(e.currentTarget.getBoundingClientRect(),
-        nameForm('Nombre, por ejemplo: direccion', 'Crear slot', (raw) => { ensureSlot(raw); query.slots = ''; touch(); render(); })) }, icon('plus'), 'Nuevo slot')),
-    h('p', { class: 'help' }, 'Un slot es un casillero donde el bot anota un dato durante la conversación: el nombre, la dirección, lo que respondió un servicio. Después lo podés usar en cualquier mensaje.'),
-    rows.length ? [h('div', { class: 'panel', style: 'gap:0;padding:4px 14px' }, rows.map(([el]) => el)), none] : h('div', { class: 'empty' }, 'Todavía no hay slots.'));
+        nameForm(t('Nombre, por ejemplo: direccion'), t('Crear slot'), (raw) => { ensureSlot(raw); query.slots = ''; touch(); render(); })) }, icon('plus'), t('Nuevo slot'))),
+    h('p', { class: 'help' }, t('Un slot es un casillero donde el bot anota un dato durante la conversación: el nombre, la dirección, lo que respondió un servicio. Después lo podés usar en cualquier mensaje.')),
+    rows.length ? [h('div', { class: 'panel', style: 'gap:0;padding:4px 14px' }, rows.map(([el]) => el)), none] : h('div', { class: 'empty' }, t('Todavía no hay slots.')));
 }
 
 // ---------- flujos ----------
 function slotPicker(obj, key) {
   const names = agent.slots.map((v) => v.name);
   if (obj[key] && !names.includes(obj[key])) names.push(obj[key]);
-  return h('select', { value: obj[key] ?? '', 'aria-label': 'Slot', onchange: (e) => {
+  return h('select', { value: obj[key] ?? '', 'aria-label': t('Slot'), onchange: (e) => {
     if (e.target.value !== '+') { obj[key] = e.target.value; touch(); return render(); }
     e.target.value = obj[key] ?? '';
-    openPop(e.target.getBoundingClientRect(), nameForm('Nombre, por ejemplo: direccion', 'Crear slot', (raw) => { obj[key] = ensureSlot(raw); touch(); render(); }));
-  } }, h('option', { value: '' }, 'Elegí un slot…'), names.map((n) => h('option', { value: n }, n)), h('option', { value: '+' }, '+ Crear un slot nuevo…'));
+    openPop(e.target.getBoundingClientRect(), nameForm(t('Nombre, por ejemplo: direccion'), t('Crear slot'), (raw) => { obj[key] = ensureSlot(raw); touch(); render(); }));
+  } }, h('option', { value: '' }, t('Elegí un slot…')), names.map((n) => h('option', { value: n }, n)), h('option', { value: '+' }, t('+ Crear un slot nuevo…')));
 }
 function createClassification(raw) {      // devuelve el nombre; si ya existe, usa esa
   const name = raw.trim().slice(0, 80);
@@ -1028,25 +1030,25 @@ function createClassification(raw) {      // devuelve el nombre; si ya existe, u
   return name;
 }
 function classifyPicker(s) {
-  const create = (e) => openPop(e.currentTarget.getBoundingClientRect(), nameForm('Por ejemplo: Turno agendado', 'Crear', (raw) => { s.classification = createClassification(raw); touch(); render(); }));
-  const hint = h('p', { class: 'help', style: 'font-size:14px' }, 'Cuando la conversación pasa por acá, queda anotada así (una sola vez). Después ves cuántas hubo en Clasificaciones.');
-  if (!agent.classifications.length && !s.classification) return [h('p', { class: 'help', style: 'font-size:14px' }, 'Todavía no hay clasificaciones. Creá una que diga cómo terminó la conversación, por ejemplo «Turno agendado».'),
-    h('div', {}, h('button', { class: 'btn quiet small', onclick: create }, icon('plus'), 'Crear una clasificación'))];
+  const create = (e) => openPop(e.currentTarget.getBoundingClientRect(), nameForm(t('Por ejemplo: Turno agendado'), t('Crear'), (raw) => { s.classification = createClassification(raw); touch(); render(); }));
+  const hint = h('p', { class: 'help', style: 'font-size:14px' }, t('Cuando la conversación pasa por acá, queda anotada así (una sola vez). Después ves cuántas hubo en Clasificaciones.'));
+  if (!agent.classifications.length && !s.classification) return [h('p', { class: 'help', style: 'font-size:14px' }, t('Todavía no hay clasificaciones. Creá una que diga cómo terminó la conversación, por ejemplo «Turno agendado».')),
+    h('div', {}, h('button', { class: 'btn quiet small', onclick: create }, icon('plus'), t('Crear una clasificación')))];
   const c = agent.classifications.find((x) => x.name === s.classification);
   const names = agent.classifications.map((x) => x.name);
   if (s.classification && !c) names.push(s.classification);
-  const select = h('select', { value: s.classification ?? '', 'aria-label': 'Clasificación', onchange: (e) => {
+  const select = h('select', { value: s.classification ?? '', 'aria-label': t('Clasificación'), onchange: (e) => {
     if (e.target.value !== '+') { s.classification = e.target.value; touch(); return render(); }
     e.target.value = s.classification ?? '';
     create(e);
-  } }, h('option', { value: '' }, 'Elegí una clasificación…'), names.map((n) => h('option', { value: n }, n)), h('option', { value: '+' }, '+ Crear una clasificación nueva…'));
-  return [h('div', { class: 'row' }, 'Marcar como', c ? h('span', { class: 'dot', style: markStyle(c) }) : null, select),
-    s.classification && !c ? h('p', { class: 'help', style: 'font-size:14px;color:var(--warn)' }, '«' + s.classification + '» ya no existe. Elegí otra.') : null,
-    c?.description ? h('p', { class: 'help', style: 'font-size:14px' }, 'Se usa: ' + c.description) : null, hint];
+  } }, h('option', { value: '' }, t('Elegí una clasificación…')), names.map((n) => h('option', { value: n }, n)), h('option', { value: '+' }, t('+ Crear una clasificación nueva…')));
+  return [h('div', { class: 'row' }, t('Marcar como'), c ? h('span', { class: 'dot', style: markStyle(c) }) : null, select),
+    s.classification && !c ? h('p', { class: 'help', style: 'font-size:14px;color:var(--warn)' }, t('«{name}» ya no existe. Elegí otra.', { name: s.classification })) : null,
+    c?.description ? h('p', { class: 'help', style: 'font-size:14px' }, t('Se usa: {description}', { description: c.description })) : null, hint];
 }
 function slotChips(field) {            // botones que insertan {{ slot }} donde está el cursor
   if (!agent.slots.length) return null;
-  return h('div', { class: 'chips' }, 'Insertar:', agent.slots.map((v) => h('button', { class: 'chip', type: 'button', onmousedown: (e) => e.preventDefault(), onclick: () => {
+  return h('div', { class: 'chips' }, t('Insertar:'), agent.slots.map((v) => h('button', { class: 'chip', type: 'button', onmousedown: (e) => e.preventDefault(), onclick: () => {
     field.setRangeText('{{ ' + v.name + ' }}', field.selectionStart ?? field.value.length, field.selectionEnd ?? field.value.length, 'end');
     field.dispatchEvent(new Event('input')); field.focus();
   } }, v.name)));
@@ -1055,38 +1057,38 @@ function newStep(type) {
   return { type, ...{ message: { text: '' }, ask: { slot: '', text: '' }, http: { method: 'GET', url: '', headers: [], body: '', saves: [] },
     function: { function: '', auto_save: true, saves: [] }, if: { cond: { var: '', op: 'eq', value: '' }, then: [], else: [] }, set: { slot: '', mode: 'text', text: '' }, goto: { flow: '' },
     call: { flow: '' }, file: { file: '', text: '' }, agent: { instructions: '', functions: [], knowledge: true, slots: [], goal: '', max_turns: 8 },
-    handoff: { text: 'Te paso con una persona, ya te escriben.', reason: '' }, classify: { classification: '' }, end: {} }[type] };
+    handoff: { text: t('Te paso con una persona, ya te escriben.'), reason: '' }, classify: { classification: '' }, end: {} }[type] };
 }
 // ---------- idiomas, botones y selección múltiple ----------
 function langSwitch() {                // ES · PT · EN arriba de cada mensaje, solo si el bot habla más de un idioma
   if (langs().length < 2) return null;
-  return h('span', { class: 'lang-pick', role: 'group', 'aria-label': 'Idioma que estás editando' }, langs().map((l) => h('button', { type: 'button', 'aria-pressed': String(l === curLang()),
-    title: LANGS[l] + (l === langs()[0] ? ' (principal)' : ''), onclick: () => { editLang = l; render(); } }, l.toUpperCase())));
+  return h('span', { class: 'lang-pick', role: 'group', 'aria-label': t('Idioma que estás editando') }, langs().map((l) => h('button', { type: 'button', 'aria-pressed': String(l === curLang()),
+    title: l === langs()[0] ? t('{lang} (principal)', { lang: LANGS[l] }) : LANGS[l], onclick: () => { editLang = l; render(); } }, l.toUpperCase())));
 }
 function trBind(obj, key, placeholder, after) {   // en el idioma principal edita obj[key]; en otro, obj.translations[lang]
   if (!translating()) return { ...bind(obj, key, after), placeholder };
   const l = curLang();
-  return { value: obj.translations?.[l] ?? '', placeholder: obj[key] || placeholder, title: 'En ' + LANGS[l] + '. Si lo dejás vacío, usa el texto en ' + LANGS[langs()[0]] + '.',
-    oninput: (e) => { const t = (obj.translations ||= {}); if (e.target.value) t[l] = e.target.value; else delete t[l]; touch(); after?.(e); } };
+  return { value: obj.translations?.[l] ?? '', placeholder: obj[key] || placeholder, title: t('En {lang}. Si lo dejás vacío, usa el texto en {main}.', { lang: LANGS[l], main: LANGS[langs()[0]] }),
+    oninput: (e) => { const tr = (obj.translations ||= {}); if (e.target.value) tr[l] = e.target.value; else delete tr[l]; touch(); after?.(e); } };
 }
 function buttonsEditor(s) {            // botones para tocar debajo del mensaje: label (lo que se ve) y value (lo que se manda)
   const list = s.buttons || [];
   const change = (fn) => { fn(); if (list.length) s.buttons = list; else delete s.buttons; touch(); render(); };
   const add = () => { change(() => list.push({ label: '' })); [...document.querySelectorAll('.btn-edit .lbl')].pop()?.focus(); };
-  if (!list.length) return h('div', {}, h('button', { class: 'link', style: 'font-size:13px', onclick: add }, 'Agregar botones para tocar'));
-  return h('div', { class: 'btn-edit' }, h('span', { class: 'who' }, 'Botones para tocar'),
+  if (!list.length) return h('div', {}, h('button', { class: 'link', style: 'font-size:13px', onclick: add }, t('Agregar botones para tocar')));
+  return h('div', { class: 'btn-edit' }, h('span', { class: 'who' }, t('Botones para tocar')),
     list.map((b, i) => h('div', { class: 'row' },
-      h('input', { class: 'lbl', 'aria-label': 'Texto del botón ' + (i + 1), ...trBind(b, 'label', 'Texto del botón') }),
-      translating() ? null : h('input', { class: 'val', ...bind(b, 'value'), placeholder: 'Qué manda (opcional)', 'aria-label': 'Qué manda el botón ' + (i + 1),
-        title: 'Lo que el bot recibe al tocarlo. Si lo dejás vacío, recibe el texto del botón.' }),
-      iconBtn('up', 'Subir botón', () => change(() => { [list[i - 1], list[i]] = [list[i], list[i - 1]]; }), i === 0),
-      iconBtn('down', 'Bajar botón', () => change(() => { [list[i + 1], list[i]] = [list[i], list[i + 1]]; }), i === list.length - 1),
-      iconBtn('x', 'Quitar botón', () => change(() => list.splice(i, 1))))),
-    h('div', {}, h('button', { class: 'link', style: 'font-size:13px', onclick: add }, 'Agregar otro botón')));
+      h('input', { class: 'lbl', 'aria-label': t('Texto del botón {n}', { n: i + 1 }), ...trBind(b, 'label', t('Texto del botón')) }),
+      translating() ? null : h('input', { class: 'val', ...bind(b, 'value'), placeholder: t('Qué manda (opcional)'), 'aria-label': t('Qué manda el botón {n}', { n: i + 1 }),
+        title: t('Lo que el bot recibe al tocarlo. Si lo dejás vacío, recibe el texto del botón.') }),
+      iconBtn('up', t('Subir botón'), () => change(() => { [list[i - 1], list[i]] = [list[i], list[i - 1]]; }), i === 0),
+      iconBtn('down', t('Bajar botón'), () => change(() => { [list[i + 1], list[i]] = [list[i], list[i + 1]]; }), i === list.length - 1),
+      iconBtn('x', t('Quitar botón'), () => change(() => list.splice(i, 1))))),
+    h('div', {}, h('button', { class: 'link', style: 'font-size:13px', onclick: add }, t('Agregar otro botón'))));
 }
 function pills(options, chosen, onchange, label) {   // elegir varios: options [[valor, texto]], chosen = lista que se modifica
-  return h('div', { class: 'pills', role: 'group', 'aria-label': label }, options.map(([v, t]) => h('button', { type: 'button', class: 'pill', 'aria-pressed': String(chosen.includes(v)),
-    onclick: () => { const i = chosen.indexOf(v); i >= 0 ? chosen.splice(i, 1) : chosen.push(v); onchange(); } }, chosen.includes(v) ? icon('check') : null, t)));
+  return h('div', { class: 'pills', role: 'group', 'aria-label': label }, options.map(([v, txt]) => h('button', { type: 'button', class: 'pill', 'aria-pressed': String(chosen.includes(v)),
+    onclick: () => { const i = chosen.indexOf(v); i >= 0 ? chosen.splice(i, 1) : chosen.push(v); onchange(); } }, chosen.includes(v) ? icon('check') : null, txt)));
 }
 function agentStepView(s) {
   s.functions ||= []; s.slots ||= [];
@@ -1094,38 +1096,38 @@ function agentStepView(s) {
   const fns = (agent.functions || []).map((f) => [f.name, f.name]);
   const goSection = (id) => { section = id; render(); $('#center').scrollTop = 0; };
   return [
-    agent.ai?.enabled ? null : h('div', { class: 'notice warn' }, 'La IA está apagada: este paso no va a funcionar hasta que la prendas.',
-      h('button', { class: 'link', onclick: () => goSection('ai') }, 'Ir a IA')),
-    lab('Qué tiene que hacer', area(s, 'instructions', { placeholder: 'Por ejemplo: Ayudá a la persona a elegir un plan. Preguntale cuánto usa el celular y recomendale uno.' })),
-    h('div', { class: 'stack' }, h('span', { class: 'who' }, 'Datos que tiene que conseguir'),
-      agent.slots.length ? pills(agent.slots.map((v) => [v.name, v.name]), s.slots, upd, 'Slots a completar')
-        : h('p', { class: 'help', style: 'font-size:14px' }, 'Todavía no hay slots. Creálos en Slots para que la IA los complete.')),
-    h('div', { class: 'stack' }, h('span', { class: 'who' }, 'Funciones que puede usar'),
-      fns.length ? pills(fns, s.functions, upd, 'Funciones que puede usar')
-        : h('p', { class: 'help', style: 'font-size:14px' }, 'Todavía no hay funciones. ', h('button', { class: 'link', onclick: () => goSection('functions') }, 'Crear una en Funciones'))),
+    agent.ai?.enabled ? null : h('div', { class: 'notice warn' }, t('La IA está apagada: este paso no va a funcionar hasta que la prendas.'),
+      h('button', { class: 'link', onclick: () => goSection('ai') }, t('Ir a IA'))),
+    lab(t('Qué tiene que hacer'), area(s, 'instructions', { placeholder: t('Por ejemplo: Ayudá a la persona a elegir un plan. Preguntale cuánto usa el celular y recomendale uno.') })),
+    h('div', { class: 'stack' }, h('span', { class: 'who' }, t('Datos que tiene que conseguir')),
+      agent.slots.length ? pills(agent.slots.map((v) => [v.name, v.name]), s.slots, upd, t('Slots a completar'))
+        : h('p', { class: 'help', style: 'font-size:14px' }, t('Todavía no hay slots. Creálos en Slots para que la IA los complete.'))),
+    h('div', { class: 'stack' }, h('span', { class: 'who' }, t('Funciones que puede usar')),
+      fns.length ? pills(fns, s.functions, upd, t('Funciones que puede usar'))
+        : h('p', { class: 'help', style: 'font-size:14px' }, t('Todavía no hay funciones. '), h('button', { class: 'link', onclick: () => goSection('functions') }, t('Crear una en Funciones')))),
     h('label', { class: 'toggle' }, h('input', { type: 'checkbox', class: 'switch', role: 'switch', checked: s.knowledge !== false, onchange: (e) => { s.knowledge = e.target.checked; touch(); } }),
-      'Puede responder con lo que cargaste en Conocimiento'),
+      t('Puede responder con lo que cargaste en Conocimiento')),
     h('div', { class: 'row', style: 'align-items:flex-end' },
-      lab('Termina cuando', h('input', { ...bind(s, 'goal'), placeholder: 'por ejemplo: el plan esté elegido' }), 'grow'),
-      lab('Máximo de mensajes', h('input', { type: 'number', min: 1, max: 50, value: s.max_turns ?? 8, style: 'width:110px',
+      lab(t('Termina cuando'), h('input', { ...bind(s, 'goal'), placeholder: t('por ejemplo: el plan esté elegido') }), 'grow'),
+      lab(t('Máximo de mensajes'), h('input', { type: 'number', min: 1, max: 50, value: s.max_turns ?? 8, style: 'width:110px',
         oninput: (e) => { s.max_turns = Math.max(1, Math.min(50, parseInt(e.target.value) || 8)); touch(); } }))),
-    h('p', { class: 'help', style: 'font-size:14px' }, 'La IA charla con la persona hasta cumplir el objetivo (o llegar al máximo de mensajes). Después el flujo sigue con el próximo paso.'),
+    h('p', { class: 'help', style: 'font-size:14px' }, t('La IA charla con la persona hasta cumplir el objetivo (o llegar al máximo de mensajes). Después el flujo sigue con el próximo paso.')),
   ];
 }
 function inserter(list, i, label) {
-  return h('div', { class: 'insert-row' }, h('button', { class: 'insert' + (label ? ' labeled' : ''), 'aria-label': 'Agregar un paso acá', title: 'Agregar un paso acá',
+  return h('div', { class: 'insert-row' }, h('button', { class: 'insert' + (label ? ' labeled' : ''), 'aria-label': t('Agregar un paso acá'), title: t('Agregar un paso acá'),
     onclick: (e) => openPop(e.currentTarget.getBoundingClientRect(), STEP_MENU.map(([type, ic, title, desc]) =>
       h('button', { class: 'opt', onclick: () => { list.splice(i, 0, newStep(type)); touch(); render(); } }, h('span', { class: 'badge ' + type }, icon(ic)), h('span', {}, title, h('small', {}, desc))))) },
   icon('plus'), label));
 }
 function stepsView(list, emptyLabel) {
   return h('div', { class: 'steps' }, list.map((s, i) => [inserter(list, i), stepView(s, list, i)]),
-    inserter(list, list.length, list.length ? 'Agregar un paso' : emptyLabel || 'Agregar el primer paso'));
+    inserter(list, list.length, list.length ? t('Agregar un paso') : emptyLabel || t('Agregar el primer paso')));
 }
 function httpView(s) {
   s.headers ||= []; s.saves ||= [];
   const u = ui.get(s) || {}; ui.set(s, u); u.vars ||= {};
-  const url = h('input', { class: 'grow', ...bind(s, 'url'), placeholder: 'https://mi-servicio.com/pedidos/{{ numero_pedido }}', 'aria-label': 'Dirección del servicio', spellcheck: 'false' });
+  const url = h('input', { class: 'grow', ...bind(s, 'url'), placeholder: 'https://mi-servicio.com/pedidos/{{ numero_pedido }}', 'aria-label': t('Dirección del servicio'), spellcheck: 'false' });
   const body = area(s, 'body', { placeholder: '{"nombre": "{{ nombre }}"}', spellcheck: 'false' });
   const used = [...new Set([...[s.url, s.body, ...s.headers.flatMap((x) => [x.key, x.value])].join(' ').matchAll(/\{\{\s*([A-Za-z_]\w*)\s*\}\}/g)].map((m) => m[1]))];
   const send = async () => {
@@ -1134,105 +1136,105 @@ function httpView(s) {
     try { u.result = await api('POST', '/' + agent.id + '/http', { step: s, vars }); } catch (e) { u.error = e.message; }
     u.loading = false; render();
   };
-  const leaf = (value, path, key) => h('button', { class: 'leaf' + (s.saves.some((x) => x.expr === path) ? ' saved' : ''), title: 'Guardar este dato en un slot',
+  const leaf = (value, path, key) => h('button', { class: 'leaf' + (s.saves.some((x) => x.expr === path) ? ' saved' : ''), title: t('Guardar este dato en un slot'),
     onclick: () => { s.saves.push({ expr: path, slot: ensureSlot(typeof key === 'number' ? 'dato' : key) }); touch(); render(); } }, JSON.stringify(value));
   const tree = (value, path) => {
     const list = Array.isArray(value);
     const rows = list ? value.slice(0, 5).map((v, i) => [i, v, path + '[' + i + ']'])
       : Object.entries(value).slice(0, 40).map(([k, v]) => [k, v, /^[A-Za-z_]\w*$/.test(k) ? path + '.' + k : path + '[' + JSON.stringify(k) + ']']);
-    return h('ul', { class: 'tree' }, rows.map(([k, v, p]) => h('li', {}, h('span', { class: 'key' }, list ? 'elemento ' + (k + 1) : k), v !== null && typeof v === 'object' ? tree(v, p) : leaf(v, p, k))),
-      list && value.length > 5 ? h('li', { class: 'key' }, 'y ' + (value.length - 5) + ' más') : null);
+    return h('ul', { class: 'tree' }, rows.map(([k, v, p]) => h('li', {}, h('span', { class: 'key' }, list ? t('elemento {n}', { n: k + 1 }) : k), v !== null && typeof v === 'object' ? tree(v, p) : leaf(v, p, k))),
+      list && value.length > 5 ? h('li', { class: 'key' }, t('y {n} más', { n: value.length - 5 })) : null);
   };
   const r = u.result;
   return [
-    h('div', { class: 'row' }, pick(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => [m, m]), s.method, (v) => { s.method = v; touch(); }, 'Método'), url),
+    h('div', { class: 'row' }, pick(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => [m, m]), s.method, (v) => { s.method = v; touch(); }, t('Método')), url),
     slotChips(url),
-    h('details', { open: s.headers.length || s.body ? true : null }, h('summary', {}, 'Encabezados y contenido a enviar (opcional)'), h('div', { class: 'stack' },
-      s.headers.map((x, i) => h('div', { class: 'row' }, h('input', { class: 'grow', ...bind(x, 'key'), placeholder: 'Nombre, por ejemplo: Authorization', 'aria-label': 'Nombre del encabezado' }),
-        h('input', { class: 'grow', ...bind(x, 'value'), placeholder: 'Valor', 'aria-label': 'Valor del encabezado' }), iconBtn('x', 'Quitar encabezado', () => { s.headers.splice(i, 1); touch(); render(); }))),
-      h('div', {}, h('button', { class: 'link', onclick: () => { s.headers.push({ key: '', value: '' }); touch(); render(); } }, 'Agregar encabezado')),
-      lab('Contenido a enviar', body), slotChips(body))),
-    h('div', { class: 'stack' }, h('h2', { style: 'font-size:14px' }, 'Qué guardar de la respuesta'),
-      s.saves.map((x, i) => h('div', { class: 'save-row' }, h('input', { ...bind(x, 'expr'), placeholder: 'body.nombre', 'aria-label': 'Dato de la respuesta', spellcheck: 'false' }), 'en', slotPicker(x, 'slot'),
-        iconBtn('x', 'Quitar', () => { s.saves.splice(i, 1); touch(); render(); }))),
-      s.saves.length ? null : h('p', { class: 'help', style: 'font-size:14px' }, 'Probá la consulta y tocá los datos que quieras guardar.'),
-      h('div', { class: 'row' }, h('button', { class: 'btn quiet small', onclick: () => { u.open = true; used.length ? render() : send(); } }, 'Probar la consulta'),
+    h('details', { open: s.headers.length || s.body ? true : null }, h('summary', {}, t('Encabezados y contenido a enviar (opcional)')), h('div', { class: 'stack' },
+      s.headers.map((x, i) => h('div', { class: 'row' }, h('input', { class: 'grow', ...bind(x, 'key'), placeholder: t('Nombre, por ejemplo: Authorization'), 'aria-label': t('Nombre del encabezado') }),
+        h('input', { class: 'grow', ...bind(x, 'value'), placeholder: t('Valor'), 'aria-label': t('Valor del encabezado') }), iconBtn('x', t('Quitar encabezado'), () => { s.headers.splice(i, 1); touch(); render(); }))),
+      h('div', {}, h('button', { class: 'link', onclick: () => { s.headers.push({ key: '', value: '' }); touch(); render(); } }, t('Agregar encabezado'))),
+      lab(t('Contenido a enviar'), body), slotChips(body))),
+    h('div', { class: 'stack' }, h('h2', { style: 'font-size:14px' }, t('Qué guardar de la respuesta')),
+      s.saves.map((x, i) => h('div', { class: 'save-row' }, h('input', { ...bind(x, 'expr'), placeholder: 'body.nombre', 'aria-label': t('Dato de la respuesta'), spellcheck: 'false' }), t('en'), slotPicker(x, 'slot'),
+        iconBtn('x', t('Quitar'), () => { s.saves.splice(i, 1); touch(); render(); }))),
+      s.saves.length ? null : h('p', { class: 'help', style: 'font-size:14px' }, t('Probá la consulta y tocá los datos que quieras guardar.')),
+      h('div', { class: 'row' }, h('button', { class: 'btn quiet small', onclick: () => { u.open = true; used.length ? render() : send(); } }, t('Probar la consulta')),
         s.saves.some((x) => x.expr === 'status') ? null : h('button', { class: 'link', style: 'font-size:14px', onclick: () => { s.saves.push({ expr: 'status', slot: ensureSlot('codigo_respuesta') }); touch(); render(); } },
-          'Guardar si salió bien (código 200)'))),
+          t('Guardar si salió bien (código 200)')))),
     u.open ? h('div', { class: 'result' },
-      used.length ? [h('p', {}, 'Para probar, poné un valor de ejemplo en cada slot que usa la consulta:'),
+      used.length ? [h('p', {}, t('Para probar, poné un valor de ejemplo en cada slot que usa la consulta:')),
         used.map((n) => lab(n, h('input', { value: u.vars[n] ?? lastSlots[n] ?? '', oninput: (e) => { u.vars[n] = e.target.value; } }))),
-        h('div', {}, h('button', { class: 'btn small', onclick: send }, 'Enviar consulta de prueba'))] : null,
-      u.loading ? h('p', {}, 'Consultando…') : null,
-      u.error ? h('p', { style: 'color:var(--warn)' }, 'No se pudo probar: ' + u.error) : null,
-      r ? [h('strong', { style: 'color:' + (r.status >= 200 && r.status < 300 ? 'var(--ok)' : 'var(--warn)') }, r.status === 0 ? 'No se pudo conectar: ' + r.body
-        : r.status < 300 ? 'El servicio respondió bien (código ' + r.status + ')' : 'El servicio respondió con un error (código ' + r.status + ')'),
-        r.status === 0 ? null : r.body !== null && typeof r.body === 'object' ? [h('p', { class: 'help' }, 'Tocá un dato para guardarlo en un slot:'), tree(r.body, 'body')] : leaf(r.body, 'body', 'respuesta')] : null) : null,
+        h('div', {}, h('button', { class: 'btn small', onclick: send }, t('Enviar consulta de prueba')))] : null,
+      u.loading ? h('p', {}, t('Consultando…')) : null,
+      u.error ? h('p', { style: 'color:var(--warn)' }, t('No se pudo probar: {error}', { error: u.error })) : null,
+      r ? [h('strong', { style: 'color:' + (r.status >= 200 && r.status < 300 ? 'var(--ok)' : 'var(--warn)') }, r.status === 0 ? t('No se pudo conectar: {error}', { error: r.body })
+        : r.status < 300 ? t('El servicio respondió bien (código {code})', { code: r.status }) : t('El servicio respondió con un error (código {code})', { code: r.status })),
+        r.status === 0 ? null : r.body !== null && typeof r.body === 'object' ? [h('p', { class: 'help' }, t('Tocá un dato para guardarlo en un slot:')), tree(r.body, 'body')] : leaf(r.body, 'body', 'respuesta')] : null) : null,
   ];
 }
 function stepView(s, list, i) {
   const move = (d) => { [list[i], list[i + d]] = [list[i + d], list[i]]; touch(); render(); };
-  const tools = h('div', { class: 'tools' }, iconBtn('up', 'Subir', () => move(-1), i === 0), iconBtn('down', 'Bajar', () => move(1), i === list.length - 1),
-    iconBtn('trash', 'Borrar paso', () => { list.splice(i, 1); touch(); render(); }));
+  const tools = h('div', { class: 'tools' }, iconBtn('up', t('Subir'), () => move(-1), i === 0), iconBtn('down', t('Bajar'), () => move(1), i === list.length - 1),
+    iconBtn('trash', t('Borrar paso'), () => { list.splice(i, 1); touch(); render(); }));
   const card = (type, ic, title, ...content) => h('div', { class: 'step' }, h('div', { class: 'card' }, h('div', { class: 'card-head' }, h('span', { class: 'badge ' + type }, icon(ic)), title), content), tools);
   if (s.type === 'message' || s.type === 'ask') {
-    const text = h('textarea', { rows: 1, 'aria-label': 'Texto del bot', ...trBind(s, 'text', s.type === 'ask' ? 'Escribí la pregunta…' : 'Escribí lo que dice el bot…', (e) => grow(e.target)) });
+    const text = h('textarea', { rows: 1, 'aria-label': t('Texto del bot'), ...trBind(s, 'text', s.type === 'ask' ? t('Escribí la pregunta…') : t('Escribí lo que dice el bot…'), (e) => grow(e.target)) });
     const linked = agent.slots.find((v) => v.name === s.slot)?.entity;
     return h('div', { class: 'step' }, h('div', { class: 'bot-side' },
-      h('div', { class: 'bubble' }, h('span', { class: 'who' }, s.type === 'ask' ? 'El bot pregunta' : 'El bot dice', translating() ? ' (en ' + LANGS[curLang()] + ')' : null, langSwitch()),
+      h('div', { class: 'bubble' }, h('span', { class: 'who' }, s.type === 'ask' ? t('El bot pregunta') : t('El bot dice'), translating() ? t(' (en {lang})', { lang: LANGS[curLang()] }) : null, langSwitch()),
         text, slotChips(text), buttonsEditor(s)),
-      s.type === 'ask' ? h('div', { class: 'answer' }, h('span', {}, 'La persona responde, y se guarda en'), slotPicker(s, 'slot'),
-        s.slot ? h('span', { style: 'color:var(--muted)' }, linked ? 'Si ya lo dijo antes no se pregunta. Tiene que ser: ' + linked + '.' : 'Si el slot ya tiene un valor, no se pregunta.') : null) : null), tools);
+      s.type === 'ask' ? h('div', { class: 'answer' }, h('span', {}, t('La persona responde, y se guarda en')), slotPicker(s, 'slot'),
+        s.slot ? h('span', { style: 'color:var(--muted)' }, linked ? t('Si ya lo dijo antes no se pregunta. Tiene que ser: {entity}.', { entity: linked }) : t('Si el slot ya tiene un valor, no se pregunta.')) : null) : null), tools);
   }
-  if (s.type === 'http') return card('http', 'globe', 'Consultar un servicio', httpView(s));
-  if (s.type === 'function') return card('function', 'braces', 'Ejecutar una función', window.functionStepView(s));   // en /static/functions.js
+  if (s.type === 'http') return card('http', 'globe', t('Consultar un servicio'), httpView(s));
+  if (s.type === 'function') return card('function', 'braces', t('Ejecutar una función'), window.functionStepView(s));   // en /static/functions.js
   if (s.type === 'if') {
     const simple = !!s.cond;
-    return card('if', 'branch', 'Tomar un camino',
-      simple ? h('div', { class: 'row' }, 'Si', slotPicker(s.cond, 'var'), pick(OPS, s.cond.op, (v) => { s.cond.op = v; touch(); render(); }, 'Comparación'),
-        ['empty', 'filled'].includes(s.cond.op) ? null : h('input', { class: 'grow', ...bind(s.cond, 'value'), placeholder: 'valor', 'aria-label': 'Valor a comparar' }))
-        : lab('Fórmula (CEL)', h('input', { ...bind(s, 'expr'), placeholder: "int(cantidad) > 3 && gusto == 'napolitana'", spellcheck: 'false' })),
+    return card('if', 'branch', t('Tomar un camino'),
+      simple ? h('div', { class: 'row' }, t('Si'), slotPicker(s.cond, 'var'), pick(OPS, s.cond.op, (v) => { s.cond.op = v; touch(); render(); }, t('Comparación')),
+        ['empty', 'filled'].includes(s.cond.op) ? null : h('input', { class: 'grow', ...bind(s.cond, 'value'), placeholder: t('valor'), 'aria-label': t('Valor a comparar') }))
+        : lab(t('Fórmula (CEL)'), h('input', { ...bind(s, 'expr'), placeholder: "int(cantidad) > 3 && gusto == 'napolitana'", spellcheck: 'false' })),
       h('div', {}, h('button', { class: 'link', style: 'font-size:13px', onclick: () => {
         if (simple) { delete s.cond; s.expr ||= ''; } else { delete s.expr; s.cond = { var: '', op: 'eq', value: '' }; } touch(); render(); } },
-      simple ? 'Usar una fórmula (avanzado)' : 'Volver a la comparación simple')),
-      h('div', { class: 'branches' }, h('div', { class: 'branch yes' }, h('strong', {}, 'Si se cumple'), stepsView(s.then ||= [], 'Agregar paso')),
-        h('div', { class: 'branch no' }, h('strong', {}, 'Si no se cumple'), stepsView(s.else ||= [], 'Agregar paso'))));
+      simple ? t('Usar una fórmula (avanzado)') : t('Volver a la comparación simple'))),
+      h('div', { class: 'branches' }, h('div', { class: 'branch yes' }, h('strong', {}, t('Si se cumple')), stepsView(s.then ||= [], t('Agregar paso'))),
+        h('div', { class: 'branch no' }, h('strong', {}, t('Si no se cumple')), stepsView(s.else ||= [], t('Agregar paso')))));
   }
   if (s.type === 'set') {
     const mode = s.mode || 'text';
-    return card('set', 'pencil', 'Guardar un valor', h('div', { class: 'row' }, 'En', slotPicker(s, 'slot'),
-      pick([['text', 'guardar este texto'], ['clear', 'dejarlo vacío'], ['cel', 'guardar una fórmula (avanzado)']], mode, (v) => { s.mode = v; touch(); render(); }, 'Qué guardar'),
-      mode === 'text' ? h('input', { class: 'grow', ...bind(s, 'text'), placeholder: 'Texto, puede usar {{ slots }}', 'aria-label': 'Texto' }) : null,
-      mode === 'cel' ? h('input', { class: 'grow', ...bind(s, 'expr'), placeholder: 'int(cantidad) * 9500', 'aria-label': 'Fórmula', spellcheck: 'false' }) : null));
+    return card('set', 'pencil', t('Guardar un valor'), h('div', { class: 'row' }, t('En'), slotPicker(s, 'slot'),
+      pick([['text', t('guardar este texto')], ['clear', t('dejarlo vacío')], ['cel', t('guardar una fórmula (avanzado)')]], mode, (v) => { s.mode = v; touch(); render(); }, t('Qué guardar')),
+      mode === 'text' ? h('input', { class: 'grow', ...bind(s, 'text'), placeholder: t('Texto, puede usar {{ slots }}'), 'aria-label': t('Texto') }) : null,
+      mode === 'cel' ? h('input', { class: 'grow', ...bind(s, 'expr'), placeholder: 'int(cantidad) * 9500', 'aria-label': t('Fórmula'), spellcheck: 'false' }) : null));
   }
-  if (s.type === 'classify') return card('classify', 'bookmark', 'Clasificar la conversación', classifyPicker(s));
-  if (s.type === 'file') return card('file', 'clip', 'Enviar un archivo', window.fileStepView(s));   // en /static/files.js
+  if (s.type === 'classify') return card('classify', 'bookmark', t('Clasificar la conversación'), classifyPicker(s));
+  if (s.type === 'file') return card('file', 'clip', t('Enviar un archivo'), window.fileStepView(s));   // en /static/files.js
   const here = sel.system ? null : agent.flows[sel.flows]?.name;
-  const flowPick = () => [pick([['', 'Elegí un flujo…'], ...agent.flows.filter((f) => f.name !== here).map((f) => [f.name, f.name])], s.flow, (v) => { s.flow = v; touch(); }, 'Flujo'),
-    s.flow && !agent.flows.some((f) => f.name === s.flow) ? h('p', { class: 'help', style: 'font-size:14px;color:var(--warn)' }, '«' + s.flow + '» ya no existe. Elegí otro.') : null];
-  if (s.type === 'goto') return card('goto', 'arrow', 'Seguir con otro flujo', flowPick(),
-    h('p', { class: 'help', style: 'font-size:14px' }, 'Sigue en ese flujo y no vuelve acá. Si querés que vuelva y siga con el próximo paso, usá «Usar otro flujo y volver».'));
-  if (s.type === 'call') return card('call', 'call', 'Usar otro flujo y volver', flowPick(),
-    h('p', { class: 'help', style: 'font-size:14px' }, 'Hace todos los pasos de ese flujo y, cuando termina, vuelve acá y sigue con el próximo paso. Sirve para reutilizar algo que se repite, como «Validar identidad». (Con «Seguir con otro flujo», en cambio, no vuelve.)'));
-  if (s.type === 'agent') return card('agent', 'spark', 'Conversar con IA', agentStepView(s));
-  if (s.type === 'handoff') return card('handoff', 'hand', 'Pasar a una persona',
-    lab('Qué dice el bot antes de pasar', area(s, 'text', { placeholder: 'Te paso con una persona, ya te escriben.' })),
-    lab('Motivo (lo ve el equipo en Bandeja)', h('input', { ...bind(s, 'reason'), placeholder: 'Por ejemplo: reclamo' })),
-    h('p', { class: 'help', style: 'font-size:14px' }, 'La conversación aparece en Bandeja y el bot deja de responder hasta que alguien del equipo la devuelva.'));
-  return card('end', 'stop', 'Terminar', h('p', { class: 'help', style: 'font-size:14px' }, 'El flujo se corta acá y el bot espera un mensaje nuevo.'));
+  const flowPick = () => [pick([['', t('Elegí un flujo…')], ...agent.flows.filter((f) => f.name !== here).map((f) => [f.name, f.name])], s.flow, (v) => { s.flow = v; touch(); }, t('Flujo')),
+    s.flow && !agent.flows.some((f) => f.name === s.flow) ? h('p', { class: 'help', style: 'font-size:14px;color:var(--warn)' }, t('«{name}» ya no existe. Elegí otro.', { name: s.flow })) : null];
+  if (s.type === 'goto') return card('goto', 'arrow', t('Seguir con otro flujo'), flowPick(),
+    h('p', { class: 'help', style: 'font-size:14px' }, t('Sigue en ese flujo y no vuelve acá. Si querés que vuelva y siga con el próximo paso, usá «Usar otro flujo y volver».')));
+  if (s.type === 'call') return card('call', 'call', t('Usar otro flujo y volver'), flowPick(),
+    h('p', { class: 'help', style: 'font-size:14px' }, t('Hace todos los pasos de ese flujo y, cuando termina, vuelve acá y sigue con el próximo paso. Sirve para reutilizar algo que se repite, como «Validar identidad». (Con «Seguir con otro flujo», en cambio, no vuelve.)')));
+  if (s.type === 'agent') return card('agent', 'spark', t('Conversar con IA'), agentStepView(s));
+  if (s.type === 'handoff') return card('handoff', 'hand', t('Pasar a una persona'),
+    lab(t('Qué dice el bot antes de pasar'), area(s, 'text', { placeholder: t('Te paso con una persona, ya te escriben.') })),
+    lab(t('Motivo (lo ve el equipo en Bandeja)'), h('input', { ...bind(s, 'reason'), placeholder: t('Por ejemplo: reclamo') })),
+    h('p', { class: 'help', style: 'font-size:14px' }, t('La conversación aparece en Bandeja y el bot deja de responder hasta que alguien del equipo la devuelva.')));
+  return card('end', 'stop', t('Terminar'), h('p', { class: 'help', style: 'font-size:14px' }, t('El flujo se corta acá y el bot espera un mensaje nuevo.')));
 }
 function flowsView() {
   const fl = agent.flows[sel.flows];
-  const list = side('flows', agent.flows, (f) => f.trigger === START ? 'Al empezar' : f.trigger ? 'Responde a ' + f.trigger : 'Sin intención', 'Nuevo flujo', () => ({ name: uniqueName(agent.flows, 'Nuevo flujo'), trigger: '', steps: [] }));
+  const list = side('flows', agent.flows, (f) => f.trigger === START ? t('Al empezar') : f.trigger ? t('Responde a {intent}', { intent: f.trigger }) : t('Sin intención'), t('Nuevo flujo'), () => ({ name: uniqueName(agent.flows, t('Nuevo flujo')), trigger: '', steps: [] }));
   if (sel.system) list.querySelectorAll('button.item').forEach((b) => b.setAttribute('aria-current', 'false'));
-  list.append(h('div', { class: 'side-group' }, 'Del sistema'), ...SYSTEM.map(([key, title]) => h('button', { class: 'item', 'aria-current': String(sel.system === key),
-    onclick: () => { sel.system = key; render(); $('#center').scrollTop = 0; } }, title, h('small', { class: sysOf(key).enabled ? 'on' : null }, sysOf(key).enabled ? 'Activado' : 'Apagado'))));
+  list.append(h('div', { class: 'side-group' }, t('Del sistema')), ...SYSTEM.map(([key, title]) => h('button', { class: 'item', 'aria-current': String(sel.system === key),
+    onclick: () => { sel.system = key; render(); $('#center').scrollTop = 0; } }, title, h('small', { class: sysOf(key).enabled ? 'on' : null }, sysOf(key).enabled ? t('Activado') : t('Apagado')))));
   if (agent.flows.length > 5) {          // buscador: filtra por nombre y por a qué responde, sin redibujar (no pierde el foco)
-    const [search, none] = searchBox('flows', 'Buscar flujos', [...list.querySelectorAll('button.item')].map((b) => [b, b.textContent]));
+    const [search, none] = searchBox('flows', t('Buscar flujos'), [...list.querySelectorAll('button.item')].map((b) => [b, b.textContent]));
     list.prepend(search); list.querySelector('.side-group').before(none);
   }
   if (sel.system) return h('div', { class: 'two' }, list, systemView(sel.system));
-  if (!fl) return h('div', { class: 'two' }, list, h('div', { class: 'empty' }, h('h2', {}, 'Todavía no hay flujos'), h('p', {}, 'Un flujo es la conversación que sigue el bot cuando entiende una intención.')));
+  if (!fl) return h('div', { class: 'two' }, list, h('div', { class: 'empty' }, h('h2', {}, t('Todavía no hay flujos')), h('p', {}, t('Un flujo es la conversación que sigue el bot cuando entiende una intención.'))));
   const intent = agent.intents.find((i) => i.name === fl.trigger);
   const rename = (e) => {
     const name = e.target.value.trim();
@@ -1241,53 +1243,54 @@ function flowsView() {
     fl.name = name; touch(); render();
   };
   return h('div', { class: 'two' }, list, h('div', { class: 'page canvas' },
-    h('input', { class: 'title', value: fl.name, 'aria-label': 'Nombre del flujo', onchange: rename }),
-    h('p', { class: 'help', style: 'margin-bottom:18px' }, 'Armá la conversación de arriba hacia abajo, como un chat. Usá el botón + para sumar pasos.'),
-    h('div', { class: 'trigger' }, h('small', {}, fl.trigger === START ? 'Empieza' : 'Empieza cuando alguien escribe algo como'),
-      pick([['', 'Elegí una intención…'], [START, 'Al empezar la conversación'], ...agent.intents.map((i) => [i.name, i.name])], fl.trigger, (v) => {
+    h('input', { class: 'title', value: fl.name, 'aria-label': t('Nombre del flujo'), onchange: rename }),
+    h('p', { class: 'help', style: 'margin-bottom:18px' }, t('Armá la conversación de arriba hacia abajo, como un chat. Usá el botón + para sumar pasos.')),
+    h('div', { class: 'trigger' }, h('small', {}, fl.trigger === START ? t('Empieza') : t('Empieza cuando alguien escribe algo como')),
+      pick([['', t('Elegí una intención…')], [START, t('Al empezar la conversación')], ...agent.intents.map((i) => [i.name, i.name])], fl.trigger, (v) => {
         const other = v === START && agent.flows.find((f) => f !== fl && f.trigger === START);
         if (other) other.trigger = '';      // solo un flujo puede arrancar la conversación: se pasa a este
         startMoved = other ? { flow: fl, from: other.name } : null;
         const was = fl.trigger; fl.trigger = v; touch(); render();
-        if (was === START || v === START) renderChat(); }, 'Qué inicia el flujo'),     // el chat avisa si hay flujo de inicio
-      intent?.examples.length ? h('em', {}, '«' + plain(intent.examples[0]) + '»') : null,
-      fl.trigger === START ? h('small', {}, 'Empieza apenas arranca la conversación, antes de que la persona escriba. Acá podés usar los datos que llegan al iniciar' +
-        (agent.slots.length ? ' (por ejemplo ' + agent.slots[0].name + ').' : '.')) : null,
-      fl.trigger === START && startMoved?.flow === fl ? h('small', {}, '«' + startMoved.from + '» ya empezaba al iniciar la conversación. Ahora empieza este y «' + startMoved.from + '» quedó sin intención.') : null,
-      fl.trigger ? null : h('small', {}, 'Sin intención, este flujo solo se usa desde otro flujo.')),
+        if (was === START || v === START) renderChat(); }, t('Qué inicia el flujo')),     // el chat avisa si hay flujo de inicio
+      intent?.examples.length ? h('em', {}, t('«{text}»', { text: plain(intent.examples[0]) })) : null,
+      fl.trigger === START ? h('small', {}, agent.slots.length
+        ? t('Empieza apenas arranca la conversación, antes de que la persona escriba. Acá podés usar los datos que llegan al iniciar (por ejemplo {slot}).', { slot: agent.slots[0].name })
+        : t('Empieza apenas arranca la conversación, antes de que la persona escriba. Acá podés usar los datos que llegan al iniciar.')) : null,
+      fl.trigger === START && startMoved?.flow === fl ? h('small', {}, t('«{flow}» ya empezaba al iniciar la conversación. Ahora empieza este y «{flow}» quedó sin intención.', { flow: startMoved.from })) : null,
+      fl.trigger ? null : h('small', {}, t('Sin intención, este flujo solo se usa desde otro flujo.'))),
     stepsView(fl.steps),
-    h('p', { class: 'finish' }, 'Acá termina el flujo y el bot espera un mensaje nuevo.'),
-    h('div', {}, h('button', { class: 'btn danger', onclick: () => confirmBox('Borrar el flujo', 'Se borra «' + fl.name + '» con todos sus pasos.', 'Borrar flujo', () => { agent.flows.splice(sel.flows, 1); sel.flows = 0; touch(); render(); }) }, 'Borrar este flujo'))));
+    h('p', { class: 'finish' }, t('Acá termina el flujo y el bot espera un mensaje nuevo.')),
+    h('div', {}, h('button', { class: 'btn danger', onclick: () => confirmBox(t('Borrar el flujo'), t('Se borra «{name}» con todos sus pasos.', { name: fl.name }), t('Borrar flujo'), () => { agent.flows.splice(sel.flows, 1); sel.flows = 0; touch(); render(); }) }, t('Borrar este flujo')))));
 }
 
 function systemView(key) {                 // un flujo del sistema: prendido/apagado, qué dice y con qué frases se activa
   const [, title, when] = SYSTEM.find((x) => x[0] === key), s = sysOf(key);
-  const input = h('input', { placeholder: 'Otra forma de pedirlo y Enter', 'aria-label': 'Nueva frase' });
+  const input = h('input', { placeholder: t('Otra forma de pedirlo y Enter'), 'aria-label': t('Nueva frase') });
   const add = (e) => {
     e.preventDefault();
-    const t = input.value.trim();
-    if (t && !s.examples.includes(t)) { s.examples.unshift(t); touch(); render(); $('.add-phrase input')?.focus(); }
+    const txt = input.value.trim();
+    if (txt && !s.examples.includes(txt)) { s.examples.unshift(txt); touch(); render(); $('.add-phrase input')?.focus(); }
   };
-  const pct = h('strong', {}, Math.round((s.margin ?? 0.04) * 100) + ' puntos');
+  const pct = h('strong', {}, t('{n} puntos', { n: Math.round((s.margin ?? 0.04) * 100) }));
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('h1', {}, title),
       h('label', { class: 'toggle' }, h('input', { type: 'checkbox', class: 'switch', role: 'switch', checked: !!s.enabled, onchange: (e) => { s.enabled = e.target.checked; touch(); render(); } }),
-        s.enabled ? 'Activado' : 'Apagado')),
+        s.enabled ? t('Activado') : t('Apagado'))),
     h('p', { class: 'help' }, when),
-    h('div', { class: 'notice' }, 'Es un comportamiento que el bot ya trae y funciona en cualquier flujo. Acá elegís si lo usa y cómo lo dice.'),
-    'text' in s ? h('div', { class: 'panel' }, h('h2', {}, 'Qué dice el bot'),
-      area(s, 'text', { 'aria-label': 'Qué dice el bot' }),
-      key === 'clarify' ? h('p', { class: 'help', style: 'font-size:14px' }, 'Después de este texto, el bot muestra las dos opciones para tocar.') : null) : null,
-    key === 'clarify' ? h('div', { class: 'panel' }, h('h2', {}, 'Cuándo duda'),
-      h('div', { class: 'row' }, 'Poco', h('input', { class: 'grow', type: 'range', min: 0.01, max: 0.15, step: 0.01, value: s.margin ?? 0.04, 'aria-label': 'Cuándo duda', style: 'padding:0',
-        oninput: (e) => { s.margin = Number(e.target.value); pct.textContent = Math.round(s.margin * 100) + ' puntos'; touch(); } }), 'Mucho', pct),
-      h('p', { class: 'help', style: 'font-size:14px' }, 'Pregunta cuando las dos intenciones más parecidas están a menos de esta distancia. Si pregunta demasiado, bajalo.')) : null,
-    'examples' in s ? h('div', { class: 'panel' }, h('h2', {}, 'Frases que lo activan'),
-      h('p', { class: 'help', style: 'font-size:14px' }, 'Formas en que la gente lo pide. Cuantas más cargues, mejor lo reconoce.'),
-      h('form', { class: 'add-phrase', onsubmit: add }, input, h('button', { class: 'btn' }, 'Agregar frase')),
+    h('div', { class: 'notice' }, t('Es un comportamiento que el bot ya trae y funciona en cualquier flujo. Acá elegís si lo usa y cómo lo dice.')),
+    'text' in s ? h('div', { class: 'panel' }, h('h2', {}, t('Qué dice el bot')),
+      area(s, 'text', { 'aria-label': t('Qué dice el bot') }),
+      key === 'clarify' ? h('p', { class: 'help', style: 'font-size:14px' }, t('Después de este texto, el bot muestra las dos opciones para tocar.')) : null) : null,
+    key === 'clarify' ? h('div', { class: 'panel' }, h('h2', {}, t('Cuándo duda')),
+      h('div', { class: 'row' }, t('Poco'), h('input', { class: 'grow', type: 'range', min: 0.01, max: 0.15, step: 0.01, value: s.margin ?? 0.04, 'aria-label': t('Cuándo duda'), style: 'padding:0',
+        oninput: (e) => { s.margin = Number(e.target.value); pct.textContent = t('{n} puntos', { n: Math.round(s.margin * 100) }); touch(); } }), t('Mucho'), pct),
+      h('p', { class: 'help', style: 'font-size:14px' }, t('Pregunta cuando las dos intenciones más parecidas están a menos de esta distancia. Si pregunta demasiado, bajalo.'))) : null,
+    'examples' in s ? h('div', { class: 'panel' }, h('h2', {}, t('Frases que lo activan')),
+      h('p', { class: 'help', style: 'font-size:14px' }, t('Formas en que la gente lo pide. Cuantas más cargues, mejor lo reconoce.')),
+      h('form', { class: 'add-phrase', onsubmit: add }, input, h('button', { class: 'btn' }, t('Agregar frase'))),
       h('div', { class: 'phrases' }, s.examples.map((x, i) => h('div', { class: 'phrase-row' }, h('div', { class: 'phrase' }, x),
-        iconBtn('trash', 'Borrar frase', () => { s.examples.splice(i, 1); touch(); render(); })))),
-      s.examples.length ? null : h('p', { class: 'help', style: 'font-size:14px;color:var(--warn)' }, 'Sin frases, no se activa nunca.')) : null);
+        iconBtn('trash', t('Borrar frase'), () => { s.examples.splice(i, 1); touch(); render(); })))),
+      s.examples.length ? null : h('p', { class: 'help', style: 'font-size:14px;color:var(--warn)' }, t('Sin frases, no se activa nunca.'))) : null);
 }
 
 // ---------- ajustes ----------
@@ -1296,14 +1299,14 @@ const FALLBACK_IDEAS = ['Perdón, no te entendí. ¿Me lo decís de otra forma?'
 function languagesPanel() {            // el primero de la lista es el idioma principal
   const on = langs();
   const set = (list) => { agent.languages = list; if (!list.includes(editLang)) editLang = null; touch(); render(); };
-  return h('div', { class: 'panel' }, h('h2', {}, 'Idiomas del bot'),
-    h('p', { class: 'help', style: 'font-size:14px' }, 'Elegí en qué idiomas atiende. Contesta en el idioma en que le escriben; si falta una traducción, usa el idioma principal.'),
-    h('div', { class: 'pills', role: 'group', 'aria-label': 'Idiomas' }, Object.entries(LANGS).map(([l, name]) =>
+  return h('div', { class: 'panel' }, h('h2', {}, t('Idiomas del bot')),
+    h('p', { class: 'help', style: 'font-size:14px' }, t('Elegí en qué idiomas atiende. Contesta en el idioma en que le escriben; si falta una traducción, usa el idioma principal.')),
+    h('div', { class: 'pills', role: 'group', 'aria-label': t('Idiomas') }, Object.entries(LANGS).map(([l, name]) =>
       h('button', { type: 'button', class: 'pill', 'aria-pressed': String(on.includes(l)), 'aria-disabled': on.length === 1 && on[0] === l ? 'true' : null,
-        title: on.length === 1 && on[0] === l ? 'Tiene que quedar al menos un idioma' : null,
-        onclick: () => { if (on.length === 1 && on[0] === l) return; set(on.includes(l) ? on.filter((x) => x !== l) : [...on, l]); } }, on.includes(l) ? icon('check') : null, name, on[0] === l ? h('small', {}, 'principal') : null))),
-    on.length > 1 ? h('div', { class: 'row' }, 'Idioma principal', pick(on.map((l) => [l, LANGS[l] || l]), on[0], (l) => set([l, ...on.filter((x) => x !== l)]), 'Idioma principal')) : null,
-    on.length > 1 ? h('p', { class: 'help', style: 'font-size:14px' }, 'Para traducir un mensaje, tocá ', on.map((l) => l.toUpperCase()).join(' · '), ' arriba de cada mensaje en Flujos.') : null);
+        title: on.length === 1 && on[0] === l ? t('Tiene que quedar al menos un idioma') : null,
+        onclick: () => { if (on.length === 1 && on[0] === l) return; set(on.includes(l) ? on.filter((x) => x !== l) : [...on, l]); } }, on.includes(l) ? icon('check') : null, name, on[0] === l ? h('small', {}, t('principal')) : null))),
+    on.length > 1 ? h('div', { class: 'row' }, t('Idioma principal'), pick(on.map((l) => [l, LANGS[l] || l]), on[0], (l) => set([l, ...on.filter((x) => x !== l)]), t('Idioma principal'))) : null,
+    on.length > 1 ? h('p', { class: 'help', style: 'font-size:14px' }, t('Para traducir un mensaje, tocá {codes} arriba de cada mensaje en Flujos.', { codes: on.map((l) => l.toUpperCase()).join(' · ') })) : null);
 }
 function fallbackPanel() {             // «fallback» puede venir como texto (agentes viejos): al editarlo pasa a ser una lista
   const l = curLang(), main = !translating();
@@ -1315,44 +1318,44 @@ function fallbackPanel() {             // «fallback» puede venir como texto (a
   };
   const add = (text) => { replies.push(text); save(); render(); if (!text) [...document.querySelectorAll('.fallback-row textarea')].pop()?.focus(); };
   const filled = replies.filter((r) => r.trim()).length;
-  const ideas = main && langs()[0] === 'es' ? FALLBACK_IDEAS.filter((t) => !replies.includes(t)) : [];
-  return h('div', { class: 'panel' }, h('div', { class: 'row' }, h('h2', { class: 'grow' }, 'Qué responde cuando no entiende'), langSwitch()),
-    h('p', { class: 'help', style: 'font-size:14px' }, 'El bot elige una al azar y no repite la misma dos veces seguidas.', main ? '' : ' Estas son las de ' + LANGS[l] + '; si no cargás ninguna, usa las de ' + LANGS[langs()[0]] + '.'),
+  const ideas = main && langs()[0] === 'es' ? FALLBACK_IDEAS.filter((idea) => !replies.includes(idea)) : [];
+  return h('div', { class: 'panel' }, h('div', { class: 'row' }, h('h2', { class: 'grow' }, t('Qué responde cuando no entiende')), langSwitch()),
+    h('p', { class: 'help', style: 'font-size:14px' }, t('El bot elige una al azar y no repite la misma dos veces seguidas.'), main ? '' : t(' Estas son las de {lang}; si no cargás ninguna, usa las de {main}.', { lang: LANGS[l], main: LANGS[langs()[0]] })),
     h('div', { class: 'stack' }, replies.map((r, i) => h('div', { class: 'row fallback-row', style: 'flex-wrap:nowrap;align-items:flex-start' },
-      h('textarea', { rows: 1, class: 'grow', value: r, 'aria-label': 'Respuesta ' + (i + 1), placeholder: main ? 'Por ejemplo: Perdón, no te entendí.' : [agent.fallback].flat()[i] || [agent.fallback].flat()[0] || '',
+      h('textarea', { rows: 1, class: 'grow', value: r, 'aria-label': t('Respuesta {n}', { n: i + 1 }), placeholder: main ? t('Por ejemplo: Perdón, no te entendí.') : [agent.fallback].flat()[i] || [agent.fallback].flat()[0] || '',
         oninput: (e) => { replies[i] = e.target.value; grow(e.target); save(); } }),
-      iconBtn('trash', 'Borrar esta respuesta', () => { replies.splice(i, 1); save(); render(); }, replies.length <= 1 || (filled <= 1 && !!r.trim()))))),
-    filled || !main ? null : h('p', { class: 'notice warn' }, 'Escribí al menos una respuesta. Si no, el bot contesta «No entendí.».'),
-    h('div', {}, h('button', { class: 'btn quiet small', onclick: () => add('') }, icon('plus'), 'Agregar otra respuesta')),
-    ideas.length ? h('div', { class: 'chips', style: 'font-size:13px' }, 'Ideas:', ideas.map((t) => h('button', { class: 'chip', style: 'text-align:left', onclick: () => add(t) }, t))) : null);
+      iconBtn('trash', t('Borrar esta respuesta'), () => { replies.splice(i, 1); save(); render(); }, replies.length <= 1 || (filled <= 1 && !!r.trim()))))),
+    filled || !main ? null : h('p', { class: 'notice warn' }, t('Escribí al menos una respuesta. Si no, el bot contesta «No entendí.».')),
+    h('div', {}, h('button', { class: 'btn quiet small', onclick: () => add('') }, icon('plus'), t('Agregar otra respuesta'))),
+    ideas.length ? h('div', { class: 'chips', style: 'font-size:13px' }, t('Ideas:'), ideas.map((idea) => h('button', { class: 'chip', style: 'text-align:left', onclick: () => add(idea) }, idea))) : null);
 }
 function privacyPanel() {             // retention_days y pii_redaction: se aplican a lo guardado (parla/server.py cleanup, parla/pii.py)
   const pii = !!agent.pii_redaction;
-  return h('div', { class: 'panel' }, h('h2', {}, 'Privacidad y datos'),
-    h('div', { class: 'row' }, 'Borrar las conversaciones sin movimiento después de',
-      h('input', { type: 'number', min: 0, step: 1, style: 'width:90px', value: agent.retention_days ?? '', placeholder: '—', 'aria-label': 'Días que se guardan las conversaciones',
-        oninput: (e) => { const v = e.target.value.trim(); if (v === '') delete agent.retention_days; else agent.retention_days = Math.max(0, Math.floor(Number(v)) || 0); touch(); } }), 'días'),
-    h('p', { class: 'help', style: 'font-size:14px' }, 'Vacío: lo que diga el servidor (PARLA_RETENTION_DAYS) o, si no dice nada, se guardan siempre. 0: se guardan siempre. Los archivos del paso «Enviar un archivo» no se borran.'),
+  return h('div', { class: 'panel' }, h('h2', {}, t('Privacidad y datos')),
+    h('div', { class: 'row' }, t('Borrar las conversaciones sin movimiento después de'),
+      h('input', { type: 'number', min: 0, step: 1, style: 'width:90px', value: agent.retention_days ?? '', placeholder: '—', 'aria-label': t('Días que se guardan las conversaciones'),
+        oninput: (e) => { const v = e.target.value.trim(); if (v === '') delete agent.retention_days; else agent.retention_days = Math.max(0, Math.floor(Number(v)) || 0); touch(); } }), t('días')),
+    h('p', { class: 'help', style: 'font-size:14px' }, t('Vacío: lo que diga el servidor (PARLA_RETENTION_DAYS) o, si no dice nada, se guardan siempre. 0: se guardan siempre. Los archivos del paso «Enviar un archivo» no se borran.')),
     h('label', { class: 'toggle' }, h('input', { type: 'checkbox', class: 'switch', role: 'switch', checked: pii,
-      onchange: (e) => { agent.pii_redaction = e.target.checked; touch(); render(); } }), 'Tapar datos personales en lo que se guarda'),
-    h('p', { class: 'help', style: 'font-size:14px' }, 'Emails, teléfonos, tarjetas, DNI o CUIT y cuentas (CBU, CVU o IBAN) quedan como «[email]», «[tarjeta]», etc. en el historial, la Bandeja y los reportes. Durante la charla el bot usa el dato real: los pasos y las consultas lo reciben igual.'),
-    pii ? h('p', { class: 'notice' }, 'Lo ya guardado se tapa recién cuando esa conversación vuelve a guardarse. Las charlas quietas por 24 horas se cierran para borrar su memoria.') : null);
+      onchange: (e) => { agent.pii_redaction = e.target.checked; touch(); render(); } }), t('Tapar datos personales en lo que se guarda')),
+    h('p', { class: 'help', style: 'font-size:14px' }, t('Emails, teléfonos, tarjetas, DNI o CUIT y cuentas (CBU, CVU o IBAN) quedan como «[email]», «[tarjeta]», etc. en el historial, la Bandeja y los reportes. Durante la charla el bot usa el dato real: los pasos y las consultas lo reciben igual.')),
+    pii ? h('p', { class: 'notice' }, t('Lo ya guardado se tapa recién cuando esa conversación vuelve a guardarse. Las charlas quietas por 24 horas se cierran para borrar su memoria.')) : null);
 }
 function settingsView() {
   const pct = h('strong', {}, Math.round(agent.threshold * 100) + '%');
-  return h('div', { class: 'page' }, h('h1', {}, 'Ajustes'),
+  return h('div', { class: 'page' }, h('h1', {}, t('Ajustes')),
     languagesPanel(),
     fallbackPanel(),
-    h('div', { class: 'panel' }, h('h2', {}, 'Qué tan seguro tiene que estar para responder'),
-      h('div', { class: 'row' }, 'Flexible', h('input', { class: 'grow', type: 'range', min: 0.2, max: 0.9, step: 0.05, value: agent.threshold, 'aria-label': 'Seguridad mínima', style: 'padding:0',
-        oninput: (e) => { agent.threshold = Number(e.target.value); pct.textContent = Math.round(agent.threshold * 100) + '%'; touch(); } }), 'Estricto', pct),
-      h('p', { class: 'help', style: 'font-size:14px' }, 'Si el bot responde cosas que no le preguntaron, subilo. Si dice seguido que no entiende, bajalo o sumá más frases.')),
+    h('div', { class: 'panel' }, h('h2', {}, t('Qué tan seguro tiene que estar para responder')),
+      h('div', { class: 'row' }, t('Flexible'), h('input', { class: 'grow', type: 'range', min: 0.2, max: 0.9, step: 0.05, value: agent.threshold, 'aria-label': t('Seguridad mínima'), style: 'padding:0',
+        oninput: (e) => { agent.threshold = Number(e.target.value); pct.textContent = Math.round(agent.threshold * 100) + '%'; touch(); } }), t('Estricto'), pct),
+      h('p', { class: 'help', style: 'font-size:14px' }, t('Si el bot responde cosas que no le preguntaron, subilo. Si dice seguido que no entiende, bajalo o sumá más frases.'))),
     privacyPanel(),
-    h('div', { class: 'panel' }, h('h2', {}, 'Llevarlo a otro lado'),
-      h('p', { class: 'help', style: 'font-size:14px' }, 'Exportá el agente completo (intenciones, entidades, slots, flujos y ajustes) en un archivo. Para usarlo en otra compu, tocá «Importar agente» en la pantalla de agentes: se crea como un agente nuevo y se entrena al abrirlo.'),
-      h('div', {}, h('button', { class: 'btn quiet', onclick: exportAgent }, 'Exportar agente'))),
-    h('div', {}, h('button', { class: 'btn danger', onclick: () => confirmBox('Borrar el agente', 'Se borra «' + agent.name + '» con sus intenciones, entidades y flujos. No se puede deshacer.', 'Borrar agente',
-      async () => { dirty = false; clearTimeout(timer); await api('DELETE', '/' + agent.id); home(); }) }, 'Borrar este agente')));
+    h('div', { class: 'panel' }, h('h2', {}, t('Llevarlo a otro lado')),
+      h('p', { class: 'help', style: 'font-size:14px' }, t('Exportá el agente completo (intenciones, entidades, slots, flujos y ajustes) en un archivo. Para usarlo en otra compu, tocá «Importar agente» en la pantalla de agentes: se crea como un agente nuevo y se entrena al abrirlo.')),
+      h('div', {}, h('button', { class: 'btn quiet', onclick: exportAgent }, t('Exportar agente')))),
+    h('div', {}, h('button', { class: 'btn danger', onclick: () => confirmBox(t('Borrar el agente'), t('Se borra «{name}» con sus intenciones, entidades y flujos. No se puede deshacer.', { name: agent.name }), t('Borrar agente'),
+      async () => { dirty = false; clearTimeout(timer); await api('DELETE', '/' + agent.id); home(); }) }, t('Borrar este agente'))));
 }
 
 // ---------- probar ----------
@@ -1370,10 +1373,10 @@ async function startChat(data) {   // empieza una conversación nueva, con los d
     const body = await r.json();
     if (!r.ok) throw new Error(body.error || r.status);
     const used = Object.entries(data).filter(([k]) => !body.ignored_data.includes(k)).map(([k, v]) => k + ' = ' + v);
-    if (used.length || body.ignored_data.length) chat.push({ who: 'event', text: (used.length ? 'Empezó con datos: ' + used.join(', ') : 'Empezó la conversación') +
-      (body.ignored_data.length ? '. No hay slot para: ' + body.ignored_data.join(', ') : '') });
+    if (used.length || body.ignored_data.length) chat.push({ who: 'event', text: (used.length ? t('Empezó con datos: {data}', { data: used.join(', ') }) : t('Empezó la conversación')) +
+      (body.ignored_data.length ? t('. No hay slot para: {names}', { names: body.ignored_data.join(', ') }) : '') });
     takeTurn(body, quiet || !!callView);
-  } catch (err) { chat.push({ who: 'problem', text: 'No se pudo empezar: ' + err.message }); }
+  } catch (err) { chat.push({ who: 'problem', text: t('No se pudo empezar: {error}', { error: err.message }) }); }
   renderChat();
 }
 // Los datos de inicio quedan guardados por agente en este navegador. startData es la copia en uso (sessions.js la pisa al
@@ -1401,7 +1404,7 @@ function startBox() {
   syncStart();
   const n = agent.slots.filter((s) => String(startData[s.name] ?? '').trim()).length;
   return h('div', { class: 'start-box' }, h('button', { type: 'button', class: 'btn quiet small', 'aria-haspopup': 'dialog', onclick: startDialog },
-    icon('sliders'), 'Empezar con datos', n ? h('span', { class: 'chip' }, n + (n === 1 ? ' dato' : ' datos')) : null));
+    icon('sliders'), t('Empezar con datos'), n ? h('span', { class: 'chip' }, t.plural(n, '{n} dato', '{n} datos')) : null));
 }
 function startDialog() {
   syncStart();
@@ -1415,51 +1418,51 @@ function startDialog() {
   };
   const leave = (fn) => () => { d.close(); fn(); };
   const create = () => {
-    const f = { name: uniqueName(agent.flows, 'Bienvenida'), trigger: START, steps: [] };
+    const f = { name: uniqueName(agent.flows, t('Bienvenida')), trigger: START, steps: [] };
     agent.flows.push(f); sel.flows = agent.flows.length - 1; sel.system = null; section = 'flows'; touch(); render(); renderChat();
   };
-  const inputs = shown.map((s) => h('input', { value: startData[s.name] ?? '', placeholder: 'valor que llega al iniciar', autocomplete: 'off',
+  const inputs = shown.map((s) => h('input', { value: startData[s.name] ?? '', placeholder: t('valor que llega al iniciar'), autocomplete: 'off',
     oninput: (e) => { startData[s.name] = e.target.value; save(); } }));
   const clear = () => { startData = {}; try { localStorage.removeItem(startKey()); } catch {} inputs.forEach((i) => { i.value = ''; }); inputs[0]?.focus(); };
   const d = h('dialog', { class: 'start-box', 'aria-labelledby': 'start-title' }, h('form', { onsubmit: go },   // Enter en cualquier campo = empezar
-    h('h2', { id: 'start-title' }, 'Empezar con datos'),
-    h('p', { class: 'help' }, 'Probá cómo arranca la conversación cuando llegan datos de antes, por ejemplo el DNI que ya pidió el conmutador. Quedan guardados para la próxima.'),
+    h('h2', { id: 'start-title' }, t('Empezar con datos')),
+    h('p', { class: 'help' }, t('Probá cómo arranca la conversación cuando llegan datos de antes, por ejemplo el DNI que ya pidió el conmutador. Quedan guardados para la próxima.')),
     shown.length ? shown.map((s, i) => lab(s.name, inputs[i]))
-      : h('p', { class: 'help' }, 'Este agente todavía no tiene slots. Creá uno en Slots para poder cargarle datos.'),
-    !initial.length && agent.slots.length > 4 ? h('p', { class: 'help' }, 'Para ver solo los que llegan al iniciar, marcalos como «Dato inicial» en ',
-      h('button', { type: 'button', class: 'link', onclick: leave(() => { section = 'slots'; render(); }) }, 'Slots'), '.') : null,
-    hasStart ? null : h('p', { class: 'help' }, 'Los datos se guardan en los slots. Para usarlos apenas empieza, ', h('button', { type: 'button', class: 'link', onclick: leave(create) }, 'creá un flujo «Al empezar la conversación»'), '.'),
-    h('div', { class: 'row' }, h('button', { class: 'btn' }, 'Empezar conversación'),
-      voiceOk() ? h('button', { type: 'button', class: 'btn quiet', onclick: () => { d.close(); chooseCall(); } }, icon('phone'), 'Llamar') : null,
-      inputs.length ? h('button', { type: 'button', class: 'btn quiet', onclick: clear }, 'Borrar datos') : null,
-      h('button', { type: 'button', class: 'btn quiet', onclick: () => d.close() }, 'Cancelar'))));
+      : h('p', { class: 'help' }, t('Este agente todavía no tiene slots. Creá uno en Slots para poder cargarle datos.')),
+    !initial.length && agent.slots.length > 4 ? h('p', { class: 'help' }, t('Para ver solo los que llegan al iniciar, marcalos como «Dato inicial» en '),
+      h('button', { type: 'button', class: 'link', onclick: leave(() => { section = 'slots'; render(); }) }, t('Slots')), '.') : null,
+    hasStart ? null : h('p', { class: 'help' }, t('Los datos se guardan en los slots. Para usarlos apenas empieza, '), h('button', { type: 'button', class: 'link', onclick: leave(create) }, t('creá un flujo «Al empezar la conversación»')), '.'),
+    h('div', { class: 'row' }, h('button', { class: 'btn' }, t('Empezar conversación')),
+      voiceOk() ? h('button', { type: 'button', class: 'btn quiet', onclick: () => { d.close(); chooseCall(); } }, icon('phone'), t('Llamar')) : null,
+      inputs.length ? h('button', { type: 'button', class: 'btn quiet', onclick: clear }, t('Borrar datos')) : null,
+      h('button', { type: 'button', class: 'btn quiet', onclick: () => d.close() }, t('Cancelar')))));
   d.onclose = () => { d.remove(); renderChat(); };
   document.body.append(d); d.showModal();
 }
 function readLine(m) {
   if (!m.nlu) return null;
-  if (m.taught) return h('div', { class: 'read' }, 'Aprendido: ahora esa frase cuenta como «' + m.taught + '».');
-  const teach = h('button', { class: 'link', onclick: (e) => openPop(e.currentTarget.getBoundingClientRect(), [h('p', { class: 'pop-title' }, '«' + m.text + '» quiere decir…'),
-    agent.intents.map((it) => h('button', { class: 'opt', onclick: () => { it.examples.unshift(m.text.replace(/[\[\]]/g, '')); m.taught = it.name; touch(); render(); renderChat(); } }, it.name))]) }, 'Enseñarle');
+  if (m.taught) return h('div', { class: 'read' }, t('Aprendido: ahora esa frase cuenta como «{intent}».', { intent: m.taught }));
+  const teach = h('button', { class: 'link', onclick: (e) => openPop(e.currentTarget.getBoundingClientRect(), [h('p', { class: 'pop-title' }, t('«{text}» quiere decir…', { text: m.text })),
+    agent.intents.map((it) => h('button', { class: 'opt', onclick: () => { it.examples.unshift(m.text.replace(/[\[\]]/g, '')); m.taught = it.name; touch(); render(); renderChat(); } }, it.name))]) }, t('Enseñarle'));
   const ents = m.nlu.entities.map((e) => [' ', h('mark', { 'data-entity': e.entity, style: markStyle(entityOf(e.entity)) }, e.value)]);
   const pct = ' (' + Math.round(m.nlu.confidence * 100) + '%)';
   if (m.rejected) {
     const e = entityOf(agent.slots.find((v) => v.name === m.answerTo)?.entity);
-    if (m.taughtValue) return h('div', { class: 'read' }, 'Aprendido: «' + m.text + '» ahora cuenta como ' + m.taughtValue + '. Mandalo de nuevo.');
-    return h('div', { class: 'read' }, 'No lo reconoció como ', h('strong', {}, e?.name || m.answerTo), '. ',
-      e?.values?.length ? h('button', { class: 'link', onclick: (ev) => openPop(ev.currentTarget.getBoundingClientRect(), [h('p', { class: 'pop-title' }, '«' + m.text + '» es otra forma de decir…'),
-        e.values.map((v) => h('button', { class: 'opt', onclick: () => { (((e.synonyms ||= {})[v]) ||= []).push(m.text.trim().toLowerCase()); m.taughtValue = v; touch(); render(); renderChat(); } }, v))]) }, 'Enseñarle') : null);
+    if (m.taughtValue) return h('div', { class: 'read' }, t('Aprendido: «{text}» ahora cuenta como {value}. Mandalo de nuevo.', { text: m.text, value: m.taughtValue }));
+    return h('div', { class: 'read' }, t('No lo reconoció como '), h('strong', {}, e?.name || m.answerTo), '. ',
+      e?.values?.length ? h('button', { class: 'link', onclick: (ev) => openPop(ev.currentTarget.getBoundingClientRect(), [h('p', { class: 'pop-title' }, t('«{text}» es otra forma de decir…', { text: m.text })),
+        e.values.map((v) => h('button', { class: 'opt', onclick: () => { (((e.synonyms ||= {})[v]) ||= []).push(m.text.trim().toLowerCase()); m.taughtValue = v; touch(); render(); renderChat(); } }, v))]) }, t('Enseñarle')) : null);
   }
   if (m.answerTo != null) {
     const slot = agent.slots.find((v) => v.name === m.answerTo), e = entityOf(slot?.entity);
     const whole = typeof m.saved === 'string' && m.saved === m.text.trim() && /\s/.test(m.saved);
-    if (m.marked) return h('div', { class: 'read' }, 'Ejemplo guardado. Entrená y probá de nuevo.');
-    return h('div', { class: 'read' }, 'Lo guardó en ', h('strong', {}, m.answerTo), m.saved != null ? ': «' + (typeof m.saved === 'string' ? m.saved : JSON.stringify(m.saved)) + '»' : '',
-      whole && slot && (!e || (!e.regex && !e.values?.length)) ? [' ', h('button', { class: 'link', onclick: (ev) => markAnswer(ev, m, slot) }, 'Marcar el dato')] : null);
+    if (m.marked) return h('div', { class: 'read' }, t('Ejemplo guardado. Entrená y probá de nuevo.'));
+    return h('div', { class: 'read' }, t('Lo guardó en '), h('strong', {}, m.answerTo), m.saved != null ? t(': «{value}»', { value: typeof m.saved === 'string' ? m.saved : JSON.stringify(m.saved) }) : '',
+      whole && slot && (!e || (!e.regex && !e.values?.length)) ? [' ', h('button', { class: 'link', onclick: (ev) => markAnswer(ev, m, slot) }, t('Marcar el dato'))] : null);
   }
-  if (!m.nlu.intent) return h('div', { class: 'read' }, 'Este agente todavía no tiene frases para comparar.');
+  if (!m.nlu.intent) return h('div', { class: 'read' }, t('Este agente todavía no tiene frases para comparar.'));
   const sure = m.nlu.confidence >= agent.threshold;
-  return h('div', { class: 'read' }, sure ? 'Entendió: ' : 'No estuvo seguro. Lo más parecido: ', h('strong', {}, m.nlu.intent), pct, ents, ' ', agent.intents.length ? teach : null);
+  return h('div', { class: 'read' }, sure ? t('Entendió: ') : t('No estuvo seguro. Lo más parecido: '), h('strong', {}, m.nlu.intent), pct, ents, ' ', agent.intents.length ? teach : null);
 }
 function markAnswer(ev, m, slot) {     // "mi nombre es olivia": la persona elige qué palabras son el dato
   const text = m.text.replace(/[\[\]]/g, '').trim();
@@ -1471,14 +1474,14 @@ function markAnswer(ev, m, slot) {     // "mi nombre es olivia": la persona elig
     const e = entityOf(name);
     (e.examples ||= []).push(text.slice(0, start) + '[' + text.slice(start, last.index + last[0].length) + '](' + name + ')' + text.slice(last.index + last[0].length));
     m.marked = true; closePop(); touch(); render(); renderChat();
-  } }, 'Guardar ejemplo');
-  const words = toks.map((t, i) => h('button', { 'aria-pressed': 'false', onclick: (e) => {
+  } }, t('Guardar ejemplo'));
+  const words = toks.map((tok, i) => h('button', { 'aria-pressed': 'false', onclick: (e) => {
     on.has(i) ? on.delete(i) : on.add(i);
     if (on.size) { const lo = Math.min(...on), hi = Math.max(...on); for (let j = lo; j <= hi; j++) on.add(j); }   // las palabras van seguidas
     words.forEach((b, j) => b.setAttribute('aria-pressed', String(on.has(j))));
     save.disabled = !on.size;
-  } }, t[0]));
-  openPop(ev.currentTarget.getBoundingClientRect(), [h('p', { class: 'pop-title' }, 'Tocá las palabras que son el ' + slot.name + ':'), h('div', { class: 'words' }, words),
+  } }, tok[0]));
+  openPop(ev.currentTarget.getBoundingClientRect(), [h('p', { class: 'pop-title' }, t('Tocá las palabras que son el {slot}:', { slot: slot.name })), h('div', { class: 'words' }, words),
     h('div', { style: 'padding:4px 8px' }, save)]);
 }
 // ---------- turno: mensajes, botones, quién respondió, idioma y paso a una persona ----------
@@ -1513,7 +1516,7 @@ function startHandoff() {               // mientras responde una persona, cada 3
       const news = items.filter((m) => m && m.from === 'human' && m.text);
       news.forEach((m) => chat.push({ who: 'human', text: m.text, by: m.by }));
       const ended = body.handoff === false || body.handoff?.active === false;
-      if (ended) { stopHandoff(); chat.push({ who: 'event', text: 'La persona devolvió la charla: vuelve a responder el bot.' }); }
+      if (ended) { stopHandoff(); chat.push({ who: 'event', text: t('La persona devolvió la charla: vuelve a responder el bot.') }); }
       if (news.length || ended) { renderChat(); say(news.map((m) => m.text).join('\n')); }
     } catch {}
   }, 3000);
@@ -1526,8 +1529,8 @@ async function sendText(text, shown) {   // shown: lo que se ve en el chat (el t
     const r = await api('POST', '/' + agent.id + '/chat', { session, text, environment: testEnv });
     mine.nlu = r.nlu; mine.answerTo = r.answer_to; mine.rejected = r.rejected; mine.saved = r.answer_to ? r.slots[r.answer_to] : null;
     takeTurn(r, quiet || !!callView);
-    if (!r.messages.length && !handoff) chat.push({ who: 'problem', text: 'El flujo no respondió nada. Revisá que tenga algún mensaje.' });
-  } catch (err) { chat.push({ who: 'problem', text: 'No se pudo enviar: ' + err.message }); }
+    if (!r.messages.length && !handoff) chat.push({ who: 'problem', text: t('El flujo no respondió nada. Revisá que tenga algún mensaje.') });
+  } catch (err) { chat.push({ who: 'problem', text: t('No se pudo enviar: {error}', { error: err.message }) }); }
   renderChat();
 }
 async function toggleMic() {            // grabar → pasar a texto → mandar
@@ -1540,7 +1543,7 @@ async function toggleMic() {            // grabar → pasar a texto → mandar
       if (String(text || '').trim()) sendText(String(text).trim()); else renderChat();
     }, { language: lastLang || langs()[0], agent: agent.id, context: lastBotText(), onState: (st) => { voiceState = ['listening', 'thinking'].includes(st) ? st : ''; renderChat(); },
       onError: (msg) => { voiceStop = null; chat.push({ who: 'problem', text: msg }); renderChat(); } });   // antes el error se perdía y el micrófono «no hacía nada»
-  } catch (err) { voiceState = ''; voiceStop = null; chat.push({ who: 'problem', text: 'No se pudo usar el micrófono: ' + (err?.message || err) }); renderChat(); }
+  } catch (err) { voiceState = ''; voiceStop = null; chat.push({ who: 'problem', text: t('No se pudo usar el micrófono: {error}', { error: err?.message || err }) }); renderChat(); }
 }
 const lastBotText = () => [...chat].reverse().find((m) => m.who === 'bot')?.text || '';   // la pregunta pendiente: contexto para el ASR
 // ---------- llamada de voz: la conversación entera por voz (WebRTC en el navegador, voz y transcripción en el servidor) ----------
@@ -1567,23 +1570,23 @@ async function startVoiceCall(ctx) {    // escucha → pasa a texto → responde
   view.start = Date.now();
   callTick = setInterval(() => { const el = $('.call-timer'); if (el) el.textContent = callClock(); }, 1000);
   const said = (from) => chat.slice(from).filter((m) => m.who === 'bot' || m.who === 'human').map((m) => m.text).join('\n');
-  let pending = said(0), errors = 0, t = null;       // t: tiempos del turno (con parla.voice.debug se ven en la consola)
+  let pending = said(0), errors = 0, tm = null;       // tm: tiempos del turno (con parla.voice.debug se ven en la consola)
   const ms = (a, b) => a && b ? Math.round(b - a) + ' ms' : '—';
   const onPlay = () => {
     if (view.state === 'thinking') set('speaking');
-    if (t) { t.audio = performance.now(); window.parlaVoice.log('turno: fin de la frase → texto', ms(t.end, t.stt), '→ respuesta del bot', ms(t.stt, t.reply), '→ primer audio', ms(t.reply, t.audio), '· total', ms(t.end, t.audio)); t = null; }
+    if (tm) { tm.audio = performance.now(); window.parlaVoice.log('turno: fin de la frase → texto', ms(tm.end, tm.stt), '→ respuesta del bot', ms(tm.stt, tm.reply), '→ primer audio', ms(tm.reply, tm.audio), '· total', ms(tm.end, tm.audio)); tm = null; }
   };
   while (live()) {
     let text = null;
     try {
       const language = lastLang || langs()[0];
-      const hear = { language, context: lastBotText(), onState: (st) => { if (st === 'thinking') t = { end: performance.now() }; set(st); } };
+      const hear = { language, context: lastBotText(), onState: (st) => { if (st === 'thinking') tm = { end: performance.now() }; set(st); } };
       if (pending) {
         view.state = 'thinking'; renderChat();               // «Pensando…» hasta que llega el audio de la primera oración
         const heard = me.aec ? me.listen(hear) : null;      // con cancelación de eco escucha mientras habla: barge-in
         heard?.catch(() => {});
         await me.say(pending, language, onPlay)
-          .catch((err) => fail('No pude leer la respuesta en voz alta: ' + err.message));
+          .catch((err) => fail(t('No pude leer la respuesta en voz alta: {error}', { error: err.message })));
         pending = '';
         if (!live()) break;
         if (view.state !== 'thinking') set('listening');
@@ -1591,13 +1594,13 @@ async function startVoiceCall(ctx) {    // escucha → pasa a texto → responde
       } else { set('listening'); text = await me.listen(hear); }
       errors = 0;
     } catch (err) { fail(err.message); if (++errors >= 3) break; continue; }
-    if (t) t.stt = performance.now();
+    if (tm) tm.stt = performance.now();
     if (!text || !live()) continue;
     view.error = '';
     set('thinking');
     const before = chat.length;
     await sendText(text);
-    if (t) t.reply = performance.now();
+    if (tm) tm.reply = performance.now();
     pending = said(before);
   }
   if (callView === view) hangUp();       // cambió de agente o falló 3 veces seguidas
@@ -1605,40 +1608,40 @@ async function startVoiceCall(ctx) {    // escucha → pasa a texto → responde
 const callClock = () => { const s = callView?.start ? Math.floor((Date.now() - callView.start) / 1000) : 0; return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
 function hangUp() {
   const c = call, v = callView;
-  if (v?.start) chat.push({ who: 'event', text: 'Terminó la llamada (' + callClock() + ')' });
+  if (v?.start) chat.push({ who: 'event', text: t('Terminó la llamada ({time})', { time: callClock() }) });
   call = null; callView = null; clearInterval(callTick); callTick = null;
   try { c?.close(); window.parlaVoice.hush(); } catch {}   // corta todo: la voz de la llamada y la de «leer en voz alta»
   if (v && !v.start && !chat.length) testMode = '';     // no llegó a conectar: vuelve a elegir
   renderChat();
 }
 function callScreen() {
-  const v = callView, STATES = { connecting: 'Conectando…', listening: 'Escuchando', thinking: 'Pensando…', speaking: 'Hablando…', failed: 'No se pudo llamar' };
+  const v = callView, STATES = { connecting: t('Conectando…'), listening: t('Escuchando'), thinking: t('Pensando…'), speaking: t('Hablando…'), failed: t('No se pudo llamar') };
   const caps = chat.filter((m) => ['user', 'bot', 'human', 'problem'].includes(m.who)).slice(-6)
-    .map((m) => h('p', { class: 'call-cap ' + m.who }, h('b', {}, m.who === 'user' ? 'Vos' : m.who === 'problem' ? 'Problema' : m.who === 'human' ? 'Persona' : agent.name), m.text));
-  const capsBox = h('div', { class: 'call-caps', 'aria-live': 'polite', 'aria-label': 'Subtítulos de la llamada' }, caps);
+    .map((m) => h('p', { class: 'call-cap ' + m.who }, h('b', {}, m.who === 'user' ? t('Vos') : m.who === 'problem' ? t('Problema') : m.who === 'human' ? t('Persona') : agent.name), m.text));
+  const capsBox = h('div', { class: 'call-caps', 'aria-live': 'polite', 'aria-label': t('Subtítulos de la llamada') }, caps);
   const mute = () => { v.muted = !v.muted; call?.mute(v.muted); renderChat(); };
   const out = h('div', { class: 'call-screen' },
     h('div', { class: 'call-av ' + v.state, 'aria-hidden': 'true' }, (agent.name.trim()[0] || 'P').toUpperCase()),
     h('p', { class: 'call-name' }, agent.name),
     h('p', { class: 'call-meta', role: 'status' }, v.start ? h('span', { class: 'call-timer' }, callClock()) : null, v.start ? ' · ' : null,
-      v.muted && v.state === 'listening' ? 'Micrófono apagado' : STATES[v.state] || ''),
+      v.muted && v.state === 'listening' ? t('Micrófono apagado') : STATES[v.state] || ''),
     v.error ? h('p', { class: 'call-error', role: 'alert' }, v.error) : null,
-    v.start && !v.aec ? h('p', { class: 'call-note' }, 'Sin cancelación de eco: esperá a que el bot termine de hablar para contestar.') : null,
+    v.start && !v.aec ? h('p', { class: 'call-note' }, t('Sin cancelación de eco: esperá a que el bot termine de hablar para contestar.')) : null,
     capsBox,
     h('div', { class: 'call-btns' },
-      v.state !== 'failed' ? h('label', {}, h('button', { type: 'button', class: 'call-btn', 'aria-pressed': String(v.muted), 'aria-label': v.muted ? 'Prender el micrófono' : 'Silenciar el micrófono', onclick: mute }, icon('mic')), v.muted ? 'Silenciado' : 'Silenciar') : null,
-      h('label', {}, h('button', { type: 'button', class: 'call-btn hang', 'aria-label': v.state === 'failed' ? 'Volver' : 'Colgar', onclick: hangUp }, icon(v.state === 'failed' ? 'back' : 'phone')), v.state === 'failed' ? 'Volver' : 'Colgar')));
+      v.state !== 'failed' ? h('label', {}, h('button', { type: 'button', class: 'call-btn', 'aria-pressed': String(v.muted), 'aria-label': v.muted ? t('Prender el micrófono') : t('Silenciar el micrófono'), onclick: mute }, icon('mic')), v.muted ? t('Silenciado') : t('Silenciar')) : null,
+      h('label', {}, h('button', { type: 'button', class: 'call-btn hang', 'aria-label': v.state === 'failed' ? t('Volver') : t('Colgar'), onclick: hangUp }, icon(v.state === 'failed' ? 'back' : 'phone')), v.state === 'failed' ? t('Volver') : t('Colgar'))));
   queueMicrotask(() => { capsBox.scrollTop = capsBox.scrollHeight; });
   return out;
 }
-const VIA = { ia: ['spark', 'Respondió la IA'], knowledge: ['book', 'Respondió con Conocimiento'], significado: ['spark', 'Lo entendió por el significado'] };
+const VIA = { ia: ['spark', t('Respondió la IA')], knowledge: ['book', t('Respondió con Conocimiento')], significado: ['spark', t('Lo entendió por el significado')] };
 const sourceName = (x) => typeof x === 'string' ? x : x?.title || x?.doc || x?.text || '';
 function chatItem(m, i) {
-  const out = [h('div', { class: 'msg ' + m.who }, m.who === 'human' ? h('span', { class: 'who' }, m.by ? m.by + ' (persona)' : 'Una persona del equipo') : null,
+  const out = [h('div', { class: 'msg ' + m.who }, m.who === 'human' ? h('span', { class: 'who' }, m.by ? t('{name} (persona)', { name: m.by }) : t('Una persona del equipo')) : null,
     m.file && m.text === m.file.name ? null : m.text, m.file ? window.fileCard(m.file) : null)];
   if (m.via && VIA[m.via]) {
     const names = (m.sources || []).map(sourceName).filter(Boolean);
-    out.push(h('span', { class: 'via', title: names.length ? 'Fuentes: ' + names.join(' · ') : null }, icon(VIA[m.via][0]), VIA[m.via][1], names.length ? ' (' + names.length + (names.length === 1 ? ' fuente)' : ' fuentes)') : null));
+    out.push(h('span', { class: 'via', title: names.length ? t('Fuentes: {names}', { names: names.join(' · ') }) : null }, icon(VIA[m.via][0]), VIA[m.via][1], names.length ? t.plural(names.length, ' ({n} fuente)', ' ({n} fuentes)') : null));
   }
   if (m.buttons?.length && !chat.slice(i + 1).some((x) => x.who === 'user'))          // solo se tocan los del último mensaje
     out.push(h('div', { class: 'reply-btns' }, m.buttons.map((b) => h('button', { type: 'button', disabled: !!handoff, onclick: () => sendText(String(b.value || b.label), b.label) }, b.label))));
@@ -1650,52 +1653,52 @@ async function saveChatAsTest() {       // la charla del panel de prueba ya qued
     const r = await fetch('/api/v1/bots/' + encodeURIComponent(agent.id) + '/sessions/' + encodeURIComponent(session));
     const s = await r.json();
     if (!r.ok) throw new Error(s.error || r.status);
-    window.testFromHistory(s.history, s.slots, 'Prueba del chat');
-  } catch (e) { chat.push({ who: 'problem', text: 'No se pudo guardar como test: ' + e.message }); renderChat(); }
+    window.testFromHistory(s.history, s.slots, t('Prueba del chat'));
+  } catch (e) { chat.push({ who: 'problem', text: t('No se pudo guardar como test: {error}', { error: e.message }) }); renderChat(); }
 }
 function renderChat() {
   const old = $('#chat form input'), hadFocus = !document.activeElement || document.activeElement === document.body || $('#chat')?.contains(document.activeElement);
-  const input = h('input', { placeholder: handoff ? 'Escribile como cliente: le llega a la persona…' : 'Escribile al bot…', 'aria-label': 'Mensaje', autocomplete: 'off', value: old?.value || '' });
+  const input = h('input', { placeholder: handoff ? t('Escribile como cliente: le llega a la persona…') : t('Escribile al bot…'), 'aria-label': t('Mensaje'), autocomplete: 'off', value: old?.value || '' });
   const send = (e) => { e.preventDefault(); const text = input.value.trim(); if (text) { input.value = ''; sendText(text); } };
   const reset = resetTest;
   const filled = Object.entries(lastSlots).filter(([, v]) => v != null && v !== '');
   const voice = agent && voiceOk();
   const choose = agent && !chat.length && !testMode && !callView;   // antes de empezar: Chat o Llamada
   const log = h('div', { id: 'log', 'aria-live': 'polite' }, chat.length ? chat.map(chatItem)
-    : choose ? h('div', { class: 'mode-pick' }, h('p', {}, '¿Cómo querés probar al bot?'),
+    : choose ? h('div', { class: 'mode-pick' }, h('p', {}, t('¿Cómo querés probar al bot?')),
       h('button', { type: 'button', class: 'mode', onclick: () => startChat(startPayload()) }, h('span', { class: 'ic-wrap' }, icon('chat')),
-        h('strong', {}, 'Chat'), h('small', {}, 'Le escribís y te responde por escrito.')),
+        h('strong', {}, t('Chat')), h('small', {}, t('Le escribís y te responde por escrito.'))),
       h('button', { type: 'button', class: 'mode', disabled: !voice, onclick: chooseCall }, h('span', { class: 'ic-wrap' }, icon('phone')),
-        h('strong', {}, 'Llamada (voz)'), h('small', {}, voice ? 'Le hablás y te contesta en voz alta, como por teléfono.' : 'Este navegador no permite usar el micrófono.')))
-    : h('p', { class: 'chat-start' }, 'Escribile al bot como lo haría un cliente. Abajo de cada mensaje vas a ver qué entendió.',
-      agent?.flows.some((f) => f.trigger === START) ? ' Para ver cómo arranca solo, tocá «Empezar de nuevo».' : ''));
-  const envs = agent?.environments || {}, ENVS = { draft: 'Borrador', staging: 'Pruebas', production: 'Producción' };
+        h('strong', {}, t('Llamada (voz)')), h('small', {}, voice ? t('Le hablás y te contesta en voz alta, como por teléfono.') : t('Este navegador no permite usar el micrófono.'))))
+    : h('p', { class: 'chat-start' }, t('Escribile al bot como lo haría un cliente. Abajo de cada mensaje vas a ver qué entendió.'),
+      agent?.flows.some((f) => f.trigger === START) ? t(' Para ver cómo arranca solo, tocá «Empezar de nuevo».') : ''));
+  const envs = agent?.environments || {}, ENVS = { draft: t('Borrador'), staging: t('Pruebas'), production: t('Producción') };
   const choices = Object.keys(ENVS).filter((k) => k === 'draft' || envs[k] != null);
   if (!choices.includes(testEnv)) testEnv = 'draft';
   const envPick = choices.length > 1 ? pick(choices.map((k) => [k, ENVS[k] + (envs[k] != null ? ' (v' + envs[k] + ')' : '')]), testEnv,
-    (k) => { testEnv = k; resetTest(); }, 'Qué versión probar') : null;
+    (k) => { testEnv = k; resetTest(); }, t('Qué versión probar')) : null;
   $('#chat').replaceChildren(...[
-    h('div', { class: 'chat-head', style: 'flex-wrap:wrap;gap:8px' }, h('h2', { class: 'grow' }, 'Probar'), envPick ? h('span', { class: 'row', style: 'gap:6px;font-size:13px;color:var(--muted)' }, envPick) : null,
-      agent && lastLang && (langs().length > 1 || lastLang !== langs()[0]) ? h('span', { class: 'chip', title: 'El idioma en que está respondiendo el bot' }, 'Idioma: ' + (LANGS[lastLang] || lastLang)) : null,
-      agent && canEdit() && chat.some((m) => m.who === 'user') ? h('button', { class: 'btn quiet small', title: 'Guarda esta charla en Tests, con lo que respondió el bot como lo esperado', onclick: saveChatAsTest }, icon('check'), 'Guardar como test') : null,
-      h('button', { class: 'btn quiet small', onclick: reset }, icon('redo'), 'Empezar de nuevo'), iconBtn('x', 'Cerrar el panel de prueba', () => setChat(false))),
-    testEnv !== 'draft' ? h('p', { class: 'help', style: 'font-size:13px;padding:0 16px 8px' }, 'Estás probando la v' + envs[testEnv] + ' de ' + ENVS[testEnv] + ', tal como la usa la API. Lo que cambies en el borrador no se ve acá hasta que publiques.') : null,
+    h('div', { class: 'chat-head', style: 'flex-wrap:wrap;gap:8px' }, h('h2', { class: 'grow' }, t('Probar')), envPick ? h('span', { class: 'row', style: 'gap:6px;font-size:13px;color:var(--muted)' }, envPick) : null,
+      agent && lastLang && (langs().length > 1 || lastLang !== langs()[0]) ? h('span', { class: 'chip', title: t('El idioma en que está respondiendo el bot') }, t('Idioma: {lang}', { lang: LANGS[lastLang] || lastLang })) : null,
+      agent && canEdit() && chat.some((m) => m.who === 'user') ? h('button', { class: 'btn quiet small', title: t('Guarda esta charla en Tests, con lo que respondió el bot como lo esperado'), onclick: saveChatAsTest }, icon('check'), t('Guardar como test')) : null,
+      h('button', { class: 'btn quiet small', onclick: reset }, icon('redo'), t('Empezar de nuevo')), iconBtn('x', t('Cerrar el panel de prueba'), () => setChat(false))),
+    testEnv !== 'draft' ? h('p', { class: 'help', style: 'font-size:13px;padding:0 16px 8px' }, t('Estás probando la v{version} de {env}, tal como la usa la API. Lo que cambies en el borrador no se ve acá hasta que publiques.', { version: envs[testEnv], env: ENVS[testEnv] })) : null,
     agent && !callView ? startBox() : null,
     callView ? callScreen() : log,
-    !callView && (filled.length || lastTrace.length) ? h('details', {}, h('summary', {}, 'Qué tiene anotado el bot (' + filled.length + (filled.length === 1 ? ' slot' : ' slots') + ')'),
+    !callView && (filled.length || lastTrace.length) ? h('details', {}, h('summary', {}, t.plural(filled.length, 'Qué tiene anotado el bot ({n} slot)', 'Qué tiene anotado el bot ({n} slots)')),
       h('dl', { class: 'kv' }, filled.map(([k, v]) => [h('dt', {}, k), h('dd', {}, typeof v === 'string' ? v : JSON.stringify(v))])),
-      lastTrace.length ? h('dl', { class: 'kv' }, h('dt', {}, 'Último turno'), h('dd', {}, lastTrace.join(', '))) : null) : null,
+      lastTrace.length ? h('dl', { class: 'kv' }, h('dt', {}, t('Último turno')), h('dd', {}, lastTrace.join(', '))) : null) : null,
     agent && canEdit() && testEnv === 'draft' && untrained() && !training ? trainNote() : null,
-    handoff ? h('div', { class: 'notice handoff-bar', role: 'status' }, icon('hand'), 'Ahora responde una persona (Bandeja). El bot no contesta hasta que la devuelvan.') : null,
-    voiceState ? h('p', { class: 'voice-state', role: 'status' }, voiceState === 'listening' ? 'Escuchando… tocá el micrófono para terminar.' : 'Pasando tu voz a texto…') : null,
+    handoff ? h('div', { class: 'notice handoff-bar', role: 'status' }, icon('hand'), t('Ahora responde una persona (Bandeja). El bot no contesta hasta que la devuelvan.')) : null,
+    voiceState ? h('p', { class: 'voice-state', role: 'status' }, voiceState === 'listening' ? t('Escuchando… tocá el micrófono para terminar.') : t('Pasando tu voz a texto…')) : null,
     callView ? null : h('form', { onsubmit: send }, input,
       voice ? h('button', { type: 'button', class: 'icon-btn' + (voiceState === 'listening' ? ' listening' : ''), style: 'width:40px;height:40px;border-radius:50%',
-        'aria-label': voiceState === 'listening' ? 'Terminar de grabar' : 'Hablarle al bot', title: voiceState === 'listening' ? 'Terminar de grabar' : 'Hablarle al bot',
+        'aria-label': voiceState === 'listening' ? t('Terminar de grabar') : t('Hablarle al bot'), title: voiceState === 'listening' ? t('Terminar de grabar') : t('Hablarle al bot'),
         disabled: voiceState === 'thinking', onclick: toggleMic }, icon('mic')) : null,
       voice ? h('button', { type: 'button', class: 'icon-btn', style: 'width:40px;height:40px;border-radius:50%', 'aria-pressed': String(speakOn),
-        'aria-label': 'Leer en voz alta las respuestas', title: speakOn ? 'Lee en voz alta las respuestas (tocá para apagar)' : 'Leer en voz alta las respuestas',
+        'aria-label': t('Leer en voz alta las respuestas'), title: speakOn ? t('Lee en voz alta las respuestas (tocá para apagar)') : t('Leer en voz alta las respuestas'),
         onclick: () => { speakOn = !speakOn; try { localStorage.setItem('parla.speak', speakOn ? '1' : '0'); } catch {} renderChat(); } }, icon('volume')) : null,
-      h('button', { class: 'btn' }, 'Enviar'))].filter(Boolean));
+      h('button', { class: 'btn' }, t('Enviar')))].filter(Boolean));
   log.scrollTop = log.scrollHeight;
   if (chat.length && hadFocus) input.focus();
 }

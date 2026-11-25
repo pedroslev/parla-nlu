@@ -1,14 +1,23 @@
 // Parla · widget web. Se pega en cualquier sitio:
 // <script src="http://HOST/static/widget.js" data-bot="id-o-slug" data-title="Hablá con nosotros" data-color="#2f6bff"
-//         data-greeting="¡Hola!" data-position="right" data-voice="false" async></script>
+//         data-greeting="¡Hola!" data-position="right" data-voice="false" data-lang="es" async></script>
+// data-lang es el idioma principal del bot (no el del navegador de quien visita): elige los textos del chat. Sin él, español.
 // Sin dependencias. Todo vive en un Shadow DOM: ni el sitio pisa el estilo del chat ni el chat el del sitio.
 // Solo habla con el servidor de Parla de donde se cargó este archivo.
 (() => {
   const me = document.currentScript || [...document.querySelectorAll('script[src*="widget.js"][data-bot]')].pop();
   const d = me?.dataset || {};
   if (!d.bot) return console.warn('Parla: falta data-bot en el <script> del widget');
+  // textos propios del widget (no carga i18n.js). Un idioma por línea, mismas claves en todos (tests/test_i18n.py lo revisa)
+  const TEXTS = {
+    es: { title: 'Hablá con nosotros', placeholder: 'Escribí un mensaje…', input: 'Tu mensaje', send: 'Enviar', speak: 'Hablar', stopRec: 'Dejar de grabar', restart: 'Nueva conversación', close: 'Cerrar', closeChat: 'Cerrar chat', openChat: 'Abrir chat · {title}', closeChatTitle: 'Cerrar chat · {title}', log: 'Mensajes', chips: 'Respuestas sugeridas', open: 'Abrir', human: 'Te atiende una persona', person: 'Persona', origin: 'Este sitio no está autorizado para usar este chat. Si sos el dueño, agregá {origin} en Parla, sección «Widget web».', offline: 'No me pude conectar. Probá de nuevo en un rato.', missing: 'Este chat no está disponible en este momento.', failed: 'Algo salió mal ({error})', noMic: 'No tengo permiso para usar el micrófono.', noVoice: 'La voz no está disponible ahora. Escribime, por favor.' },
+    en: { title: 'Chat with us', placeholder: 'Type a message…', input: 'Your message', send: 'Send', speak: 'Speak', stopRec: 'Stop recording', restart: 'New conversation', close: 'Close', closeChat: 'Close chat', openChat: 'Open chat · {title}', closeChatTitle: 'Close chat · {title}', log: 'Messages', chips: 'Suggested replies', open: 'Open', human: 'A person is helping you', person: 'Agent', origin: 'This site is not allowed to use this chat. If you are the owner, add {origin} in Parla, in the “Web widget” section.', offline: 'Could not connect. Please try again in a moment.', missing: 'This chat is not available right now.', failed: 'Something went wrong ({error})', noMic: 'I do not have permission to use the microphone.', noVoice: 'Voice is not available right now. Please type instead.' },
+    pt: { title: 'Fale com a gente', placeholder: 'Digite uma mensagem…', input: 'Sua mensagem', send: 'Enviar', speak: 'Falar', stopRec: 'Parar de gravar', restart: 'Nova conversa', close: 'Fechar', closeChat: 'Fechar chat', openChat: 'Abrir chat · {title}', closeChatTitle: 'Fechar chat · {title}', log: 'Mensagens', chips: 'Respostas sugeridas', open: 'Abrir', human: 'Uma pessoa está te atendendo', person: 'Atendente', origin: 'Este site não tem permissão para usar este chat. Se você é o dono, adicione {origin} no Parla, na seção “Widget web”.', offline: 'Não consegui me conectar. Tente de novo daqui a pouco.', missing: 'Este chat não está disponível no momento.', failed: 'Algo deu errado ({error})', noMic: 'Não tenho permissão para usar o microfone.', noVoice: 'A voz não está disponível agora. Escreva, por favor.' },
+  };
+  const lang = (d.lang || 'es').slice(0, 2).toLowerCase(), L = TEXTS[lang] || TEXTS.es;
+  const fill = (s, vars) => s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
   const bot = d.bot, base = new URL(me.src, location.href).origin, api = base + '/api/v1/bots/' + encodeURIComponent(bot);
-  const title = d.title || 'Hablá con nosotros', color = /^#[0-9a-f]{6}$/i.test(d.color || '') ? d.color : '#2f6bff';
+  const title = d.title || L.title, color = /^#[0-9a-f]{6}$/i.test(d.color || '') ? d.color : '#2f6bff';
   const left = d.position === 'left', channel = d.channel || 'web';
   const canVoice = d.voice === 'true' && !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
   const key = 'parla.widget.' + bot;
@@ -25,6 +34,7 @@
   document.querySelectorAll('[data-parla-widget="' + CSS.escape(bot) + '"]').forEach((el) => el.parlaDestroy?.());
   const host = document.createElement('div');
   host.setAttribute('data-parla-widget', bot);
+  host.lang = TEXTS[lang] ? lang : 'es';
   const root = host.attachShadow({ mode: 'open' });
   const h = (tag, props, ...kids) => { const el = document.createElement(tag); for (const [k, v] of Object.entries(props || {})) if (v != null && v !== false) k.startsWith('on') ? (el[k] = v) : el.setAttribute(k, v === true ? '' : v); el.append(...kids.filter((k) => k != null)); return el; };
   const svg = (paths) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = paths.map((p) => '<path d="' + p + '"/>').join(''); return s; };
@@ -85,18 +95,18 @@
   `));
 
   const status = h('small', { 'aria-live': 'polite' });
-  const log = h('div', { class: 'log', role: 'log', 'aria-live': 'polite', 'aria-label': 'Mensajes' });
-  const chips = h('div', { class: 'chips', role: 'group', 'aria-label': 'Respuestas sugeridas' });
-  const input = h('input', { type: 'text', placeholder: 'Escribí un mensaje…', 'aria-label': 'Tu mensaje', autocomplete: 'off', maxlength: '4000' });
-  const sendBtn = h('button', { type: 'submit', class: 'ib', 'aria-label': 'Enviar', title: 'Enviar' }, svg(I.send));
-  const mic = canVoice ? h('button', { type: 'button', class: 'ib', 'aria-label': 'Hablar', title: 'Hablar', 'aria-pressed': 'false', onclick: () => toggleMic() }, svg(I.mic)) : null;
+  const log = h('div', { class: 'log', role: 'log', 'aria-live': 'polite', 'aria-label': L.log });
+  const chips = h('div', { class: 'chips', role: 'group', 'aria-label': L.chips });
+  const input = h('input', { type: 'text', placeholder: L.placeholder, 'aria-label': L.input, autocomplete: 'off', maxlength: '4000' });
+  const sendBtn = h('button', { type: 'submit', class: 'ib', 'aria-label': L.send, title: L.send }, svg(I.send));
+  const mic = canVoice ? h('button', { type: 'button', class: 'ib', 'aria-label': L.speak, title: L.speak, 'aria-pressed': 'false', onclick: () => toggleMic() }, svg(I.mic)) : null;
   const form = h('form', { onsubmit: (e) => { e.preventDefault(); const t = input.value.trim(); if (t) { input.value = ''; send(t); } } }, input, mic, sendBtn);
   const panel = h('section', { class: 'panel', id: 'parla-panel', role: 'dialog', 'aria-label': title, hidden: true },
     h('header', {}, h('div', {}, h('strong', {}, title), status),
-      h('button', { type: 'button', class: 'ib', 'aria-label': 'Nueva conversación', title: 'Nueva conversación', onclick: () => restart() }, svg(I.redo)),
-      h('button', { type: 'button', class: 'ib', 'aria-label': 'Cerrar chat', title: 'Cerrar', onclick: () => toggle(false) }, svg(I.x))),
+      h('button', { type: 'button', class: 'ib', 'aria-label': L.restart, title: L.restart, onclick: () => restart() }, svg(I.redo)),
+      h('button', { type: 'button', class: 'ib', 'aria-label': L.closeChat, title: L.close, onclick: () => toggle(false) }, svg(I.x))),
     log, chips, form);
-  const launch = h('button', { type: 'button', class: 'launch', 'aria-label': 'Abrir chat: ' + title, 'aria-expanded': 'false', 'aria-controls': 'parla-panel', onclick: () => toggle() }, svg(I.chat));
+  const launch = h('button', { type: 'button', class: 'launch', 'aria-label': fill(L.openChat, { title }), 'aria-expanded': 'false', 'aria-controls': 'parla-panel', onclick: () => toggle() }, svg(I.chat));
   root.append(launch, panel);
   (document.body || document.documentElement).append(host);
 
@@ -106,7 +116,7 @@
     if (!/^\/files\//.test(f.url || '')) return null;
     const url = base + f.url, size = f.size < 1048576 ? Math.max(1, Math.round(f.size / 1024)) + ' KB' : (f.size / 1048576).toFixed(1) + ' MB';
     return /^image\//.test(f.mime || '') ? h('a', { href: url, target: '_blank', rel: 'noopener' }, h('img', { class: 'att', src: url, alt: f.name }))
-      : h('a', { class: 'file', href: url, target: '_blank', rel: 'noopener' }, svg(I.clip), h('span', {}, String(f.name), h('small', {}, size + ' · Abrir')));
+      : h('a', { class: 'file', href: url, target: '_blank', rel: 'noopener' }, svg(I.clip), h('span', {}, String(f.name), h('small', {}, size + ' · ' + L.open)));
   }
   function add(kind, text, who, file) {
     log.append(h('div', { class: 'm ' + kind }, who ? h('span', { class: 'who' }, who) : null, file && text === file.name ? null : String(text), file ? attach(file) : null));
@@ -124,7 +134,7 @@
   function toggle(open = panel.hidden) {
     panel.hidden = !open;
     launch.setAttribute('aria-expanded', String(open));
-    launch.setAttribute('aria-label', (open ? 'Cerrar chat: ' : 'Abrir chat: ') + title);
+    launch.setAttribute('aria-label', fill(open ? L.closeChatTitle : L.openChat, { title }));
     if (open) { input.focus(); if (!ready) ready = boot(); } else launch.focus();
   }
   panel.addEventListener('keydown', (e) => {
@@ -150,10 +160,10 @@
     return data;
   }
   function oops(e) {
-    add('err', e.status === 403 ? 'Este sitio no está autorizado para usar este chat. Si sos el dueño, agregá ' + location.origin + ' en Parla, sección «Widget web».'
-      : e.status === 0 ? 'No me pude conectar. Probá de nuevo en un rato.'
-      : e.status === 404 ? 'Este chat no está disponible en este momento.'
-      : 'Algo salió mal: ' + e.message);
+    add('err', e.status === 403 ? fill(L.origin, { origin: location.origin })
+      : e.status === 0 ? L.offline
+      : e.status === 404 ? L.missing
+      : fill(L.failed, { error: e.message }));
   }
   let after = null, poller = null, ready = null;
   function turn(res) {
@@ -164,7 +174,7 @@
     handoff(!!res.handoff);
   }
   function handoff(on) {
-    status.textContent = on ? 'Te atiende una persona' : '';
+    status.textContent = on ? L.human : '';
     if (on && !poller) { poller = setInterval(poll, 3000); if (after == null) poll(true); }
     if (!on && poller) { clearInterval(poller); poller = null; }
   }
@@ -174,7 +184,7 @@
     try {
       const r = await call('GET', '/sessions/' + encodeURIComponent(sid) + '/messages?after=' + (after ?? 0));
       const list = r.messages || [];
-      if (!baseline) list.filter((m) => m.from === 'human' || m.from === 'bot').forEach((m) => add('bot', m.text, m.from === 'human' ? (m.by || 'Persona') : null, m.file));
+      if (!baseline) list.filter((m) => m.from === 'human' || m.from === 'bot').forEach((m) => add('bot', m.text, m.from === 'human' ? (m.by || L.person) : null, m.file));
       if (!baseline && list.at(-1)?.buttons) showButtons(list.at(-1).buttons);
       after = Number.isInteger(r.next) ? r.next : (after ?? 0) + list.length;
       if (r.handoff === false) handoff(false);
@@ -188,7 +198,7 @@
       const r = await call('GET', '/sessions/' + encodeURIComponent(sid) + '/messages?after=0');
       const list = (r.messages || []).filter((m) => ['user', 'bot', 'human'].includes(m.from));
       if (list.length && !r.ended) {
-        list.forEach((m) => add(m.from === 'user' ? 'user' : 'bot', m.text, m.from === 'human' ? (m.by || 'Persona') : null, m.file));
+        list.forEach((m) => add(m.from === 'user' ? 'user' : 'bot', m.text, m.from === 'human' ? (m.by || L.person) : null, m.file));
         showButtons(list.at(-1).buttons);
         after = Number.isInteger(r.next) ? r.next : (r.messages || []).length;
         return handoff(!!r.handoff);
@@ -221,7 +231,7 @@
   async function toggleMic() {
     if (rec) return rec.stop();
     let stream;
-    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { return add('err', 'No tengo permiso para usar el micrófono.'); }
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { return add('err', L.noMic); }
     const chunks = [];
     rec = new MediaRecorder(stream);
     rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
@@ -229,7 +239,7 @@
       stream.getTracks().forEach((t) => t.stop());
       const mime = rec.mimeType || 'audio/webm';
       rec = null; clearTimeout(limit);
-      mic.setAttribute('aria-pressed', 'false'); mic.setAttribute('aria-label', 'Hablar'); mic.replaceChildren(svg(I.mic));
+      mic.setAttribute('aria-pressed', 'false'); mic.setAttribute('aria-label', L.speak); mic.replaceChildren(svg(I.mic));
       const blob = new Blob(chunks, { type: mime });
       if (!blob.size) return;
       const audio = await new Promise((ok) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
@@ -238,12 +248,12 @@
         const res = await call('POST', '/audio', { sessionId: sid, audio, mime, speak: true });
         if (res.heard) add('user', res.heard);
         turn(res);
-      } catch (e) { e.status === 404 || e.status === 405 ? add('err', 'La voz no está disponible ahora. Escribime, por favor.') : oops(e); }
+      } catch (e) { e.status === 404 || e.status === 405 ? add('err', L.noVoice) : oops(e); }
       finally { setBusy(false); }
     };
     rec.start();
     const limit = setTimeout(() => rec?.stop(), 60000);   // un minuto como mucho
-    mic.setAttribute('aria-pressed', 'true'); mic.setAttribute('aria-label', 'Dejar de grabar'); mic.replaceChildren(svg(I.stop));
+    mic.setAttribute('aria-pressed', 'true'); mic.setAttribute('aria-label', L.stopRec); mic.replaceChildren(svg(I.stop));
   }
 
   host.parlaDestroy = () => { clearInterval(poller); rec?.stop(); host.remove(); };

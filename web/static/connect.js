@@ -30,13 +30,13 @@ async function cxApi(method, path, body) {
 function cxManual(c) {
   const pre = h('pre', {}, c.manual.text), done = h('span', { class: 'help', role: 'status' });
   const copy = async () => {
-    try { await navigator.clipboard.writeText(c.manual.text); done.textContent = 'Copiado'; }
-    catch { getSelection().selectAllChildren(pre); done.textContent = 'Quedó seleccionado: copialo con Ctrl+C (o ⌘C)'; }
+    try { await navigator.clipboard.writeText(c.manual.text); done.textContent = t('Copiado'); }
+    catch { getSelection().selectAllChildren(pre); done.textContent = t('Quedó seleccionado: copialo con Ctrl+C (o ⌘C)'); }
   };
   return h('details', { open: !c.installed },
-    h('summary', {}, 'Hacerlo a mano'),
+    h('summary', {}, t('Hacerlo a mano')),
     h('div', { class: 'cx-manual' }, h('p', { class: 'help' }, c.manual.how), pre,
-      h('div', { class: 'row' }, h('button', { class: 'btn quiet small', type: 'button', onclick: copy }, 'Copiar'), done)));
+      h('div', { class: 'row' }, h('button', { class: 'btn quiet small', type: 'button', onclick: copy }, t('Copiar')), done)));
 }
 
 function cxClient(c, redraw) {
@@ -46,23 +46,23 @@ function cxClient(c, redraw) {
     try {
       const r = await cxApi('POST', path, { client: c.id });
       await redraw(c.id, r.message, false);
-    } catch (e) { await redraw(c.id, 'No se pudo: ' + e.message, true); }
+    } catch (e) { await redraw(c.id, t('No se pudo: {error}', { error: e.message }), true); }
   };
   const btn = c.connected
-    ? h('button', { class: 'btn quiet small', type: 'button', onclick: (e) => act(e.currentTarget, '/remove', 'Desconectando…') }, 'Desconectar')
-    : h('button', { class: 'btn small', type: 'button', onclick: (e) => act(e.currentTarget, '', 'Conectando…') }, 'Conectar');
-  const state = c.connected ? h('span', { class: 'cx-state on' }, icon('check'), 'Ya conectado')
-    : h('span', { class: 'cx-state' }, c.installed ? 'Lo encontré en esta compu' : 'No lo encontré en esta compu');
+    ? h('button', { class: 'btn quiet small', type: 'button', onclick: (e) => act(e.currentTarget, '/remove', t('Desconectando…')) }, t('Desconectar'))
+    : h('button', { class: 'btn small', type: 'button', onclick: (e) => act(e.currentTarget, '', t('Conectando…')) }, t('Conectar'));
+  const state = c.connected ? h('span', { class: 'cx-state on' }, icon('check'), t('Ya conectado'))
+    : h('span', { class: 'cx-state' }, c.installed ? t('Lo encontré en esta compu') : t('No lo encontré en esta compu'));
   return { el: h('div', { class: 'cx-client' }, h('div', { class: 'cx-top' }, h('strong', {}, c.name), state, btn), msg, cxManual(c)), msg };
 }
 
 window.connectView = async () => {
-  const list = h('div', { class: 'cx-list' }, h('p', { class: 'help' }, 'Buscando tus asistentes…'));
+  const list = h('div', { class: 'cx-list' }, h('p', { class: 'help' }, t('Buscando tus asistentes…')));
   const d = h('dialog', { class: 'cx', 'aria-labelledby': 'cx-title' }, h('div', { class: 'cx-body' },
-    h('div', { class: 'cx-head' }, h('h2', { id: 'cx-title' }, 'Conectar con IA'), iconBtn('x', 'Cerrar', () => d.close())),
-    h('p', { class: 'help' }, 'Conectá Parla con tu asistente de IA y pedile que te arme bots. Tocás «Conectar» una vez y después le escribís, por ejemplo: «armame un bot que tome pedidos de pizza».'),
+    h('div', { class: 'cx-head' }, h('h2', { id: 'cx-title' }, t('Conectar con IA')), iconBtn('x', t('Cerrar'), () => d.close())),
+    h('p', { class: 'help' }, t('Conectá Parla con tu asistente de IA y pedile que te arme bots. Tocás «Conectar» una vez y después le escribís, por ejemplo: «armame un bot que tome pedidos de pizza».')),
     list,
-    h('p', { class: 'help', style: 'font-size:13px' }, 'Parla tiene que estar abierto en esta compu mientras el asistente trabaja. Antes de cambiar la configuración de un asistente guardamos una copia (termina en .parla-backup).')));
+    h('p', { class: 'help', style: 'font-size:13px' }, t('Parla tiene que estar abierto en esta compu mientras el asistente trabaja. Antes de cambiar la configuración de un asistente guardamos una copia (termina en .parla-backup).'))));
   d.onclose = () => d.remove();
   document.body.append(d); d.showModal();
   const draw = async (id, text, bad) => {
@@ -71,7 +71,7 @@ window.connectView = async () => {
       list.replaceChildren(...rows.map((r) => r.el));
       const row = rows.find((r) => r.c.id === id);
       if (row) { row.msg.className = 'cx-msg notice' + (bad ? ' warn' : ''); row.msg.textContent = text; }
-    } catch (e) { list.replaceChildren(h('p', { class: 'notice warn' }, 'No pude ver tus asistentes: ' + e.message)); }
+    } catch (e) { list.replaceChildren(h('p', { class: 'notice warn' }, t('No pude ver tus asistentes: {error}', { error: e.message }))); }
   };
   draw();
 };

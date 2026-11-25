@@ -60,8 +60,8 @@ const FN_LANGS = [['python', 'Python'], ['javascript', 'JavaScript']];
 
 // Ejemplos listos para usar. outputs = slots que se crean para que lo que devuelve se guarde solo.
 const FN_EXAMPLES = [
-  { name: 'validar_cuit', title: 'Validar CUIT', sub: 'Revisa el dígito verificador y lo deja con guiones', language: 'python', inputs: ['cuit'], outputs: ['cuit_valido'],
-    description: 'Revisa si un CUIT/CUIL es válido (11 números y dígito verificador). Devuelve cuit_valido (true/false) y el cuit con guiones.',
+  { name: 'validar_cuit', title: t('Validar CUIT'), sub: t('Revisa el dígito verificador y lo deja con guiones'), language: 'python', inputs: ['cuit'], outputs: ['cuit_valido'],
+    description: t('Revisa si un CUIT/CUIL es válido (11 números y dígito verificador). Devuelve cuit_valido (true/false) y el cuit con guiones.'),
     code: `import re
 
 def run(inputs):
@@ -75,8 +75,8 @@ def run(inputs):
         return {"cuit_valido": False}
     return {"cuit_valido": True, "cuit": numeros[:2] + "-" + numeros[2:10] + "-" + numeros[10]}
 ` },
-  { name: 'total_pedido', title: 'Calcular total del pedido', sub: 'Cantidad × precio, con 10% off desde 6 unidades', language: 'javascript', inputs: ['cantidad', 'precio'], outputs: ['total', 'total_texto'],
-    description: 'Multiplica cantidad por precio y aplica 10% de descuento desde 6 unidades. Devuelve total (número) y total_texto (como «$ 51.300»).',
+  { name: 'total_pedido', title: t('Calcular total del pedido'), sub: t('Cantidad × precio, con 10% off desde 6 unidades'), language: 'javascript', inputs: ['cantidad', 'precio'], outputs: ['total', 'total_texto'],
+    description: t('Multiplica cantidad por precio y aplica 10% de descuento desde 6 unidades. Devuelve total (número) y total_texto (como «$ 51.300»).'),
     code: `// acepta números escritos como "9.500" o "9500,50"
 const numero = (x) => Number(String(x ?? "").replace(/\\./g, "").replace(",", ".")) || 0;
 
@@ -88,8 +88,8 @@ async function run(inputs) {
   return { total, descuento: Math.round(descuento), total_texto: "$ " + total.toLocaleString("es-AR") };
 }
 ` },
-  { name: 'dias_habiles', title: 'Días hábiles hasta una fecha', sub: 'Cuenta de lunes a viernes, sin feriados fijos', language: 'python', inputs: ['fecha'], outputs: ['dias_habiles'],
-    description: 'Cuenta los días hábiles desde mañana hasta la fecha (dd/mm/aaaa), sin sábados, domingos ni feriados fijos. Devuelve dias_habiles y fecha_valida.',
+  { name: 'dias_habiles', title: t('Días hábiles hasta una fecha'), sub: t('Cuenta de lunes a viernes, sin feriados fijos'), language: 'python', inputs: ['fecha'], outputs: ['dias_habiles'],
+    description: t('Cuenta los días hábiles desde mañana hasta la fecha (dd/mm/aaaa), sin sábados, domingos ni feriados fijos. Devuelve dias_habiles y fecha_valida.'),
     code: `from datetime import date, datetime, timedelta
 
 # feriados nacionales de fecha fija (mes, día); sumá los móviles de cada año si los necesitás
@@ -139,7 +139,7 @@ function codeEditor(fn, onRun) {
   const hl = h('pre', { class: 'fn-hl', 'aria-hidden': 'true' });
   const lines = () => { gutter.textContent = Array.from({ length: ta.value.split('\n').length }, (_, i) => i + 1).join('\n'); };
   const paint = () => { hl.innerHTML = highlightCode(ta.value, fn.language); };
-  const ta = h('textarea', { spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', wrap: 'off', 'aria-label': 'Código de la función',
+  const ta = h('textarea', { spellcheck: 'false', autocapitalize: 'off', autocomplete: 'off', wrap: 'off', 'aria-label': t('Código de la función'),
     ...bind(fn, 'code', (e) => { grow(e.target); lines(); paint(); }) });
   const put = (text) => {        // inserta como si se tipeara: así Cmd/Ctrl+Z lo deshace
     if (!document.execCommand('insertText', false, text)) { ta.setRangeText(text, ta.selectionStart, ta.selectionEnd, 'end'); ta.dispatchEvent(new Event('input')); }
@@ -197,13 +197,13 @@ function resultView(r) {
   const names = new Set(agent.slots.map((v) => v.name));
   if (r.result === null || typeof r.result !== 'object' || Array.isArray(r.result))
     return [h('pre', { class: 'fn-json' }, JSON.stringify(r.result, null, 2) ?? 'undefined'),
-      h('p', { class: 'fn-bad', style: 'font-size:14px' }, 'Devolvé un objeto (por ejemplo {"total": 100}) para que se pueda guardar en slots.')];
+      h('p', { class: 'fn-bad', style: 'font-size:14px' }, t('Devolvé un objeto (por ejemplo {"total": 100}) para que se pueda guardar en slots.'))];
   const keys = Object.keys(r.result);
   return h('pre', { class: 'fn-json' }, '{', keys.length ? '\n' : '', keys.map((k, i) => {
     const value = JSON.stringify(r.result[k], null, 2).replace(/\n/g, '\n  ');
     return ['  ', names.has(k) ? h('mark', {}, JSON.stringify(k)) : JSON.stringify(k), ': ', value, i < keys.length - 1 ? ',' : '',
-      h('span', { class: 'fn-to' }, names.has(k) ? '   ← se guarda en el slot ' + k : slug(k) !== k ? null
-        : ['   ', h('button', { class: 'link', title: 'Crear el slot ' + slug(k) + ' para que se guarde solo', onclick: () => { ensureSlot(k); touch(); render(); } }, 'crear slot «' + slug(k) + '»')]), '\n'];
+      h('span', { class: 'fn-to' }, names.has(k) ? '   ' + t('← se guarda en el slot {slot}', { slot: k }) : slug(k) !== k ? null
+        : ['   ', h('button', { class: 'link', title: t('Crear el slot {slot} para que se guarde solo', { slot: slug(k) }), onclick: () => { ensureSlot(k); touch(); render(); } }, t('crear slot «{slot}»', { slot: slug(k) }))]), '\n'];
   }), '}');
 }
 function testView(fn) {
@@ -211,18 +211,18 @@ function testView(fn) {
   const value = (n) => u.vars[n] ?? lastSlots[n] ?? '';
   const r = u.result;
   return h('div', { class: 'panel fn-test' },
-    h('h2', { style: 'font-size:16px' }, 'Probar'),
-    fn.inputs.length ? [h('p', { class: 'help', style: 'font-size:14px' }, 'Poné un valor de ejemplo para cada slot' + (Object.keys(lastSlots).length ? ' (traemos los del chat de prueba).' : '.')),
+    h('h2', { style: 'font-size:16px' }, t('Probar')),
+    fn.inputs.length ? [h('p', { class: 'help', style: 'font-size:14px' }, Object.keys(lastSlots).length ? t('Poné un valor de ejemplo para cada slot (traemos los del chat de prueba).') : t('Poné un valor de ejemplo para cada slot.')),
       fn.inputs.map((n) => lab(n, h('input', { value: typeof value(n) === 'string' ? value(n) : JSON.stringify(value(n)), oninput: (e) => { u.vars[n] = e.target.value; },
         onkeydown: (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') fnRun(fn); } })))]
-      : h('p', { class: 'help', style: 'font-size:14px' }, 'No recibe slots: corre con inputs vacío.'),
-    h('div', { class: 'row' }, h('button', { class: 'btn small', onclick: () => fnRun(fn), disabled: u.loading }, u.loading ? 'Ejecutando…' : 'Ejecutar'),
+      : h('p', { class: 'help', style: 'font-size:14px' }, t('No recibe slots: corre con inputs vacío.')),
+    h('div', { class: 'row' }, h('button', { class: 'btn small', onclick: () => fnRun(fn), disabled: u.loading }, u.loading ? t('Ejecutando…') : t('Ejecutar')),
       h('span', { class: 'fn-note' }, navigator.platform.includes('Mac') ? '⌘ + Enter' : 'Ctrl + Enter')),
-    u.error ? h('p', { class: 'fn-bad' }, 'No se pudo probar: ' + u.error) : null,
-    r ? [h('div', { class: 'row' }, h('span', { class: r.ok ? 'fn-ok' : 'fn-bad' }, r.ok ? 'Anduvo bien' : 'Falló: ' + r.error), h('span', { class: 'fn-note' }, r.ms + ' ms')),
-      r.ok ? [h('span', { class: 'fn-note' }, 'Devolvió:'), resultView(r)] : null,
-      r.traceback ? h('details', {}, h('summary', { class: 'fn-note' }, 'Detalle del error'), h('pre', { class: 'fn-logs' }, r.traceback)) : null,
-      r.logs ? [h('span', { class: 'fn-note' }, 'Lo que imprimió (print / console.log):'), h('pre', { class: 'fn-logs' }, r.logs)] : null] : null);
+    u.error ? h('p', { class: 'fn-bad' }, t('No se pudo probar: {error}', { error: u.error })) : null,
+    r ? [h('div', { class: 'row' }, h('span', { class: r.ok ? 'fn-ok' : 'fn-bad' }, r.ok ? t('Anduvo bien') : t('Falló: {error}', { error: r.error })), h('span', { class: 'fn-note' }, r.ms + ' ms')),
+      r.ok ? [h('span', { class: 'fn-note' }, t('Devolvió:')), resultView(r)] : null,
+      r.traceback ? h('details', {}, h('summary', { class: 'fn-note' }, t('Detalle del error')), h('pre', { class: 'fn-logs' }, r.traceback)) : null,
+      r.logs ? [h('span', { class: 'fn-note' }, t('Lo que imprimió (print / console.log):')), h('pre', { class: 'fn-logs' }, r.logs)] : null] : null);
 }
 async function fnRun(fn) {
   const u = fnState.get(fn) || {}; fnState.set(fn, u); u.vars ||= {};
@@ -240,28 +240,28 @@ async function fnRun(fn) {
 
 // ---------- pantalla ----------
 const fnIntro = () => h('div', { class: 'fn-intro' },
-  h('p', { class: 'help' }, 'Una función es un pedacito de código tuyo que el bot corre en un paso del flujo. Sirve para cálculos, validaciones (CUIT, CBU, fechas), dar formato, combinar varias APIs o lógica que con pasos queda muy larga. Para traer o mandar datos a un solo servicio alcanza con «Consultar un servicio».'),
-  h('p', { class: 'fn-note' }, 'El código corre en esta computadora, con un límite de 5 segundos por vez.'));
+  h('p', { class: 'help' }, t('Una función es un pedacito de código tuyo que el bot corre en un paso del flujo. Sirve para cálculos, validaciones (CUIT, CBU, fechas), dar formato, combinar varias APIs o lógica que con pasos queda muy larga. Para traer o mandar datos a un solo servicio alcanza con «Consultar un servicio».')),
+  h('p', { class: 'fn-note' }, t('El código corre en esta computadora, con un límite de 5 segundos por vez.')));
 function examplesMenu(e) {
-  openPop(e.currentTarget.getBoundingClientRect(), [h('div', { class: 'pop-title' }, 'Empezar desde un ejemplo'), FN_EXAMPLES.map((x) =>
+  openPop(e.currentTarget.getBoundingClientRect(), [h('div', { class: 'pop-title' }, t('Empezar desde un ejemplo')), FN_EXAMPLES.map((x) =>
     h('button', { class: 'opt', onclick: () => { closePop(); fnCreate(x); render(); } }, h('span', { class: 'badge function' }, icon('braces')), h('span', {}, x.title, h('small', {}, x.sub))))]);
 }
 window.functionsView = function () {
   agent.functions ||= [];
   const fns = agent.functions;
-  if (!fns.length) return h('div', { class: 'page' }, h('h1', {}, 'Funciones'), fnIntro(),
-    h('div', { class: 'empty' }, h('h2', {}, 'Todavía no hay funciones'),
-      h('button', { class: 'btn', onclick: () => { fnCreate({}); render(); $('.title')?.select(); } }, icon('plus'), 'Crear función'),
-      h('p', {}, 'O empezá desde un ejemplo que ya anda:'),
+  if (!fns.length) return h('div', { class: 'page' }, h('h1', {}, t('Funciones')), fnIntro(),
+    h('div', { class: 'empty' }, h('h2', {}, t('Todavía no hay funciones')),
+      h('button', { class: 'btn', onclick: () => { fnCreate({}); render(); $('.title')?.select(); } }, icon('plus'), t('Crear función')),
+      h('p', {}, t('O empezá desde un ejemplo que ya anda:')),
       h('div', { class: 'fn-examples' }, FN_EXAMPLES.map((x) => h('button', { class: 'fn-example', onclick: () => { fnCreate(x); render(); } },
         h('strong', {}, x.title), h('small', {}, x.sub), h('small', {}, FN_LANGS.find(([k]) => k === x.language)[1]))))));
   sel.functions = Math.min(sel.functions || 0, fns.length - 1);
   const fn = fns[sel.functions];
   fn.inputs ||= [];
   // el link va DENTRO de la lista: la lista es sticky y, si queda afuera, se le monta encima al hacer scroll
-  const list = side('functions', fns, (f) => (f.language === 'javascript' ? 'JavaScript' : 'Python') + ' · ' + ((f.inputs || []).length ? f.inputs.join(', ') : 'sin slots'),
-    'Nueva función', () => ({ name: fnName('mi_funcion'), description: '', language: 'python', inputs: [], code: FN_TEMPLATES.python }));
-  list.append(h('button', { class: 'link', style: 'font-size:14px;margin:4px 12px;align-self:flex-start', onclick: examplesMenu }, 'Desde un ejemplo'));
+  const list = side('functions', fns, (f) => (f.language === 'javascript' ? 'JavaScript' : 'Python') + ' · ' + ((f.inputs || []).length ? f.inputs.join(', ') : t('sin slots')),
+    t('Nueva función'), () => ({ name: fnName('mi_funcion'), description: '', language: 'python', inputs: [], code: FN_TEMPLATES.python }));
+  list.append(h('button', { class: 'link', style: 'font-size:14px;margin:4px 12px;align-self:flex-start', onclick: examplesMenu }, t('Desde un ejemplo')));
   const rename = (e) => {
     const name = fnName(e.target.value, fn);
     if (!slug(e.target.value) || name === fn.name) return render();
@@ -279,26 +279,26 @@ window.functionsView = function () {
   const adder = { get slot() { return ''; }, set slot(n) { if (n && !fn.inputs.includes(n)) fn.inputs.push(n); } };   // slotPicker escribe acá y suma el slot
   const uses = fnUses(fn.name);
   return h('div', { class: 'two' }, list, h('div', { class: 'page fn-form' },
-    h('input', { class: 'title', value: fn.name, 'aria-label': 'Nombre de la función', spellcheck: 'false', onchange: rename }),
+    h('input', { class: 'title', value: fn.name, 'aria-label': t('Nombre de la función'), spellcheck: 'false', onchange: rename }),
     fnIntro(),
-    lab('Qué hace (lo ve quien la usa en un flujo, y la IA)', area(fn, 'description', { placeholder: 'Por ejemplo: revisa si el CUIT es válido y lo devuelve con guiones' })),
-    h('div', { class: 'stack' }, h('span', { class: 'fn-note' }, 'Lenguaje'),
-      h('div', { class: 'fn-langs', role: 'group', 'aria-label': 'Lenguaje' }, FN_LANGS.map(([k, t]) => h('button', { 'aria-pressed': String((fn.language || 'python') === k), onclick: () => setLang(k) }, t))),
-      otherLang ? h('p', { class: 'fn-bad', style: 'font-size:14px' }, 'El código es la plantilla del otro lenguaje.', ' ',
-        h('button', { class: 'link', onclick: () => { fn.code = FN_TEMPLATES[fn.language]; touch(); render(); } }, 'Usar la de ' + (fn.language === 'javascript' ? 'JavaScript' : 'Python'))) : null),
-    h('div', { class: 'stack' }, h('span', { class: 'fn-note' }, 'Recibe estos slots (llegan en inputs)'),
-      h('div', { class: 'row', style: 'gap:6px' }, fn.inputs.map((n, i) => h('span', { class: 'fn-chip' }, n, iconBtn('x', 'Quitar ' + n, () => { fn.inputs.splice(i, 1); touch(); render(); }))),
+    lab(t('Qué hace (lo ve quien la usa en un flujo, y la IA)'), area(fn, 'description', { placeholder: t('Por ejemplo: revisa si el CUIT es válido y lo devuelve con guiones') })),
+    h('div', { class: 'stack' }, h('span', { class: 'fn-note' }, t('Lenguaje')),
+      h('div', { class: 'fn-langs', role: 'group', 'aria-label': t('Lenguaje') }, FN_LANGS.map(([k, t]) => h('button', { 'aria-pressed': String((fn.language || 'python') === k), onclick: () => setLang(k) }, t))),
+      otherLang ? h('p', { class: 'fn-bad', style: 'font-size:14px' }, t('El código es la plantilla del otro lenguaje.'), ' ',
+        h('button', { class: 'link', onclick: () => { fn.code = FN_TEMPLATES[fn.language]; touch(); render(); } }, t('Usar la de {lang}', { lang: fn.language === 'javascript' ? 'JavaScript' : 'Python' }))) : null),
+    h('div', { class: 'stack' }, h('span', { class: 'fn-note' }, t('Recibe estos slots (llegan en inputs)')),
+      h('div', { class: 'row', style: 'gap:6px' }, fn.inputs.map((n, i) => h('span', { class: 'fn-chip' }, n, iconBtn('x', t('Quitar {name}', { name: n }), () => { fn.inputs.splice(i, 1); touch(); render(); }))),
         slotPicker(adder, 'slot'))),
-    h('div', { class: 'stack' }, h('span', { class: 'fn-note' }, 'Código: definí run(inputs) y devolvé un objeto. Tab sangra, Shift+Tab saca sangría.'),
+    h('div', { class: 'stack' }, h('span', { class: 'fn-note' }, t('Código: definí run(inputs) y devolvé un objeto. Tab sangra, Shift+Tab saca sangría.')),
       codeEditor(fn, () => fnRun(fn))),
     testView(fn),
     h('div', { class: 'fn-uses' }, uses.length
-      ? ['La usa' + (uses.length === 1 ? ' el flujo' : 'n los flujos'), uses.map((f) => h('button', { class: 'link', onclick: () => fnOpenFlow(f) }, f.name))]
-      : 'Todavía no la usa ningún flujo. En un flujo, sumá el paso «Ejecutar una función».'),
-    h('div', {}, h('button', { class: 'btn danger', onclick: () => confirmBox('Borrar la función', 'Se borra «' + fn.name + '».' + (uses.length ? ' Los pasos que la usan van a quedar sin función hasta que elijas otra.' : ''), 'Borrar función', () => {
+      ? [t.plural(uses.length, 'La usa el flujo', 'La usan los flujos'), uses.map((f) => h('button', { class: 'link', onclick: () => fnOpenFlow(f) }, f.name))]
+      : t('Todavía no la usa ningún flujo. En un flujo, sumá el paso «Ejecutar una función».')),
+    h('div', {}, h('button', { class: 'btn danger', onclick: () => confirmBox(t('Borrar la función'), uses.length ? t('Se borra «{name}». Los pasos que la usan van a quedar sin función hasta que elijas otra.', { name: fn.name }) : t('Se borra «{name}».', { name: fn.name }), t('Borrar función'), () => {
       walkSteps((s) => { if (s.type === 'function' && s.function === fn.name) s.function = ''; });
       fns.splice(fns.indexOf(fn), 1); sel.functions = 0; touch(); render();
-    }) }, 'Borrar esta función'))));
+    }) }, t('Borrar esta función')))));
 };
 
 // ---------- paso «Ejecutar una función» del flujo ----------
@@ -308,26 +308,26 @@ window.functionStepView = function (s) {
   const fn = fnOf(s.function);
   const names = fns.map((f) => f.name);
   if (s.function && !fn) names.push(s.function);
-  const select = h('select', { value: s.function ?? '', 'aria-label': 'Función', onchange: (e) => {
+  const select = h('select', { value: s.function ?? '', 'aria-label': t('Función'), onchange: (e) => {
     if (e.target.value !== '+') { s.function = e.target.value; touch(); return render(); }
     e.target.value = s.function ?? '';
-    openPop(e.target.getBoundingClientRect(), nameForm('Nombre, por ejemplo: validar_cuit', 'Crear', (raw) => { const f = fnCreate({ name: raw }); s.function = f.name; fnOpen(f); }));
-  } }, h('option', { value: '' }, 'Elegí una función…'), names.map((n) => h('option', { value: n }, n)), h('option', { value: '+' }, '+ Crear una función nueva…'));
+    openPop(e.target.getBoundingClientRect(), nameForm(t('Nombre, por ejemplo: validar_cuit'), t('Crear'), (raw) => { const f = fnCreate({ name: raw }); s.function = f.name; fnOpen(f); }));
+  } }, h('option', { value: '' }, t('Elegí una función…')), names.map((n) => h('option', { value: n }, n)), h('option', { value: '+' }, t('+ Crear una función nueva…')));
   return [
-    h('div', { class: 'row' }, 'Ejecutar', select, fn ? h('button', { class: 'link', style: 'font-size:14px', onclick: () => fnOpen(fn) }, 'Ver el código') : null),
-    s.function && !fn ? h('p', { class: 'help', style: 'font-size:14px;color:var(--warn)' }, '«' + s.function + '» ya no existe. Elegí otra.') : null,
+    h('div', { class: 'row' }, t('Ejecutar'), select, fn ? h('button', { class: 'link', style: 'font-size:14px', onclick: () => fnOpen(fn) }, t('Ver el código')) : null),
+    s.function && !fn ? h('p', { class: 'help', style: 'font-size:14px;color:var(--warn)' }, t('«{name}» ya no existe. Elegí otra.', { name: s.function })) : null,
     fn?.description ? h('p', { class: 'help', style: 'font-size:14px' }, fn.description) : null,
-    fn ? h('p', { class: 'help', style: 'font-size:14px' }, fn.inputs?.length ? ['Le pasa ', fn.inputs.map((n, i) => [i ? ', ' : '', h('strong', {}, n)]), '.'] : 'No recibe slots (se eligen en la función).') : null,
+    fn ? h('p', { class: 'help', style: 'font-size:14px' }, fn.inputs?.length ? [t('Le pasa '), fn.inputs.map((n, i) => [i ? ', ' : '', h('strong', {}, n)]), '.'] : t('No recibe slots (se eligen en la función).')) : null,
     h('label', { class: 'row', style: 'gap:8px;font-size:14px' }, h('input', { type: 'checkbox', checked: s.auto_save !== false, onchange: (e) => { s.auto_save = e.target.checked; touch(); } }),
-      'Lo que devuelva con nombre de slot se guarda solo'),
+      t('Lo que devuelva con nombre de slot se guarda solo')),
     h('div', { class: 'stack' },
-      s.saves.map((x, i) => h('div', { class: 'save-row' }, h('input', { ...bind(x, 'expr'), placeholder: 'result.total', 'aria-label': 'Dato que devuelve', spellcheck: 'false' }), 'en', slotPicker(x, 'slot'),
-        iconBtn('x', 'Quitar', () => { s.saves.splice(i, 1); touch(); render(); }))),
-      h('div', { class: 'row' }, h('button', { class: 'link', style: 'font-size:14px', onclick: () => { s.saves.push({ expr: 'result.', slot: '' }); touch(); render(); } }, 'Guardar además…'),
+      s.saves.map((x, i) => h('div', { class: 'save-row' }, h('input', { ...bind(x, 'expr'), placeholder: 'result.total', 'aria-label': t('Dato que devuelve'), spellcheck: 'false' }), t('en'), slotPicker(x, 'slot'),
+        iconBtn('x', t('Quitar'), () => { s.saves.splice(i, 1); touch(); render(); }))),
+      h('div', { class: 'row' }, h('button', { class: 'link', style: 'font-size:14px', onclick: () => { s.saves.push({ expr: 'result.', slot: '' }); touch(); render(); } }, t('Guardar además…')),
         s.saves.some((x) => x.expr === 'ok') ? null : h('button', { class: 'link', style: 'font-size:14px', onclick: () => { s.saves.push({ expr: 'ok', slot: ensureSlot('funcion_ok') }); touch(); render(); } },
-          'Guardar si salió bien (para tomar un camino)')),
+          t('Guardar si salió bien (para tomar un camino)'))),
       h('p', { class: 'help', style: 'font-size:13px' }, s.saves.some((x) => /\b(ok|error)\b/.test(x.expr || ''))
-        ? 'Si falla, el flujo sigue: usá el slot de ok (true/false) o error en un «Tomar un camino».'
-        : 'Si falla, el flujo se corta y avisa en el chat. Guardá ok o error para seguir y decidir qué hacer.')),
+        ? t('Si falla, el flujo sigue: usá el slot de ok (true/false) o error en un «Tomar un camino».')
+        : t('Si falla, el flujo se corta y avisa en el chat. Guardá ok o error para seguir y decidir qué hacer.'))),
   ];
 };

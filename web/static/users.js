@@ -19,10 +19,10 @@ document.head.append(h('style', {}, `
 `));
 
 const US_ROLES = {
-  owner: ['Dueño', 'Puede hacer todo, incluso crear y borrar usuarios.'],
-  editor: ['Editor', 'Arma y cambia los bots, prueba y publica. No maneja usuarios.'],
-  analyst: ['Analista', 'Solo mira: conversaciones, reportes y bandeja. No puede cambiar nada.'],
-  agent: ['Atención', 'Solo la Bandeja: lee y responde las charlas que el bot pasa a una persona.'],
+  owner: [t('Dueño'), t('Puede hacer todo, incluso crear y borrar usuarios.')],
+  editor: [t('Editor'), t('Arma y cambia los bots, prueba y publica. No maneja usuarios.')],
+  analyst: [t('Analista'), t('Solo mira: conversaciones, reportes y bandeja. No puede cambiar nada.')],
+  agent: [t('Atención'), t('Solo la Bandeja: lee y responde las charlas que el bot pasa a una persona.')],
 };
 window.me = null;
 window.authEnabled = false;
@@ -67,7 +67,8 @@ document.head.append(h('style', {}, `
   .lg-b:nth-child(1) { animation-delay: .25s; } .lg-sense { animation-delay: 1s; } .lg-b:nth-child(3) { animation-delay: 1.7s; }
   .lg-b:nth-child(4) { animation-delay: 2.6s; }
   @keyframes lg-in { to { opacity: 1; transform: none; } }
-  .lg-side { display: flex; align-items: center; justify-content: center; padding: 32px clamp(20px, 5vw, 64px); overflow-y: auto; }
+  .lg-side { position: relative; display: flex; align-items: center; justify-content: center; padding: 32px clamp(20px, 5vw, 64px); overflow-y: auto; }
+  .lg-lang { position: absolute; top: 16px; right: 16px; }
   .lg-form { width: min(380px, 100%); display: flex; flex-direction: column; gap: 18px; }
   .lg-form h2 { font: 700 34px/1.1 var(--display); letter-spacing: -.02em; }
   .lg-form > p { color: var(--muted); margin-top: -8px; }
@@ -84,7 +85,7 @@ document.head.append(h('style', {}, `
   @media (max-width: 820px) {
     dialog.lg[open] { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
     .lg-stage { padding: 28px 20px 24px; gap: 18px; } .lg-chat { display: none; } .lg-mark { font-size: 56px; }
-    .lg-side { align-items: flex-start; }
+    .lg-side { align-items: flex-start; padding-top: 64px; }
   }
   @media (prefers-reduced-motion: reduce) { .lg-b, .lg-sense { animation: none; opacity: 1; transform: none; } .lg-go { transition: none; } }
 `));
@@ -94,29 +95,29 @@ window.showLogin = () => usLogin || (usLogin = new Promise((resolve) => {
   try { last = localStorage.getItem('parla-user') || ''; } catch {}
   const name = h('input', { autocomplete: 'username', required: true, value: last, autocapitalize: 'none', spellcheck: 'false' });
   const pass = h('input', { type: 'password', autocomplete: 'current-password', required: true });
-  const msg = usMsg(), go = h('button', { class: 'btn lg-go' }, 'Entrar');
+  const msg = usMsg(), go = h('button', { class: 'btn lg-go' }, t('Entrar'));
   const field = (text, input) => h('label', { class: 'lg-field' }, text, input);
   const d = h('dialog', { class: 'lg', 'aria-labelledby': 'us-login' },
     h('section', { class: 'lg-stage', 'aria-hidden': 'true' },
-      h('div', {}, h('div', { class: 'lg-mark' }, 'Parla', h('span', {}, '.')), h('p', { class: 'lg-lead' }, 'Bots que entienden cómo habla tu gente.')),
+      h('div', {}, h('div', { class: 'lg-mark' }, 'Parla', h('span', {}, '.')), h('p', { class: 'lg-lead' }, t('Bots que entienden cómo habla tu gente.'))),
       h('div', { class: 'lg-chat' },
-        h('div', { class: 'lg-b user' }, 'dame una de ', h('mark', {}, 'muzza'), ' para ', h('mark', {}, 'Palermo')),
-        h('div', { class: 'lg-sense' }, h('span', {}, 'quiere ', h('b', {}, 'Pedir pizza')), h('span', {}, 'gusto ', h('b', {}, 'muzzarella')), h('span', {}, 'barrio ', h('b', {}, 'Palermo'))),
-        h('div', { class: 'lg-b bot' }, '¡Sale una muzzarella para Palermo! 🍕 ¿A qué dirección te la mando?'),
-        h('div', { class: 'lg-b user' }, 'Gorriti 4500'))),
-    h('div', { class: 'lg-side' }, h('form', { class: 'lg-form', onsubmit: async (e) => {
-      e.preventDefault(); go.disabled = true; go.textContent = 'Entrando…'; msg.textContent = '';
+        h('div', { class: 'lg-b user' }, t('dame una de '), h('mark', {}, t('muzza')), t(' para '), h('mark', {}, t('Palermo'))),
+        h('div', { class: 'lg-sense' }, h('span', {}, t('quiere '), h('b', {}, t('Pedir pizza'))), h('span', {}, t('gusto '), h('b', {}, t('muzzarella'))), h('span', {}, t('barrio '), h('b', {}, t('Palermo')))),
+        h('div', { class: 'lg-b bot' }, t('¡Sale una muzzarella para Palermo! 🍕 ¿A qué dirección te la mando?')),
+        h('div', { class: 'lg-b user' }, t('Gorriti 4500')))),
+    h('div', { class: 'lg-side' }, h('div', { class: 'lg-lang' }, window.langSwitcher?.()), h('form', { class: 'lg-form', onsubmit: async (e) => {
+      e.preventDefault(); go.disabled = true; go.textContent = t('Entrando…'); msg.textContent = '';
       try {
         const r = await usApi('POST', '/api/auth/login', { name: name.value.trim(), password: pass.value });
         try { localStorage.setItem('parla-user', name.value.trim()); } catch {}
         window.me = r.user; window.authEnabled = true; usLogin = null;
         d.close(); d.remove(); resolve(r.user);
       } catch (err) { usFail(msg, err); pass.select(); }
-      go.disabled = false; go.textContent = 'Entrar';
-    } }, h('h2', { id: 'us-login' }, 'Hola de nuevo'),
-      h('p', {}, 'Entrá para seguir armando tus agentes.'),
-      field('Usuario', name), field('Contraseña', pass), msg, go,
-      h('p', { class: 'lg-foot' }, 'Todo corre en esta compu: tus conversaciones no salen a internet.'))));
+      go.disabled = false; go.textContent = t('Entrar');
+    } }, h('h2', { id: 'us-login' }, t('Hola de nuevo')),
+      h('p', {}, t('Entrá para seguir armando tus agentes.')),
+      field(t('Usuario'), name), field(t('Contraseña'), pass), msg, go,
+      h('p', { class: 'lg-foot' }, t('Todo corre en esta compu: tus conversaciones no salen a internet.')))));
   d.oncancel = (e) => e.preventDefault();        // sin sesión no hay a dónde volver
   document.body.append(d); d.showModal(); (last ? pass : name).focus();
 }));
@@ -127,7 +128,7 @@ async function usLogout() {
 }
 
 function usRolePicker(current) {
-  const box = h('div', { class: 'us-roles', role: 'radiogroup', 'aria-label': 'Rol' });
+  const box = h('div', { class: 'us-roles', role: 'radiogroup', 'aria-label': t('Rol') });
   const id = 'r' + Math.random().toString(36).slice(2, 7);
   for (const [role, [title, text]] of Object.entries(US_ROLES))
     box.append(h('label', {}, h('input', { type: 'radio', name: id, value: role, checked: role === current }), h('span', {}, h('strong', {}, title), h('small', {}, text))));
@@ -137,9 +138,9 @@ function usRolePicker(current) {
 
 // Qué agentes ve: todos (null) o solo algunos (lista de ids). El dueño siempre ve todos.
 function usScope(u, agents) {
-  if (u.role === 'owner' || u.bots == null) return 'Ve todos los agentes';
+  if (u.role === 'owner' || u.bots == null) return t('Ve todos los agentes');
   const names = agents.filter((a) => u.bots.includes(a.id)).map((a) => a.name);     // los borrados no cuentan
-  return names.length ? 'Ve ' + names.length + (names.length === 1 ? ' agente: ' : ' agentes: ') + names.join(', ') : 'No ve ningún agente';
+  return names.length ? t.plural(names.length, 'Ve {n} agente: {names}', 'Ve {n} agentes: {names}', { names: names.join(', ') }) : t('No ve ningún agente');
 }
 
 function usBotsPicker(agents, current) {
@@ -147,11 +148,11 @@ function usBotsPicker(agents, current) {
   const all = h('input', { type: 'radio', name: id, checked: current == null }), some = h('input', { type: 'radio', name: id, checked: current != null });
   const list = h('div', { class: 'us-roles us-bots', hidden: current == null },
     agents.length ? agents.map((a) => h('label', {}, h('input', { type: 'checkbox', value: a.id, checked: (current || []).includes(a.id) }), h('span', {}, a.name)))
-      : h('small', {}, 'Todavía no hay agentes.'));
+      : h('small', {}, t('Todavía no hay agentes.')));
   all.onchange = some.onchange = () => { list.hidden = !some.checked; };
-  const box = h('div', { class: 'us-roles', role: 'radiogroup', 'aria-label': 'Qué agentes ve' },
-    h('label', {}, all, h('span', {}, h('strong', {}, 'Todos'), h('small', {}, 'Ve todos los agentes, también los que se creen más adelante.'))),
-    h('label', {}, some, h('span', {}, h('strong', {}, 'Solo estos'), h('small', {}, 'Los demás ni le aparecen en la lista. Si crea un agente, ese también lo ve.'))),
+  const box = h('div', { class: 'us-roles', role: 'radiogroup', 'aria-label': t('Qué agentes ve') },
+    h('label', {}, all, h('span', {}, h('strong', {}, t('Todos')), h('small', {}, t('Ve todos los agentes, también los que se creen más adelante.')))),
+    h('label', {}, some, h('span', {}, h('strong', {}, t('Solo estos')), h('small', {}, t('Los demás ni le aparecen en la lista. Si crea un agente, ese también lo ve.')))),
     list);
   box.value = () => all.checked ? null : [...list.querySelectorAll('input:checked')].map((i) => i.value);
   return box;
@@ -160,20 +161,20 @@ function usBotsPicker(agents, current) {
 function usPasswordFields() {
   const a = h('input', { type: 'password', autocomplete: 'new-password', minlength: 5, required: true });
   const b = h('input', { type: 'password', autocomplete: 'new-password', minlength: 5, required: true });
-  const check = () => { if (a.value !== b.value) throw new Error('Las dos contraseñas no coinciden.'); return a.value; };
-  return { nodes: [lab('Contraseña (5 caracteres o más)', a), lab('Repetila', b)], check };
+  const check = () => { if (a.value !== b.value) throw new Error(t('Las dos contraseñas no coinciden.')); return a.value; };
+  return { nodes: [lab(t('Contraseña (5 caracteres o más)'), a), lab(t('Repetila'), b)], check };
 }
 
 function usKeyShown(key) {
   const done = h('span', { class: 'help', role: 'status' }), pre = h('div', { class: 'us-secret' }, key);
   const copy = async () => {
-    try { await navigator.clipboard.writeText(key); done.textContent = 'Copiada'; }
-    catch { getSelection().selectAllChildren(pre); done.textContent = 'Quedó seleccionada: copiala con Ctrl+C (o ⌘C)'; }
+    try { await navigator.clipboard.writeText(key); done.textContent = t('Copiada'); }
+    catch { getSelection().selectAllChildren(pre); done.textContent = t('Quedó seleccionada: copiala con Ctrl+C (o ⌘C)'); }
   };
   return h('div', { class: 'notice', style: 'flex-direction:column;align-items:stretch' },
-    h('strong', {}, 'Copiala ahora: no se vuelve a mostrar.'), pre,
-    h('p', { class: 'help', style: 'font-size:13px' }, 'Se usa en la API o el MCP con el encabezado «Authorization: Bearer <clave>» (en el MCP, la variable PARLA_TOKEN).'),
-    h('div', { class: 'row' }, h('button', { class: 'btn quiet small', type: 'button', onclick: copy }, 'Copiar'), done));
+    h('strong', {}, t('Copiala ahora: no se vuelve a mostrar.')), pre,
+    h('p', { class: 'help', style: 'font-size:13px' }, t('Se usa en la API o el MCP con el encabezado «Authorization: Bearer <clave>» (en el MCP, la variable PARLA_TOKEN).')),
+    h('div', { class: 'row' }, h('button', { class: 'btn quiet small', type: 'button', onclick: copy }, t('Copiar')), done));
 }
 
 function usUserCard(u, owners, redraw, agents) {
@@ -181,40 +182,40 @@ function usUserCard(u, owners, redraw, agents) {
   const act = async (fn) => { msg.textContent = ''; try { await fn(); } catch (e) { usFail(msg, e); } };
   const base = '/api/users/' + encodeURIComponent(u.name);
   const lastOwner = u.role === 'owner' && owners === 1;
-  const role = pick(Object.entries(US_ROLES).map(([k, [t]]) => [k, t]), u.role,
-    (v) => act(async () => { await usApi('PUT', base, { role: v }); await redraw(); }).then(() => { role.value = u.role; }), 'Rol de ' + u.name);
+  const role = pick(Object.entries(US_ROLES).map(([k, [title]]) => [k, title]), u.role,
+    (v) => act(async () => { await usApi('PUT', base, { role: v }); await redraw(); }).then(() => { role.value = u.role; }), t('Rol de {name}', { name: u.name }));
   const resetForm = () => {
     const pw = usPasswordFields();
     extra.replaceChildren(h('form', { class: 'us-body', onsubmit: (e) => { e.preventDefault(); act(async () => {
-      await usApi('PUT', base, { password: pw.check() }); extra.replaceChildren(h('p', { class: 'notice' }, 'Listo: la contraseña cambió. Avisale a ' + u.name + '.'));
-    }); } }, pw.nodes, h('div', { class: 'row' }, h('button', { class: 'btn small' }, 'Guardar contraseña'),
-      h('button', { class: 'btn quiet small', type: 'button', onclick: () => extra.replaceChildren() }, 'Cancelar'))));
+      await usApi('PUT', base, { password: pw.check() }); extra.replaceChildren(h('p', { class: 'notice' }, t('Listo: la contraseña cambió. Avisale a {name}.', { name: u.name })));
+    }); } }, pw.nodes, h('div', { class: 'row' }, h('button', { class: 'btn small' }, t('Guardar contraseña')),
+      h('button', { class: 'btn quiet small', type: 'button', onclick: () => extra.replaceChildren() }, t('Cancelar')))));
   };
-  const scope = u.role === 'owner' ? h('p', { class: 'help', style: 'font-size:13px' }, 'Ve todos los agentes')
+  const scope = u.role === 'owner' ? h('p', { class: 'help', style: 'font-size:13px' }, t('Ve todos los agentes'))
     : (() => {
       const bots = usBotsPicker(agents, u.bots ?? null);
       return h('details', {}, h('summary', {}, usScope(u, agents)),
         h('form', { class: 'us-body', onsubmit: (e) => { e.preventDefault(); act(async () => { await usApi('PUT', base, { bots: bots.value() }); await redraw(); }); } },
-          h('span', { class: 'help', style: 'font-size:13px' }, '¿Qué agentes ve?'), bots, h('div', { class: 'row' }, h('button', { class: 'btn small' }, 'Guardar'))));
+          h('span', { class: 'help', style: 'font-size:13px' }, t('¿Qué agentes ve?')), bots, h('div', { class: 'row' }, h('button', { class: 'btn small' }, t('Guardar')))));
     })();
   const shown = h('div');
-  const label = h('input', { placeholder: 'Para qué es, por ejemplo: MCP de mi compu', 'aria-label': 'Para qué es la clave', class: 'grow' });
+  const label = h('input', { placeholder: t('Para qué es, por ejemplo: MCP de mi compu'), 'aria-label': t('Para qué es la clave'), class: 'grow' });
   const keys = h('details', { open: u.keys.length > 0 || undefined },
-    h('summary', {}, 'Claves de API (' + u.keys.length + ')'),
-    h('p', { class: 'help', style: 'font-size:13px' }, 'Sirven para que un programa (la API o tu asistente de IA por MCP) entre como ' + u.name + ', con sus mismos permisos.'),
+    h('summary', {}, t('Claves de API ({n})', { n: u.keys.length })),
+    h('p', { class: 'help', style: 'font-size:13px' }, t('Sirven para que un programa (la API o tu asistente de IA por MCP) entre como {name}, con sus mismos permisos.', { name: u.name })),
     u.keys.map((k) => h('div', { class: 'us-key' }, h('span', { class: 'grow' }, k.label), h('small', { class: 'help' }, k.created.slice(0, 10)),
-      iconBtn('trash', 'Revocar clave «' + k.label + '»', () => confirmBox('Revocar la clave', 'Lo que use «' + k.label + '» deja de entrar a Parla.', 'Revocar',
+      iconBtn('trash', t('Revocar clave «{label}»', { label: k.label }), () => confirmBox(t('Revocar la clave'), t('Lo que use «{label}» deja de entrar a Parla.', { label: k.label }), t('Revocar'),
         () => act(async () => { await usApi('DELETE', base + '/keys/' + k.id); await redraw(); }))))),
     h('form', { class: 'row', style: 'margin-top:8px', onsubmit: (e) => { e.preventDefault(); act(async () => {
       const r = await usApi('POST', base + '/keys', { label: label.value });
       await redraw(u.name, usKeyShown(r.key));
-    }); } }, label, h('button', { class: 'btn small' }, icon('key'), 'Crear clave')), shown);
+    }); } }, label, h('button', { class: 'btn small' }, icon('key'), t('Crear clave'))), shown);
   const card = h('div', { class: 'us-user' },
-    h('div', { class: 'row' }, h('strong', {}, u.name, u.name === window.me?.name ? h('small', { class: 'help', style: 'font:400 13px var(--body, inherit)' }, ' (vos)') : null), role),
+    h('div', { class: 'row' }, h('strong', {}, u.name, u.name === window.me?.name ? h('small', { class: 'help', style: 'font:400 13px var(--body, inherit)' }, t(' (vos)')) : null), role),
     h('p', { class: 'help', style: 'font-size:13px' }, US_ROLES[u.role]?.[1] || ''), scope,
-    h('div', { class: 'row' }, h('button', { class: 'btn quiet small', type: 'button', onclick: resetForm }, 'Cambiar contraseña'),
-      lastOwner ? null : h('button', { class: 'btn danger small', type: 'button', onclick: () => confirmBox('Borrar el usuario', 'Se borra «' + u.name + '» y sus claves de API. No se puede deshacer.', 'Borrar usuario',
-        () => act(async () => { await usApi('DELETE', base); await redraw(); })) }, 'Borrar')),
+    h('div', { class: 'row' }, h('button', { class: 'btn quiet small', type: 'button', onclick: resetForm }, t('Cambiar contraseña')),
+      lastOwner ? null : h('button', { class: 'btn danger small', type: 'button', onclick: () => confirmBox(t('Borrar el usuario'), t('Se borra «{name}» y sus claves de API. No se puede deshacer.', { name: u.name }), t('Borrar usuario'),
+        () => act(async () => { await usApi('DELETE', base); await redraw(); })) }, t('Borrar'))),
     extra, keys, msg);
   card.showKey = (node) => { keys.open = true; shown.replaceChildren(node); };
   return card;
@@ -222,23 +223,24 @@ function usUserCard(u, owners, redraw, agents) {
 
 function usNewUser(redraw, agents) {
   const name = h('input', { required: true, maxlength: 40, autocomplete: 'off' }), roles = usRolePicker('editor'), pw = usPasswordFields(), msg = usMsg();
-  const bots = usBotsPicker(agents, null), owner = h('p', { class: 'help', style: 'font-size:13px', hidden: true }, 'Ve todos los agentes');
-  const scope = h('div', { class: 'us-roles' }, h('span', { class: 'help', style: 'font-size:13px' }, '¿Qué agentes ve?'), bots, owner);
+  const bots = usBotsPicker(agents, null), owner = h('p', { class: 'help', style: 'font-size:13px', hidden: true }, t('Ve todos los agentes'));
+  const scope = h('div', { class: 'us-roles' }, h('span', { class: 'help', style: 'font-size:13px' }, t('¿Qué agentes ve?')), bots, owner);
   roles.onchange = () => { const isOwner = roles.value() === 'owner'; bots.hidden = isOwner; owner.hidden = !isOwner; };
   return h('form', { class: 'us-user', onsubmit: async (e) => {
     e.preventDefault(); msg.textContent = '';
     const role = roles.value();
     try { await usApi('POST', '/api/users', { name: name.value, role, password: pw.check(), bots: role === 'owner' ? null : bots.value() }); await redraw(); }
     catch (err) { usFail(msg, err); }
-  } }, h('strong', {}, 'Nuevo usuario'), lab('Nombre', name), h('div', { class: 'us-roles' }, h('span', { class: 'help', style: 'font-size:13px' }, '¿Qué puede hacer?'), roles), scope, pw.nodes, msg,
-    h('div', { class: 'row' }, h('button', { class: 'btn small' }, 'Crear usuario'), h('button', { class: 'btn quiet small', type: 'button', onclick: () => redraw() }, 'Cancelar')));
+  } }, h('strong', {}, t('Nuevo usuario')), lab(t('Nombre'), name), h('div', { class: 'us-roles' }, h('span', { class: 'help', style: 'font-size:13px' }, t('¿Qué puede hacer?')), roles), scope, pw.nodes, msg,
+    h('div', { class: 'row' }, h('button', { class: 'btn small' }, t('Crear usuario')), h('button', { class: 'btn quiet small', type: 'button', onclick: () => redraw() }, t('Cancelar'))));
 }
 
 function usFirstOwner(body) {
   const name = h('input', { required: true, maxlength: 40, autocomplete: 'username' }), pw = usPasswordFields(), msg = usMsg();
   return [
-    h('p', { class: 'help' }, 'Ahora Parla está abierto: cualquiera que lo abra en esta compu puede usarlo todo. Si lo comparten varias personas, creá usuarios para que cada una entre con su contraseña y vea solo lo que le toca.'),
-    h('p', { class: 'help' }, 'El primer usuario es el dueño: puede todo y es quien crea a los demás. Desde que lo crees, para entrar a Parla hay que iniciar sesión.'),
+    h('div', { class: 'row' }, h('strong', {}, t('Idioma de la interfaz')), window.langSwitcher?.()),
+    h('p', { class: 'help' }, t('Ahora Parla está abierto: cualquiera que lo abra en esta compu puede usarlo todo. Si lo comparten varias personas, creá usuarios para que cada una entre con su contraseña y vea solo lo que le toca.')),
+    h('p', { class: 'help' }, t('El primer usuario es el dueño: puede todo y es quien crea a los demás. Desde que lo crees, para entrar a Parla hay que iniciar sesión.')),
     h('form', { class: 'us-body', onsubmit: async (e) => {
       e.preventDefault(); msg.textContent = '';
       try {
@@ -246,16 +248,16 @@ function usFirstOwner(body) {
         window.authEnabled = true; window.me = { name: u.name, role: u.role };
         usDraw(body);
       } catch (err) { usFail(msg, err); }
-    } }, lab('Tu nombre de usuario', name), pw.nodes, msg, h('div', { class: 'row' }, h('button', { class: 'btn' }, 'Crear usuario dueño')))];
+    } }, lab(t('Tu nombre de usuario'), name), pw.nodes, msg, h('div', { class: 'row' }, h('button', { class: 'btn' }, t('Crear usuario dueño'))))];
 }
 
 async function usDraw(body, focus, keyNode) {
   const me = window.me;
   if (!window.authEnabled) return body.replaceChildren(...usFirstOwner(body));
-  const mine = h('div', { class: 'row' }, h('span', { class: 'grow' }, 'Entraste como ', h('strong', {}, me?.name || '—'), ' · ', US_ROLES[me?.role]?.[0] || ''),
-    h('button', { class: 'btn quiet small', type: 'button', onclick: usLogout }, 'Cerrar sesión'));
+  const mine = h('div', { class: 'row' }, h('span', { class: 'grow' }, t('Entraste como '), h('strong', {}, me?.name || '—'), ' · ', US_ROLES[me?.role]?.[0] || ''),
+    h('button', { class: 'btn quiet small', type: 'button', onclick: usLogout }, t('Cerrar sesión')));
   if (me?.role !== 'owner') return body.replaceChildren(mine, h('p', { class: 'help' }, US_ROLES[me?.role]?.[1] || ''),
-    h('p', { class: 'help', style: 'font-size:13px' }, 'Para cambiar tu rol o tu contraseña, pedíselo al dueño de este Parla.'));
+    h('p', { class: 'help', style: 'font-size:13px' }, t('Para cambiar tu rol o tu contraseña, pedíselo al dueño de este Parla.')));
   const redraw = (f, k) => usDraw(body, f, k);
   try {
     const [{ users }, agents] = await Promise.all([usApi('GET', '/api/users'), usApi('GET', '/api/agents')]);
@@ -263,11 +265,11 @@ async function usDraw(body, focus, keyNode) {
     const cards = users.map((u) => usUserCard(u, owners, redraw, agents));
     const list = h('div', { class: 'us-body' }, cards);
     body.replaceChildren(mine,
-      h('div', { class: 'row' }, h('p', { class: 'help grow' }, 'Cada persona entra con su usuario y ve solo lo que le permite su rol.'),
-        h('button', { class: 'btn small', type: 'button', onclick: () => list.prepend(usNewUser(redraw, agents)) }, icon('plus'), 'Nuevo usuario')),
+      h('div', { class: 'row' }, h('p', { class: 'help grow' }, t('Cada persona entra con su usuario y ve solo lo que le permite su rol.')),
+        h('button', { class: 'btn small', type: 'button', onclick: () => list.prepend(usNewUser(redraw, agents)) }, icon('plus'), t('Nuevo usuario'))),
       list);
     if (focus && keyNode) cards[users.findIndex((u) => u.name === focus)]?.showKey(keyNode);
-  } catch (e) { body.replaceChildren(mine, h('p', { class: 'notice warn' }, 'No pude traer los usuarios: ' + e.message)); }
+  } catch (e) { body.replaceChildren(mine, h('p', { class: 'notice warn' }, t('No pude traer los usuarios: {error}', { error: e.message }))); }
 }
 
 // Usuarios es una pantalla (#/usuarios), con el mismo marco que «Tus agentes»: es demasiado para un modal.
@@ -286,19 +288,19 @@ function usOpen() { window.usersPage(); }
 window.usersPage = async () => {
   if (typeof agent !== 'undefined' && agent) { await saveNow(); agent = null; }
   history.replaceState(null, '', '#/usuarios');               // F5 vuelve a esta pantalla
-  const body = h('div', { class: 'us-body us-page' }, h('p', { class: 'help' }, 'Cargando…'));
+  const body = h('div', { class: 'us-body us-page' }, h('p', { class: 'help' }, t('Cargando…')));
   const app = $('#app');
   app.className = 'home';
   app.replaceChildren(
     h('header', { class: 'home-hero home-hero-sm' }, h('div', { class: 'home-in' },
-      h('div', { class: 'home-top' }, h('button', { class: 'btn quiet home-back', onclick: () => home() }, icon('back'), 'Tus agentes'),
-        h('div', { class: 'row' }, window.themeSwitcher?.(), h('span', { 'data-me-slot': '' }, window.userAvatar()))),
-      h('h1', {}, 'Usuarios'),
-      h('p', { class: 'home-lead' }, 'Quién entra a Parla, qué puede hacer cada uno y qué agentes ve.'))),
+      h('div', { class: 'home-top' }, h('button', { class: 'btn quiet home-back', onclick: () => home() }, icon('back'), t('Tus agentes')),
+        h('div', { class: 'row' }, window.langSwitcher?.(), window.themeSwitcher?.(), h('span', { 'data-me-slot': '' }, window.userAvatar()))),
+      h('h1', {}, t('Usuarios')),
+      h('p', { class: 'home-lead' }, t('Quién entra a Parla, qué puede hacer cada uno y qué agentes ve.')))),
     h('main', { class: 'home-in home-body' }, body));
   usDraw(body);
 };
-window.usersButton = () => h('button', { class: 'btn quiet', onclick: usOpen }, icon('users'), window.me ? window.me.name : 'Usuarios');
+window.usersButton = () => h('button', { class: 'btn quiet', onclick: usOpen }, icon('users'), window.me ? window.me.name : t('Usuarios'));
 
 // Avatar de arriba a la derecha (inicio y editor): quién soy, usuarios y cerrar sesión sin volver a ningún lado.
 document.head.append(h('style', {}, `
@@ -313,12 +315,12 @@ document.head.append(h('style', {}, `
 window.userAvatar = () => {
   if (!window.authEnabled || !window.me) return window.usersButton();      // sin usuarios: el botón para crear el primero
   const me = window.me, initial = (me.name.trim()[0] || '?').toUpperCase();
-  return h('button', { class: 'us-av', 'aria-label': 'Tu usuario: ' + me.name, title: me.name, 'aria-haspopup': 'menu',
+  return h('button', { class: 'us-av', 'aria-label': t('Tu usuario: {name}', { name: me.name }), title: me.name, 'aria-haspopup': 'menu',
     onclick: (e) => openPop(e.currentTarget.getBoundingClientRect(), [
       h('div', { class: 'us-who' }, h('span', { class: 'us-av', 'aria-hidden': 'true' }, initial), h('span', {}, h('strong', {}, me.name), h('small', {}, (US_ROLES[me.role] || [me.role])[0]))),
-      h('button', { class: 'opt', onclick: () => { closePop(); usOpen(); } }, icon('users'), h('span', {}, me.role === 'owner' ? 'Administrar usuarios' : 'Mi usuario')),
-      me.role === 'owner' && window.auditPage ? h('button', { class: 'opt', onclick: () => { closePop(); window.auditPage(); } }, icon('history'), h('span', {}, 'Auditoría')) : null,
-      h('button', { class: 'opt', onclick: () => { closePop(); usLogout(); } }, icon('back'), h('span', {}, 'Cerrar sesión')),
+      h('button', { class: 'opt', onclick: () => { closePop(); usOpen(); } }, icon('users'), h('span', {}, me.role === 'owner' ? t('Administrar usuarios') : t('Mi usuario'))),
+      me.role === 'owner' && window.auditPage ? h('button', { class: 'opt', onclick: () => { closePop(); window.auditPage(); } }, icon('history'), h('span', {}, t('Auditoría'))) : null,
+      h('button', { class: 'opt', onclick: () => { closePop(); usLogout(); } }, icon('back'), h('span', {}, t('Cerrar sesión'))),
     ]) }, initial);
 };
 

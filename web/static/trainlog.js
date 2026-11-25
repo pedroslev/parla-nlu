@@ -55,67 +55,67 @@
     const rows = Object.keys(confusion || {}).filter(real);
     if (rows.length < 2) return null;
     const cols = [...new Set([...rows, ...rows.flatMap((r) => Object.keys(confusion[r]))])].filter(real);
-    return h('section', {}, h('h3', {}, 'Con qué intenciones se confunde'),
-      h('p', { class: 'help', style: 'font-size:13px;margin-bottom:8px' }, 'Cada fila es una intención y muestra a cuál mandó sus frases: lo verde está bien, lo marcado en rojo son frases que se confunden con otra.'),
-      h('div', { class: 'tl-cm', role: 'region', 'aria-label': 'Tabla de confusiones', tabindex: '0' }, h('table', {},
-        h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Es de ↓ / la mandó a →'), cols.map((c) => h('th', { scope: 'col', title: c }, c)))),
+    return h('section', {}, h('h3', {}, t('Con qué intenciones se confunde')),
+      h('p', { class: 'help', style: 'font-size:13px;margin-bottom:8px' }, t('Cada fila es una intención y muestra a cuál mandó sus frases: lo verde está bien, lo marcado en rojo son frases que se confunden con otra.')),
+      h('div', { class: 'tl-cm', role: 'region', 'aria-label': t('Tabla de confusiones'), tabindex: '0' }, h('table', {},
+        h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, t('Es de ↓ / la mandó a →')), cols.map((c) => h('th', { scope: 'col', title: c }, c)))),
         h('tbody', {}, rows.map((r) => h('tr', {}, h('th', { scope: 'row', title: r }, r), cols.map((c) => {
           const n = confusion[r][c] || 0;
-          return h('td', { class: n ? (c === r ? 'hit' : 'miss') : 'zero', title: n ? n + (n === 1 ? ' frase de «' : ' frases de «') + r + '» fueron a «' + c + '»' : null }, n || '·');
+          return h('td', { class: n ? (c === r ? 'hit' : 'miss') : 'zero', title: n ? t.plural(n, '{n} frase de «{from}» fueron a «{to}»', '{n} frases de «{from}» fueron a «{to}»', { from: r, to: c }) : null }, n || '·');
         })))))));
   }
 
   function body(log, dialog) {
     const check = log.self_check || {};
     const level = check.accuracy == null ? '' : check.accuracy >= 0.85 ? 'good' : check.accuracy >= 0.6 ? 'meh' : 'bad';
-    const verdict = check.accuracy == null ? 'Sumá al menos 2 frases por intención para que pueda evaluarse.'
-      : check.accuracy >= 0.85 ? 'Distingue bien tus intenciones.'
-      : check.accuracy >= 0.6 ? 'Se confunde a veces: mirá las frases de abajo y sumá ejemplos más distintos.'
-      : 'Se confunde seguido: las intenciones se parecen mucho entre sí o tienen pocas frases.';
+    const verdict = check.accuracy == null ? t('Sumá al menos 2 frases por intención para que pueda evaluarse.')
+      : check.accuracy >= 0.85 ? t('Distingue bien tus intenciones.')
+      : check.accuracy >= 0.6 ? t('Se confunde a veces: mirá las frases de abajo y sumá ejemplos más distintos.')
+      : t('Se confunde seguido: las intenciones se parecen mucho entre sí o tienen pocas frases.');
     return [
       h('section', {},
-        h('h3', {}, 'Qué tan bien entiende'),
+        h('h3', {}, t('Qué tan bien entiende')),
         h('div', { class: 'tl-score ' + level }, check.accuracy == null ? null : h('strong', {}, pct(check.accuracy)), h('span', { class: 'help' }, verdict)),
         check.checked ? h('p', { class: 'help', style: 'font-size:13px;margin-top:6px' },
-          'Probó cada frase de ejemplo como si no la conociera y se fijó a qué intención la mandaría: acertó ' + check.right + ' de ' + check.checked + '.') : null),
-      check.intents?.length ? h('section', {}, h('h3', {}, 'Por intención'),
+          t('Probó cada frase de ejemplo como si no la conociera y se fijó a qué intención la mandaría: acertó {right} de {checked}.', { right: check.right, checked: check.checked })) : null),
+      check.intents?.length ? h('section', {}, h('h3', {}, t('Por intención')),
         h('div', { class: 'tl-rows' }, check.intents.map((i) => h('div', { class: 'tl-row' },
           h('button', { class: 'name link', style: 'text-align:left;font-weight:500', onclick: () => goIntent(i.name, dialog) }, i.name),
-          i.accuracy == null ? h('span', { class: 'help', style: 'font-size:13px' }, 'necesita 2 frases o más')
+          i.accuracy == null ? h('span', { class: 'help', style: 'font-size:13px' }, t('necesita 2 frases o más'))
             : h('div', { class: 'tl-bar' + (i.accuracy < 0.6 ? ' low' : ''), title: pct(i.accuracy) }, h('span', { style: 'width:' + pct(i.accuracy) })),
-          h('span', { class: 'tl-num' }, (i.accuracy == null ? '' : pct(i.accuracy) + ' · ') + i.phrases + ' fr.'))))) : null,
+          h('span', { class: 'tl-num' }, (i.accuracy == null ? '' : pct(i.accuracy) + ' · ') + t('{n} fr.', { n: i.phrases })))))) : null,
       matrix(check.confusion),
-      check.mistakes?.length ? h('section', {}, h('h3', {}, 'Frases que confunde'),
+      check.mistakes?.length ? h('section', {}, h('h3', {}, t('Frases que confunde')),
         h('div', { class: 'stack' }, check.mistakes.map((m) => h('div', { class: 'tl-mistake' },
           h('q', {}, m.phrase),
-          h('span', {}, 'Es de ', h('strong', {}, m.expected), ' pero se parece más a ', h('strong', {}, m.got), ' («' + m.closest + '»).'),
-          h('div', {}, h('button', { class: 'link', style: 'font-size:13px', onclick: () => goIntent(m.expected, dialog) }, 'Ver ' + m.expected)))))) : null,
-      log.warnings?.length ? h('section', {}, h('h3', {}, 'Para mejorar'), h('ul', { class: 'tl-tips' }, log.warnings.map((w) => h('li', {}, w)))) : null,
-      log.entities?.length ? h('section', {}, h('h3', {}, 'Entidades'),
+          h('span', {}, t('Es de '), h('strong', {}, m.expected), t(' pero se parece más a '), h('strong', {}, m.got), t(' («{phrase}»).', { phrase: m.closest })),
+          h('div', {}, h('button', { class: 'link', style: 'font-size:13px', onclick: () => goIntent(m.expected, dialog) }, t('Ver {name}', { name: m.expected }))))))) : null,
+      log.warnings?.length ? h('section', {}, h('h3', {}, t('Para mejorar')), h('ul', { class: 'tl-tips' }, log.warnings.map((w) => h('li', {}, w)))) : null,
+      log.entities?.length ? h('section', {}, h('h3', {}, t('Entidades')),
         h('div', { class: 'tl-rows' }, log.entities.map((e) => h('div', { class: 'tl-row', style: 'grid-template-columns:minmax(0,1fr) auto' },
           h('span', { class: 'name' }, h('span', { class: 'dot', style: markStyle(entityOf(e.name)) + ';margin-right:8px;vertical-align:-2px' }), e.name),
-          h('span', { class: 'tl-num' }, e.kind + (e.marked ? ' · marcada ' + e.marked + (e.marked === 1 ? ' vez' : ' veces') : '')))))) : null,
-      h('section', {}, h('h3', {}, 'Pasos'),
+          h('span', { class: 'tl-num' }, e.kind + (e.marked ? ' · ' + t.plural(e.marked, 'marcada {n} vez', 'marcada {n} veces') : '')))))) : null,
+      h('section', {}, h('h3', {}, t('Pasos')),
         h('ol', { class: 'tl-steps' }, (log.steps || []).map((s) => h('li', {}, icon('check'), h('span', {}, s.name, h('small', {}, s.detail)), h('span', { class: 'tl-ms' }, s.ms + ' ms'))))),
     ];
   }
 
   window.trainLogView = () => {
-    const t = agent?.trained;
-    const log = t?.log;
+    const tr = agent?.trained;
+    const log = tr?.log;
     const dialog = h('dialog', { class: 'tl', 'aria-labelledby': 'tl-title' });
     const close = () => dialog.close();
     dialog.append(
       h('div', { class: 'tl-head' },
-        h('div', { class: 'grow' }, h('h2', { id: 'tl-title' }, 'Último entrenamiento'),
-          h('p', {}, t ? t.at.replace(' ', ' a las ') + (log ? ' · tardó ' + (log.duration_ms / 1000).toFixed(1) + ' s' : '') + ' · ' + t.phrases + ' frases, ' + t.marked + ' datos marcados' : 'Todavía no se entrenó.')),
-        iconBtn('x', 'Cerrar', close)),
+        h('div', { class: 'grow' }, h('h2', { id: 'tl-title' }, t('Último entrenamiento')),
+          h('p', {}, tr ? tr.at.replace(' ', t(' a las ')) + (log ? ' · ' + t('tardó {s} s', { s: (log.duration_ms / 1000).toFixed(1) }) : '') + ' · ' + t('{phrases} frases, {marked} datos marcados', { phrases: tr.phrases, marked: tr.marked }) : t('Todavía no se entrenó.'))),
+        iconBtn('x', t('Cerrar'), close)),
       h('div', { class: 'tl-body' }, log ? body(log, dialog)
-        : h('p', { class: 'help' }, 'Este entrenamiento es de antes de que Parla guardara el detalle. Entrená de nuevo para verlo.')),
+        : h('p', { class: 'help' }, t('Este entrenamiento es de antes de que Parla guardara el detalle. Entrená de nuevo para verlo.'))),
       h('div', { class: 'tl-foot' },
-        untrained() ? h('span', { class: 'help grow', style: 'font-size:13px;align-self:center' }, 'Hay cambios que todavía no están en este entrenamiento.') : null,
-        h('button', { class: 'btn quiet', onclick: close }, 'Cerrar'),
-        h('button', { class: 'btn', onclick: async () => { close(); await trainNow(); window.trainLogView(); } }, icon('spark'), 'Entrenar de nuevo')));
+        untrained() ? h('span', { class: 'help grow', style: 'font-size:13px;align-self:center' }, t('Hay cambios que todavía no están en este entrenamiento.')) : null,
+        h('button', { class: 'btn quiet', onclick: close }, t('Cerrar')),
+        h('button', { class: 'btn', onclick: async () => { close(); await trainNow(); window.trainLogView(); } }, icon('spark'), t('Entrenar de nuevo'))));
     dialog.onclose = () => dialog.remove();
     dialog.addEventListener('click', (e) => { if (e.target === dialog) close(); });   // clic afuera
     document.body.append(dialog);

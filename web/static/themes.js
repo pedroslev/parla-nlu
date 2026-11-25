@@ -2,9 +2,9 @@
 // para que el tema se aplique antes de pintar. window.themeSwitcher() devuelve el selector.
 (() => {
   const KEY = 'parla-theme';
-  const THEMES = [['light', 'Claro', 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z|M12 2v2|M12 20v2|M4.9 4.9l1.4 1.4|M17.7 17.7l1.4 1.4|M2 12h2|M20 12h2|M4.9 19.1l1.4-1.4|M17.7 6.3l1.4-1.4'],
-    ['dark', 'Oscuro', 'M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z'],
-    ['color', 'Colorido', 'M12 21a9 9 0 1 1 9-9c0 2.5-2 3-3.5 3H16a2 2 0 0 0-1.4 3.4A1.5 1.5 0 0 1 13.5 21z|M7.5 11h.01|M10.5 7h.01|M15.5 8h.01']];
+  const THEMES = [['light', t('Claro'), 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8z|M12 2v2|M12 20v2|M4.9 4.9l1.4 1.4|M17.7 17.7l1.4 1.4|M2 12h2|M20 12h2|M4.9 19.1l1.4-1.4|M17.7 6.3l1.4-1.4'],
+    ['dark', t('Oscuro'), 'M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z'],
+    ['color', t('Colorido'), 'M12 21a9 9 0 1 1 9-9c0 2.5-2 3-3.5 3H16a2 2 0 0 0-1.4 3.4A1.5 1.5 0 0 1 13.5 21z|M7.5 11h.01|M10.5 7h.01|M15.5 8h.01']];
   const css = `
   :root { color-scheme: light; }
   dialog { background: var(--surface); }
@@ -20,6 +20,7 @@
   .th-switch button:focus-visible, #nav .th-switch button:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
   .th-switch .ic { width: 16px; height: 16px; display: block; }
   .lang-switch button { font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+  .lang-switch > .ic { margin: 0 2px 0 5px; color: var(--muted); flex: none; }
   #nav .nav-theme { display: flex; justify-content: center; padding: 12px 0 0; }
   @media (max-width: 1080px) {   /* barra angosta de 64px: segmentos apilados */
     #nav .th-switch { flex-direction: column; }
@@ -235,10 +236,10 @@
   };
   window.themeSwitcher = () => {
     const box = document.createElement('div');
-    box.className = 'th-switch'; box.setAttribute('role', 'group'); box.setAttribute('aria-label', 'Tema');
+    box.className = 'th-switch'; box.setAttribute('role', 'group'); box.setAttribute('aria-label', t('Tema'));
     for (const [id, label, paths] of THEMES) {
       const b = document.createElement('button');
-      b.type = 'button'; b.dataset.theme = id; b.title = 'Tema ' + label.toLowerCase(); b.setAttribute('aria-label', label);
+      b.type = 'button'; b.dataset.theme = id; b.title = t('Tema {name}', { name: label.toLowerCase() }); b.setAttribute('aria-label', label);
       b.setAttribute('aria-pressed', id === root.dataset.theme);
       b.onclick = () => choose(id);
       b.append(svg(paths));

@@ -22,8 +22,8 @@ document.head.append(h('style', {}, `
   .ts-fails code { color: var(--ink); background: var(--soft); border-radius: 5px; padding: 0 5px; overflow-wrap: anywhere; }
 `));
 
-const TS_CHECKS = { intent: 'Intención', says: 'Dice', buttons: 'Botones', slots: 'Slot', flow: 'Flujo', handoff: 'Pasa a una persona', error: 'Falló un paso' };
-const tsShow = (v) => v == null || v === '' ? '(nada)' : typeof v === 'string' ? v : JSON.stringify(v);
+const TS_CHECKS = { intent: t('Intención'), says: t('Dice'), buttons: t('Botones'), slots: t('Slot'), flow: t('Flujo'), handoff: t('Pasa a una persona'), error: t('Falló un paso') };
+const tsShow = (v) => v == null || v === '' ? t('(nada)') : typeof v === 'string' ? v : JSON.stringify(v);
 const tsCsv = (s) => s.split(',').map((x) => x.trim()).filter(Boolean);
 // ponytail: «slot=valor, otro=valor»: un valor con coma no entra; editarlo en el JSON exportado si hace falta
 const tsPairs = (s) => Object.fromEntries(tsCsv(s).map((x) => x.split('=')).filter((p) => p.length > 1 && p[0].trim()).map(([k, ...v]) => [k.trim(), v.join('=').trim()]));
@@ -31,9 +31,9 @@ const tsPairsText = (o) => Object.entries(o || {}).map(([k, v]) => k + '=' + (ty
 const tsSet = (obj, key, value) => { if (value === '' || value == null || (typeof value === 'object' && !Object.keys(value).length)) delete obj[key]; else obj[key] = value; };
 
 // Las fallas en palabras: las usa también el diálogo de publicar (releases.js).
-window.testFailures = (results) => h('ul', { class: 'ts-fails' }, results.tests.filter((t) => !t.passed).map((t) => h('li', {}, h('strong', {}, t.name || '?'), ': ',
-  t.error ? 'no se pudo correr (' + t.error + ')' : t.turns.flatMap((turn, k) => turn.failures.map((f) => 'turno ' + (k + 1) + ', ' + (TS_CHECKS[f.check.split('.')[0]] || f.check).toLowerCase()
-    + (f.check.includes('.') ? ' ' + f.check.split('.')[1] : '') + ': esperaba «' + tsShow(f.expected) + '», recibió «' + tsShow(f.got) + '»')).join('; '))));
+window.testFailures = (results) => h('ul', { class: 'ts-fails' }, results.tests.filter((r) => !r.passed).map((r) => h('li', {}, h('strong', {}, r.name || '?'), ': ',
+  r.error ? t('no se pudo correr ({error})', { error: r.error }) : r.turns.flatMap((turn, k) => turn.failures.map((f) => t('turno {n}, {check}: esperaba «{expected}», recibió «{got}»', { n: k + 1,
+    check: (TS_CHECKS[f.check.split('.')[0]] || f.check).toLowerCase() + (f.check.includes('.') ? ' ' + f.check.split('.')[1] : ''), expected: tsShow(f.expected), got: tsShow(f.got) }))).join('; '))));
 
 async function tsRun(names) {
   tsRunning = true; tsError = ''; render();
@@ -65,7 +65,7 @@ window.testFromHistory = (history, slots, name) => {
   }
   const filled = Object.fromEntries(Object.entries(slots || {}).filter(([k, v]) => v != null && v !== '' && agent.slots.some((s) => s.name === k)));
   if (turns.length && Object.keys(filled).length) turns[turns.length - 1].slots = filled;
-  if (!turns.some((t) => 'user' in t)) return alert('Esta conversación no tiene mensajes del cliente para guardar como test.');
+  if (!turns.some((t) => 'user' in t)) return alert(t('Esta conversación no tiene mensajes del cliente para guardar como test.'));
   agent.tests ||= [];
   const test = { name: uniqueName(agent.tests, name || 'Test'), ...(Object.keys(start).length ? { start } : {}), turns };
   agent.tests.push(test);
@@ -77,7 +77,7 @@ window.testsView = () => {
   if (tsFor !== agent.id) { tsResults = {}; tsFor = agent.id; tsEnv = 'draft'; tsError = ''; }
   const ro = !canEdit(), ed = (props) => ro ? { ...props, disabled: true } : props;
   const choose = (...args) => { const el = pick(...args); el.disabled = ro; return el; };
-  const envs = agent.environments || {}, ENVS = { draft: 'Borrador', staging: 'Pruebas', production: 'Producción' };
+  const envs = agent.environments || {}, ENVS = { draft: t('Borrador'), staging: t('Pruebas'), production: t('Producción') };
   const choices = Object.keys(ENVS).filter((k) => k === 'draft' || envs[k] != null);
   if (!choices.includes(tsEnv)) tsEnv = 'draft';
   const tests = agent.tests;
@@ -85,48 +85,48 @@ window.testsView = () => {
   const changed = (t) => { delete tsResults[t.name]; touch(); };
   const flows = [['', '—'], ...agent.flows.map((f) => [f.name, f.name])], intents = [['', '—'], ...agent.intents.map((i) => [i.name, i.name])];
 
-  const turnRow = (t, turn, k, res) => h('div', { class: 'ts-turn' + (res ? (res.passed ? ' ok' : ' bad') : '') },
-    'user' in turn ? h('div', { class: 'ts-user' }, h('input', ed({ value: turn.user, placeholder: 'Lo que escribe el cliente', 'aria-label': 'Turno ' + (k + 1) + ': lo que escribe el cliente',
-      oninput: (e) => { turn.user = e.target.value; changed(t); } })),
-      ro ? null : iconBtn('trash', 'Borrar este turno', () => { t.turns.splice(k, 1); changed(t); render(); }, t.turns.length <= 1))
-      : h('strong', { style: 'font-size:14px' }, 'Al empezar la conversación'),
+  const turnRow = (tc, turn, k, res) => h('div', { class: 'ts-turn' + (res ? (res.passed ? ' ok' : ' bad') : '') },
+    'user' in turn ? h('div', { class: 'ts-user' }, h('input', ed({ value: turn.user, placeholder: t('Lo que escribe el cliente'), 'aria-label': t('Turno {n}: lo que escribe el cliente', { n: k + 1 }),
+      oninput: (e) => { turn.user = e.target.value; changed(tc); } })),
+      ro ? null : iconBtn('trash', t('Borrar este turno'), () => { tc.turns.splice(k, 1); changed(tc); render(); }, tc.turns.length <= 1))
+      : h('strong', { style: 'font-size:14px' }, t('Al empezar la conversación')),
     h('div', { class: 'ts-exp' },
-      lab('Entendió', choose(intents, turn.intent, (v) => { tsSet(turn, 'intent', v); changed(t); }, 'Intención esperada')),
-      lab('Dice (texto o /regex/)', h('input', ed({ value: turn.says || '', oninput: (e) => { tsSet(turn, 'says', e.target.value); changed(t); } }))),
-      lab('Botones', h('input', ed({ value: (turn.buttons || []).join(', '), placeholder: 'Sí, No', oninput: (e) => { tsSet(turn, 'buttons', tsCsv(e.target.value)); changed(t); } }))),
-      lab('Slots', h('input', ed({ value: tsPairsText(turn.slots), placeholder: 'slot=valor, …', oninput: (e) => { tsSet(turn, 'slots', tsPairs(e.target.value)); changed(t); } }))),
-      lab('Flujo', choose(flows, turn.flow, (v) => { tsSet(turn, 'flow', v); changed(t); }, 'Flujo esperado')),
-      h('label', { class: 'f ts-check' }, h('input', ed({ type: 'checkbox', checked: !!turn.handoff, onchange: (e) => { tsSet(turn, 'handoff', e.target.checked || null); changed(t); } })), 'Pasa a una persona')),
-    res && !res.passed ? h('ul', { class: 'ts-fails' }, res.failures.map((f) => h('li', {}, (TS_CHECKS[f.check.split('.')[0]] || f.check) + (f.check.includes('.') ? ' ' + f.check.split('.')[1] : '') + ': esperaba ',
-      h('code', {}, tsShow(f.expected)), ', recibió ', h('code', {}, tsShow(f.got))))) : null);
+      lab(t('Entendió'), choose(intents, turn.intent, (v) => { tsSet(turn, 'intent', v); changed(tc); }, t('Intención esperada'))),
+      lab(t('Dice (texto o /regex/)'), h('input', ed({ value: turn.says || '', oninput: (e) => { tsSet(turn, 'says', e.target.value); changed(tc); } }))),
+      lab(t('Botones'), h('input', ed({ value: (turn.buttons || []).join(', '), placeholder: t('Sí, No'), oninput: (e) => { tsSet(turn, 'buttons', tsCsv(e.target.value)); changed(tc); } }))),
+      lab(t('Slots'), h('input', ed({ value: tsPairsText(turn.slots), placeholder: t('slot=valor, …'), oninput: (e) => { tsSet(turn, 'slots', tsPairs(e.target.value)); changed(tc); } }))),
+      lab(t('Flujo'), choose(flows, turn.flow, (v) => { tsSet(turn, 'flow', v); changed(tc); }, t('Flujo esperado'))),
+      h('label', { class: 'f ts-check' }, h('input', ed({ type: 'checkbox', checked: !!turn.handoff, onchange: (e) => { tsSet(turn, 'handoff', e.target.checked || null); changed(tc); } })), t('Pasa a una persona'))),
+    res && !res.passed ? h('ul', { class: 'ts-fails' }, res.failures.map((f) => h('li', {}, (TS_CHECKS[f.check.split('.')[0]] || f.check) + (f.check.includes('.') ? ' ' + f.check.split('.')[1] : '') + t(': esperaba '),
+      h('code', {}, tsShow(f.expected)), t(', recibió '), h('code', {}, tsShow(f.got))))) : null);
 
-  const card = (t, i) => {
-    const res = tsResults[t.name];
+  const card = (tc, i) => {
+    const res = tsResults[tc.name];
     return h('div', { class: 'panel ts-test' + (res ? (res.passed ? ' ok' : ' bad') : '') },
       h('div', { class: 'ts-head' },
-        h('input', ed({ class: 'title', value: t.name, 'aria-label': 'Nombre del test', onchange: (e) => {
+        h('input', ed({ class: 'title', value: tc.name, 'aria-label': t('Nombre del test'), onchange: (e) => {
           const name = e.target.value.trim();
-          if (!name || tests.some((x) => x !== t && x.name === name)) { e.target.value = t.name; return; }
-          delete tsResults[t.name]; t.name = name; touch(); } })),
-        res ? h('span', { class: 'ts-state ' + (res.passed ? 'ok' : 'bad') }, res.passed ? 'Pasó' : 'Falló') : null,
-        h('button', { class: 'btn quiet small', disabled: tsRunning, onclick: () => tsRun([t.name]) }, icon('redo'), 'Correr'),
-        ro ? null : iconBtn('trash', 'Borrar el test', () => confirmBox('¿Borrar el test?', 'Se borra «' + t.name + '». No se puede deshacer.', 'Borrar test', () => { tests.splice(i, 1); delete tsResults[t.name]; touch(); render(); }))),
-      lab('Datos de inicio', h('input', ed({ value: tsPairsText(t.start), placeholder: 'slot=valor, … (como los que llegan de un IVR o CRM)', oninput: (e) => { tsSet(t, 'start', tsPairs(e.target.value)); changed(t); } }))),
-      res?.error ? h('p', { class: 'notice warn', role: 'alert' }, 'No se pudo correr: ' + res.error) : null,
-      t.turns.map((turn, k) => turnRow(t, turn, k, res?.turns?.[k])),
-      ro ? null : h('div', {}, h('button', { class: 'btn quiet small', onclick: () => { t.turns.push({ user: '' }); changed(t); render(); } }, icon('plus'), 'Agregar turno')));
+          if (!name || tests.some((x) => x !== tc && x.name === name)) { e.target.value = tc.name; return; }
+          delete tsResults[tc.name]; tc.name = name; touch(); } })),
+        res ? h('span', { class: 'ts-state ' + (res.passed ? 'ok' : 'bad') }, res.passed ? t('Pasó') : t('Falló')) : null,
+        h('button', { class: 'btn quiet small', disabled: tsRunning, onclick: () => tsRun([tc.name]) }, icon('redo'), t('Correr')),
+        ro ? null : iconBtn('trash', t('Borrar el test'), () => confirmBox(t('¿Borrar el test?'), t('Se borra «{name}». No se puede deshacer.', { name: tc.name }), t('Borrar test'), () => { tests.splice(i, 1); delete tsResults[tc.name]; touch(); render(); }))),
+      lab(t('Datos de inicio'), h('input', ed({ value: tsPairsText(tc.start), placeholder: t('slot=valor, … (como los que llegan de un IVR o CRM)'), oninput: (e) => { tsSet(tc, 'start', tsPairs(e.target.value)); changed(tc); } }))),
+      res?.error ? h('p', { class: 'notice warn', role: 'alert' }, t('No se pudo correr: {error}', { error: res.error })) : null,
+      tc.turns.map((turn, k) => turnRow(tc, turn, k, res?.turns?.[k])),
+      ro ? null : h('div', {}, h('button', { class: 'btn quiet small', onclick: () => { tc.turns.push({ user: '' }); changed(tc); render(); } }, icon('plus'), t('Agregar turno'))));
   };
 
   const add = () => { tests.push({ name: uniqueName(tests, 'Test'), turns: [{ user: '' }] }); touch(); render(); [...document.querySelectorAll('.ts-test .title')].pop()?.select(); };
   return h('div', { class: 'page' },
-    h('div', { class: 'row' }, h('h1', { class: 'grow' }, 'Tests'),
-      choices.length > 1 ? pick(choices.map((k) => [k, ENVS[k] + (envs[k] != null ? ' (v' + envs[k] + ')' : '')]), tsEnv, (k) => { tsEnv = k; tsResults = {}; render(); }, 'Contra qué versión correr') : null,
-      h('button', { class: 'btn', disabled: tsRunning || !tests.length, onclick: () => tsRun() }, icon('check'), tsRunning ? 'Corriendo…' : 'Correr todos')),
-    h('p', { class: 'help' }, 'Charlas de ejemplo con lo que esperás que haga el bot en cada turno. Correlas después de cada cambio para ver si algo se rompió. Al publicar en Producción corren solas. No quedan en Conversaciones ni en Reportes, pero las consultas a servicios, las funciones y la IA corren de verdad.'),
-    tsError ? h('p', { class: 'notice warn', role: 'alert' }, 'No se pudieron correr: ' + tsError) : null,
+    h('div', { class: 'row' }, h('h1', { class: 'grow' }, t('Tests')),
+      choices.length > 1 ? pick(choices.map((k) => [k, ENVS[k] + (envs[k] != null ? ' (v' + envs[k] + ')' : '')]), tsEnv, (k) => { tsEnv = k; tsResults = {}; render(); }, t('Contra qué versión correr')) : null,
+      h('button', { class: 'btn', disabled: tsRunning || !tests.length, onclick: () => tsRun() }, icon('check'), tsRunning ? t('Corriendo…') : t('Correr todos'))),
+    h('p', { class: 'help' }, t('Charlas de ejemplo con lo que esperás que haga el bot en cada turno. Correlas después de cada cambio para ver si algo se rompió. Al publicar en Producción corren solas. No quedan en Conversaciones ni en Reportes, pero las consultas a servicios, las funciones y la IA corren de verdad.')),
+    tsError ? h('p', { class: 'notice warn', role: 'alert' }, t('No se pudieron correr: {error}', { error: tsError })) : null,
     ran.length && !tsRunning ? h('p', { class: 'notice' + (bad ? ' warn' : ''), role: 'status' }, icon(bad ? 'x' : 'check'),
-      bad ? 'Fallaron ' + bad + ' de ' + ran.length + (ran.length === 1 ? ' test.' : ' tests.') : ran.length === 1 ? 'Pasó el test.' : 'Pasaron los ' + ran.length + ' tests.') : null,
-    tests.length ? tests.map(card) : h('div', { class: 'empty' }, icon('check'), h('strong', {}, 'Todavía no hay tests'),
-      h('p', { class: 'help' }, 'La forma más fácil: charlá con el bot en «Probar» o abrí una charla en Conversaciones y tocá «Guardar como test». Queda guardado lo que pasó como lo esperado; después aflojá lo que cambia solo (fechas, nombres).')),
-    ro ? null : h('div', {}, h('button', { class: 'btn quiet', onclick: add }, icon('plus'), 'Nuevo test')));
+      bad ? t.plural(ran.length, 'Fallaron {bad} de {n} test.', 'Fallaron {bad} de {n} tests.', { bad }) : ran.length === 1 ? t('Pasó el test.') : t('Pasaron los {n} tests.', { n: ran.length })) : null,
+    tests.length ? tests.map(card) : h('div', { class: 'empty' }, icon('check'), h('strong', {}, t('Todavía no hay tests')),
+      h('p', { class: 'help' }, t('La forma más fácil: charlá con el bot en «Probar» o abrí una charla en Conversaciones y tocá «Guardar como test». Queda guardado lo que pasó como lo esperado; después aflojá lo que cambia solo (fechas, nombres).'))),
+    ro ? null : h('div', {}, h('button', { class: 'btn quiet', onclick: add }, icon('plus'), t('Nuevo test'))));
 };

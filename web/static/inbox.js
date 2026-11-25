@@ -32,7 +32,7 @@ const ibDate = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + ' ' + i
 async function ibSession(sid) {          // la conversación completa (misma ruta que usa Conversaciones)
   const r = await fetch('/api/v1/bots/' + encodeURIComponent(agent.id) + '/sessions/' + encodeURIComponent(sid));
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || 'el servidor respondió ' + r.status);
+  if (!r.ok) throw new Error(data.error || t('el servidor respondió {status}', { status: r.status }));
   return data;
 }
 function ibOpenInSessions(sid) {         // abre esa charla en Conversaciones (estado de /static/sessions.js)
@@ -44,16 +44,16 @@ function ibOpenInSessions(sid) {         // abre esa charla en Conversaciones (e
 window.inboxView = () => {
   clearInterval(ibTimer);
   const myAgent = agent;
-  const list = h('div', { class: 'ib-list', role: 'list', 'aria-label': 'Conversaciones con una persona' });
+  const list = h('div', { class: 'ib-list', role: 'list', 'aria-label': t('Conversaciones con una persona') });
   const detail = h('div', { class: 'panel', 'aria-live': 'polite' });
-  const body = h('div', {}, h('div', { class: 'empty', role: 'status' }, 'Cargando la bandeja…'));
+  const body = h('div', {}, h('div', { class: 'empty', role: 'status' }, t('Cargando la bandeja…')));
   const root = h('div', { class: 'ib' },
-    h('div', { class: 'page-head' }, h('h1', {}, 'Bandeja'), h('button', { class: 'btn quiet small', onclick: () => refresh() }, icon('redo'), 'Actualizar')),
-    h('p', { class: 'help' }, 'Las conversaciones que el bot pasó a una persona. Desde acá las leés, contestás y, cuando terminás, se las devolvés al bot.'),
+    h('div', { class: 'page-head' }, h('h1', {}, t('Bandeja')), h('button', { class: 'btn quiet small', onclick: () => refresh() }, icon('redo'), t('Actualizar'))),
+    h('p', { class: 'help' }, t('Las conversaciones que el bot pasó a una persona. Desde acá las leés, contestás y, cuando terminás, se las devolvés al bot.')),
     body);
   let items = [], openSig = '';
   const log = h('div', { class: 'ib-log' });
-  const text = h('textarea', { placeholder: 'Escribí tu respuesta…', 'aria-label': 'Tu respuesta', rows: 2,
+  const text = h('textarea', { placeholder: t('Escribí tu respuesta…'), 'aria-label': t('Tu respuesta'), rows: 2,
     onkeydown: (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } } });
   const head = h('div', { class: 'sv-head row', style: 'flex-wrap:wrap;row-gap:8px' });
   const note = h('p', { class: 'help', role: 'status', style: 'font-size:13px' });
@@ -61,7 +61,7 @@ window.inboxView = () => {
   const act = async (what, payload) => {
     note.textContent = '';
     try { await api('POST', '/' + agent.id + '/sessions/' + encodeURIComponent(ibSel) + '/' + what, payload); await refresh(); return true; }
-    catch (e) { note.textContent = 'No se pudo: ' + e.message + '.'; return false; }
+    catch (e) { note.textContent = t('No se pudo: {error}.', { error: e.message }); return false; }
   };
   async function send() {
     const t = text.value.trim();
@@ -72,8 +72,8 @@ window.inboxView = () => {
   function drawList() {
     if (!items.length) {
       ibSel = null;
-      body.replaceChildren(h('div', { class: 'empty' }, icon('inbox'), h('strong', {}, 'No hay conversaciones esperando a una persona'),
-        h('p', { class: 'help' }, 'Una conversación llega acá cuando un flujo usa el paso «Pasar a una persona», o cuando el cliente pide hablar con alguien (por ejemplo «quiero hablar con una persona»). Mientras tanto, el bot no contesta esa charla.')));
+      body.replaceChildren(h('div', { class: 'empty' }, icon('inbox'), h('strong', {}, t('No hay conversaciones esperando a una persona')),
+        h('p', { class: 'help' }, t('Una conversación llega acá cuando un flujo usa el paso «Pasar a una persona», o cuando el cliente pide hablar con alguien (por ejemplo «quiero hablar con una persona»). Mientras tanto, el bot no contesta esa charla.'))));
       return;
     }
     if (!items.some((s) => s.sessionId === ibSel)) ibSel = items[0].sessionId;
@@ -81,8 +81,8 @@ window.inboxView = () => {
       class: 'ib-item', 'aria-current': String(s.sessionId === ibSel),
       onclick: () => { ibSel = s.sessionId; openSig = ''; delete log.dataset.once; drawList(); drawDetail(); },
     }, h('strong', {}, s.sessionId),
-      h('span', { class: 'sv-preview' }, s.last_message ? '«' + s.last_message + '»' : ''),
-      h('small', {}, [s.handoff?.reason ? 'Motivo: ' + s.handoff.reason : null, s.handoff?.by ? 'Atiende ' + s.handoff.by : 'Sin tomar', ibDate(s.handoff?.since || s.updated)].filter(Boolean).join(' · '))))));
+      h('span', { class: 'sv-preview' }, s.last_message ? t('«{text}»', { text: s.last_message }) : ''),
+      h('small', {}, [s.handoff?.reason ? t('Motivo: {reason}', { reason: s.handoff.reason }) : null, s.handoff?.by ? t('Atiende {name}', { name: s.handoff.by }) : t('Sin tomar'), ibDate(s.handoff?.since || s.updated)].filter(Boolean).join(' · '))))));
     if (!body.contains(list)) body.replaceChildren(h('div', { class: 'ib-grid' }, list, detail));
   }
 
@@ -99,21 +99,21 @@ window.inboxView = () => {
       const ho = s.handoff || item.handoff || {};
       const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
       log.replaceChildren(...(s.history || []).flatMap((m) => {
-        if (m.from === 'user') return [h('div', { class: 'msg user' }, m.text), h('div', { class: 'ib-who user' }, 'Cliente · ' + ibTime(m.at))];
-        if (m.from === 'human') return [h('div', { class: 'msg human' }, m.text), h('div', { class: 'ib-who' }, (m.by || 'Persona') + ' · ' + ibTime(m.at))];
-        if (m.from === 'bot') return [h('div', { class: 'msg bot' }, m.file && m.text === m.file.name ? null : m.text, m.file ? window.fileCard(m.file) : null), h('div', { class: 'ib-who' }, 'Bot · ' + ibTime(m.at))];
+        if (m.from === 'user') return [h('div', { class: 'msg user' }, m.text), h('div', { class: 'ib-who user' }, t('Cliente') + ' · ' + ibTime(m.at))];
+        if (m.from === 'human') return [h('div', { class: 'msg human' }, m.text), h('div', { class: 'ib-who' }, (m.by || t('Persona')) + ' · ' + ibTime(m.at))];
+        if (m.from === 'bot') return [h('div', { class: 'msg bot' }, m.file && m.text === m.file.name ? null : m.text, m.file ? window.fileCard(m.file) : null), h('div', { class: 'ib-who' }, t('Bot') + ' · ' + ibTime(m.at))];
         return h('div', { class: 'msg event' }, m.text + ' · ' + ibTime(m.at));
       }));
       if (stick || !log.dataset.once) { log.scrollTop = log.scrollHeight; log.dataset.once = '1'; }
       head.replaceChildren(h('div', { class: 'grow stack', style: 'gap:2px;min-width:min(220px,100%)' }, h('h2', {}, id),
-        h('span', { class: 'help', style: 'font-size:14px' }, [ho.reason ? 'Motivo: ' + ho.reason : null, ho.by ? 'La atiende ' + ho.by : 'Nadie la tomó todavía'].filter(Boolean).join(' · '))),
-        ho.by ? null : h('button', { class: 'btn quiet small', onclick: () => act('take') }, icon('hand'), 'Tomar conversación'),
-        h('button', { class: 'btn small', onclick: () => act('release') }, icon('back'), 'Devolver al bot'));
+        h('span', { class: 'help', style: 'font-size:14px' }, [ho.reason ? t('Motivo: {reason}', { reason: ho.reason }) : null, ho.by ? t('La atiende {name}', { name: ho.by }) : t('Nadie la tomó todavía')].filter(Boolean).join(' · '))),
+        ho.by ? null : h('button', { class: 'btn quiet small', onclick: () => act('take') }, icon('hand'), t('Tomar conversación')),
+        h('button', { class: 'btn small', onclick: () => act('release') }, icon('back'), t('Devolver al bot')));
       if (!detail.contains(log)) detail.replaceChildren(head, log, h('div', { class: 'ib-reply' }, text,
-        h('button', { class: 'btn', onclick: send }, icon('arrow'), 'Enviar')), note,
-        h('button', { class: 'link', style: 'align-self:flex-start;font-size:13px', onclick: () => ibOpenInSessions(id) }, 'Ver en Conversaciones'));
+        h('button', { class: 'btn', onclick: send }, icon('arrow'), t('Enviar'))), note,
+        h('button', { class: 'link', style: 'align-self:flex-start;font-size:13px', onclick: () => ibOpenInSessions(id) }, t('Ver en Conversaciones')));
     } catch (e) {
-      if (id === ibSel) detail.replaceChildren(h('div', { class: 'notice warn', role: 'alert' }, 'No se pudo abrir la conversación: ' + e.message + '.'));
+      if (id === ibSel) detail.replaceChildren(h('div', { class: 'notice warn', role: 'alert' }, t('No se pudo abrir la conversación: {error}.', { error: e.message })));
     }
   }
 
@@ -124,7 +124,7 @@ window.inboxView = () => {
       items = Array.isArray(data) ? data : data.sessions || data.conversations || data.inbox || [];
       drawList(); await drawDetail();
     } catch (e) {
-      if (root.isConnected) body.replaceChildren(h('div', { class: 'notice warn', role: 'alert' }, 'No se pudo cargar la bandeja: ' + e.message + '.'));
+      if (root.isConnected) body.replaceChildren(h('div', { class: 'notice warn', role: 'alert' }, t('No se pudo cargar la bandeja: {error}.', { error: e.message })));
     }
   }
 
@@ -140,18 +140,18 @@ window.improveView = () => {
   const myAgent = agent;
   const intents = agent.intents.filter((i) => !i.name.startsWith('__'));
   const notice = h('div', { 'aria-live': 'polite' });
-  const body = h('div', { class: 'stack', style: 'gap:14px' }, h('div', { class: 'empty', role: 'status' }, 'Buscando lo que el bot no entendió…'));
+  const body = h('div', { class: 'stack', style: 'gap:14px' }, h('div', { class: 'empty', role: 'status' }, t('Buscando lo que el bot no entendió…')));
   const root = h('div', { class: 'page' },
-    h('div', { class: 'page-head' }, h('h1', {}, 'Para enseñar'), h('button', { class: 'btn quiet small', onclick: () => render() }, icon('redo'), 'Actualizar')),
-    h('p', { class: 'help' }, 'Lo que la gente escribió y el bot no entendió, agrupado por frases parecidas. Enseñale a qué intención corresponde cada una, o ignorala si no hace falta.'),
+    h('div', { class: 'page-head' }, h('h1', {}, t('Para enseñar')), h('button', { class: 'btn quiet small', onclick: () => render() }, icon('redo'), t('Actualizar'))),
+    h('p', { class: 'help' }, t('Lo que la gente escribió y el bot no entendió, agrupado por frases parecidas. Enseñale a qué intención corresponde cada una, o ignorala si no hace falta.')),
     notice, body);
 
   const done = (msg, train) => notice.replaceChildren(h('div', { class: 'notice' }, icon('check'), h('span', { class: 'grow' }, msg),
-    train ? h('button', { class: 'btn small', onclick: async () => { await trainNow(); notice.replaceChildren(); } }, icon('spark'), 'Entrenar ahora') : null));
+    train ? h('button', { class: 'btn small', onclick: async () => { await trainNow(); notice.replaceChildren(); } }, icon('spark'), t('Entrenar ahora')) : null));
 
   function card(g, groups) {
     const texts = g.texts || [...new Set(g.examples.map((e) => e.text))];
-    const choice = h('select', { 'aria-label': 'Intención' }, h('option', { value: '' }, 'Elegí una intención…'),
+    const choice = h('select', { 'aria-label': t('Intención') }, h('option', { value: '' }, t('Elegí una intención…')),
       intents.map((i) => h('option', { value: i.name }, i.name)));
     choice.value = intents.some((i) => i.name === g.suggested_intent) ? g.suggested_intent : '';
     const gone = () => { groups.splice(groups.indexOf(g), 1); draw(groups); };
@@ -162,29 +162,29 @@ window.improveView = () => {
       const fresh = texts.filter((t) => !have.has(t.trim().toLowerCase()));
       it.examples.push(...fresh);
       touch(); gone();
-      done('Listo: sumaste ' + fresh.length + (fresh.length === 1 ? ' frase' : ' frases') + ' a «' + it.name + '». Para que el bot lo aprenda hay que entrenarlo de nuevo.', true);
+      done(t.plural(fresh.length, 'Listo: sumaste {n} frase a «{name}». Para que el bot lo aprenda hay que entrenarlo de nuevo.', 'Listo: sumaste {n} frases a «{name}». Para que el bot lo aprenda hay que entrenarlo de nuevo.', { name: it.name }), true);
     };
     const ignore = () => {
       agent.ignored_phrases.push(...texts.filter((t) => !agent.ignored_phrases.includes(t)));
       touch(); gone();
-      done('Listo: no vamos a mostrarte más «' + g.label + '».');
+      done(t('Listo: no vamos a mostrarte más «{label}».', { label: g.label }));
     };
     return h('div', { class: 'panel ib-group' },
-      h('div', { class: 'row' }, h('h2', { class: 'grow' }, '«' + g.label + '»'),
-        h('span', { class: 'help', style: 'font-size:14px' }, g.count === 1 ? 'lo escribió 1 vez' : 'lo escribieron ' + g.count + ' veces')),
+      h('div', { class: 'row' }, h('h2', { class: 'grow' }, t('«{text}»', { text: g.label })),
+        h('span', { class: 'help', style: 'font-size:14px' }, t.plural(g.count, 'lo escribió {n} vez', 'lo escribieron {n} veces'))),
       h('ul', { class: 'ib-ex' }, g.examples.slice(0, 5).map((e) => h('li', {}, h('q', {}, e.text), h('small', {}, ibDate(e.at)),
-        e.sessionId ? h('button', { class: 'link', style: 'font-size:13px', onclick: () => ibOpenInSessions(e.sessionId) }, 'Ver conversación') : null))),
-      g.examples.length > 5 ? h('small', { class: 'help' }, 'y ' + (g.count - 5) + ' más') : null,
-      intents.length ? h('div', { class: 'ib-teach' }, choice, h('button', { class: 'btn small', onclick: teach }, icon('lightbulb'), 'Enseñar'),
-        h('button', { class: 'btn quiet small', onclick: ignore }, 'Ignorar'),
-        g.suggested_intent && choice.value ? h('small', { class: 'help' }, 'Te sugerimos la que más se parece.') : null)
-        : h('p', { class: 'help', style: 'font-size:14px' }, 'Creá una intención primero para poder enseñarle esta frase.'));
+        e.sessionId ? h('button', { class: 'link', style: 'font-size:13px', onclick: () => ibOpenInSessions(e.sessionId) }, t('Ver conversación')) : null))),
+      g.examples.length > 5 ? h('small', { class: 'help' }, t('y {n} más', { n: g.count - 5 })) : null,
+      intents.length ? h('div', { class: 'ib-teach' }, choice, h('button', { class: 'btn small', onclick: teach }, icon('lightbulb'), t('Enseñar')),
+        h('button', { class: 'btn quiet small', onclick: ignore }, t('Ignorar')),
+        g.suggested_intent && choice.value ? h('small', { class: 'help' }, t('Te sugerimos la que más se parece.')) : null)
+        : h('p', { class: 'help', style: 'font-size:14px' }, t('Creá una intención primero para poder enseñarle esta frase.')));
   }
 
   function draw(groups) {
     body.replaceChildren(...(groups.length ? groups.map((g) => card(g, groups))
-      : [h('div', { class: 'empty' }, icon('lightbulb'), h('strong', {}, 'No hay nada para enseñar'),
-        h('p', { class: 'help' }, 'Cuando alguien escriba algo que el bot no entiende, va a aparecer acá para que le enseñes qué quiso decir.'))]));
+      : [h('div', { class: 'empty' }, icon('lightbulb'), h('strong', {}, t('No hay nada para enseñar')),
+        h('p', { class: 'help' }, t('Cuando alguien escriba algo que el bot no entiende, va a aparecer acá para que le enseñes qué quiso decir.')))]));
   }
 
   (async () => {
@@ -193,8 +193,8 @@ window.improveView = () => {
       const { groups } = await api('GET', '/' + myAgent.id + '/insights/unrecognized');
       if (agent === myAgent && root.isConnected) draw(groups || []);
     } catch (e) {
-      body.replaceChildren(h('div', { class: 'notice warn', role: 'alert' }, 'No se pudo cargar: ' + e.message + '.',
-        h('button', { class: 'link', onclick: render }, 'Probar de nuevo')));
+      body.replaceChildren(h('div', { class: 'notice warn', role: 'alert' }, t('No se pudo cargar: {error}.', { error: e.message }),
+        h('button', { class: 'link', onclick: render }, t('Probar de nuevo'))));
     }
   })();
   return root;

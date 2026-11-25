@@ -13,12 +13,12 @@ document.head.append(h('style', {}, `
   .msg .file-card, .msg .file-img { margin-top: 6px; }
 `));
 const FILE_ACCEPT = '.pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip';
-const fileSize = (n) => n < 1024 ? n + ' B' : n < 1048576 ? Math.round(n / 1024) + ' KB' : (n / 1048576).toFixed(1).replace('.', ',') + ' MB';
+const fileSize = (n) => n < 1024 ? n + ' B' : n < 1048576 ? Math.round(n / 1024) + ' KB' : (n / 1048576).toLocaleString(t.locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' MB';
 // la tarjeta del adjunto en el chat de prueba y en Conversaciones (las imágenes se ven directo)
 window.fileCard = (f) => f?.mime?.startsWith('image/')
-  ? h('a', { href: f.url, target: '_blank', rel: 'noopener', title: 'Abrir ' + f.name }, h('img', { class: 'file-img', src: f.url, alt: f.name }))
-  : h('a', { class: 'file-card', href: f.url, target: '_blank', rel: 'noopener', title: 'Abrir o descargar ' + f.name },
-    icon('clip'), h('span', {}, h('strong', {}, f.name), h('small', {}, fileSize(f.size || 0) + ' · Abrir o descargar')));
+  ? h('a', { href: f.url, target: '_blank', rel: 'noopener', title: t('Abrir {name}', { name: f.name }) }, h('img', { class: 'file-img', src: f.url, alt: f.name }))
+  : h('a', { class: 'file-card', href: f.url, target: '_blank', rel: 'noopener', title: t('Abrir o descargar {name}', { name: f.name }) },
+    icon('clip'), h('span', {}, h('strong', {}, f.name), h('small', {}, fileSize(f.size || 0) + ' · ' + t('Abrir o descargar'))));
 
 const fl = { agent: null, loaded: false, list: [], busy: false, error: '' };
 async function flLoad() {
@@ -29,22 +29,22 @@ async function flLoad() {
 }
 function flUpload(file, s) {
   if (!file) return;
-  if (file.size > 10 * 1024 * 1024) { fl.error = 'El archivo es muy grande (máximo 10 MB).'; return render(); }
+  if (file.size > 10 * 1024 * 1024) { fl.error = t('El archivo es muy grande (máximo 10 MB).'); return render(); }
   fl.busy = true; fl.error = ''; render();
   const r = new FileReader();
   r.onload = async () => {
     try { const out = await api('POST', '/' + agent.id + '/files', { name: file.name, data: r.result }); fl.list = out.files; s.file = out.id; touch(); }
-    catch (e) { fl.error = 'No se pudo subir: ' + e.message; }
+    catch (e) { fl.error = t('No se pudo subir: {error}', { error: e.message }); }
     fl.busy = false; render();
   };
-  r.onerror = () => { fl.busy = false; fl.error = 'No se pudo leer el archivo.'; render(); };
+  r.onerror = () => { fl.busy = false; fl.error = t('No se pudo leer el archivo.'); render(); };
   r.readAsDataURL(file);
 }
 function flRemove(f) {
   let used = 0;
   walkSteps((x) => { if (x.type === 'file' && (x.file === f.id || String(x.file || '').toLowerCase() === f.name.toLowerCase())) used++; });
-  confirmBox('Borrar el archivo', 'Se borra «' + f.name + '» del bot.' + (used ? ' Lo ' + (used === 1 ? 'usa 1 paso, que va' : 'usan ' + used + ' pasos, que van') +
-    ' a dar error, también en las versiones publicadas.' : '') + ' No se puede deshacer.', 'Borrar archivo', async () => {
+  confirmBox(t('Borrar el archivo'), t('Se borra «{name}» del bot.', { name: f.name }) + (used ? ' ' + t.plural(used, 'Lo usa 1 paso, que va a dar error, también en las versiones publicadas.',
+    'Lo usan {n} pasos, que van a dar error, también en las versiones publicadas.') : '') + ' ' + t('No se puede deshacer.'), t('Borrar archivo'), async () => {
     try { fl.list = (await api('DELETE', '/' + agent.id + '/files/' + f.id)).files; } catch (e) { fl.error = e.message; }
     render();
   });
@@ -53,18 +53,17 @@ window.fileStepView = (s) => {
   if (fl.agent !== agent.id) flLoad();
   const ref = String(s.file || '');
   const cur = fl.list.find((f) => f.id === ref) || fl.list.findLast((f) => f.name.toLowerCase() === ref.toLowerCase());
-  const input = h('input', { type: 'file', accept: FILE_ACCEPT, hidden: true, 'aria-label': 'Elegir archivo', onchange: (e) => flUpload(e.target.files[0], s) });
-  const text = h('textarea', { rows: 1, 'aria-label': 'Texto que acompaña el archivo', ...trBind(s, 'text', 'Por ejemplo: Acá tenés la lista de precios, {{ nombre }}', (e) => grow(e.target)) });
+  const input = h('input', { type: 'file', accept: FILE_ACCEPT, hidden: true, 'aria-label': t('Elegir archivo'), onchange: (e) => flUpload(e.target.files[0], s) });
+  const text = h('textarea', { rows: 1, 'aria-label': t('Texto que acompaña el archivo'), ...trBind(s, 'text', t('Por ejemplo: Acá tenés la lista de precios, {{ nombre }}'), (e) => grow(e.target)) });
   return [
     h('div', { class: 'row' },
-      pick([['', fl.list.length ? 'Elegí un archivo…' : fl.loaded ? 'Todavía no subiste archivos' : 'Cargando…'], ...fl.list.map((f) => [f.id, f.name + ' (' + fileSize(f.size) + ')'])],
-        cur?.id ?? '', (v) => { s.file = v; touch(); render(); }, 'Archivo'),
-      h('button', { class: 'btn quiet small', type: 'button', disabled: fl.busy, onclick: () => input.click() }, icon('up'), fl.busy ? 'Subiendo…' : 'Subir un archivo'), input),
-    ref && !cur && fl.loaded ? h('p', { class: 'help', style: 'font-size:14px;color:var(--warn)' }, '«' + ref + '» ya no está en el bot. Subilo de nuevo o elegí otro.') : null,
+      pick([['', fl.list.length ? t('Elegí un archivo…') : fl.loaded ? t('Todavía no subiste archivos') : t('Cargando…')], ...fl.list.map((f) => [f.id, f.name + ' (' + fileSize(f.size) + ')'])],
+        cur?.id ?? '', (v) => { s.file = v; touch(); render(); }, t('Archivo')),
+      h('button', { class: 'btn quiet small', type: 'button', disabled: fl.busy, onclick: () => input.click() }, icon('up'), fl.busy ? t('Subiendo…') : t('Subir un archivo')), input),
+    ref && !cur && fl.loaded ? h('p', { class: 'help', style: 'font-size:14px;color:var(--warn)' }, t('«{name}» ya no está en el bot. Subilo de nuevo o elegí otro.', { name: ref })) : null,
     fl.error ? h('p', { class: 'help', style: 'font-size:14px;color:var(--warn)' }, fl.error) : null,
-    cur ? h('div', { class: 'row' }, window.fileCard(cur), iconBtn('trash', 'Borrar «' + cur.name + '» del bot', () => flRemove(cur))) : null,
-    lab('Texto que acompaña (opcional)', text), slotChips(text),
-    h('p', { class: 'help', style: 'font-size:14px' }, 'PDF, imagen, Word, Excel, PowerPoint, CSV, TXT o ZIP, hasta 10 MB. Sin texto, el bot manda solo el archivo. ' +
-      'Quien tenga el enlace lo puede abrir, así que no subas nada privado. Los archivos son del bot, no de una versión: si borrás uno, deja de enviarse también en lo publicado.'),
+    cur ? h('div', { class: 'row' }, window.fileCard(cur), iconBtn('trash', t('Borrar «{name}» del bot', { name: cur.name }), () => flRemove(cur))) : null,
+    lab(t('Texto que acompaña (opcional)'), text), slotChips(text),
+    h('p', { class: 'help', style: 'font-size:14px' }, t('PDF, imagen, Word, Excel, PowerPoint, CSV, TXT o ZIP, hasta 10 MB. Sin texto, el bot manda solo el archivo. Quien tenga el enlace lo puede abrir, así que no subas nada privado. Los archivos son del bot, no de una versión: si borrás uno, deja de enviarse también en lo publicado.')),
   ];
 };

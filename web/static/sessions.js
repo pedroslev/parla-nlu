@@ -80,7 +80,7 @@ document.head.append(h('style', {}, `
   .sv-turn.diff .sv-col.now { border-color: var(--warn); }
   .sv-col .msg { max-width: 100%; font-size: 14px; }
   .sv-col-h { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-  .sv-turn.same .sv-col-h::after { content: " · igual"; color: var(--ok); text-transform: none; letter-spacing: 0; }
+  .sv-turn.same .sv-col-h::after { content: ${JSON.stringify(t(' · igual'))}; color: var(--ok); text-transform: none; letter-spacing: 0; }
   .msg.sv-imp { background: var(--brand-soft); color: var(--brand); font-weight: 600; border-radius: 10px; padding: 6px 12px; }
 
   @container sv (max-width: 760px) {
@@ -91,17 +91,17 @@ document.head.append(h('style', {}, `
   @container svd (max-width: 520px) { .sv-cols { grid-template-columns: minmax(0, 1fr); } }
 `));
 
-const svChannelName = (c) => c === 'api' ? 'API' : c === 'prueba' ? 'Chat de prueba' : c;
+const svChannelName = (c) => c === 'api' ? 'API' : c === 'prueba' ? t('Chat de prueba') : c;
 const svValue = (v) => typeof v === 'string' ? v : JSON.stringify(v);
 const svTime = (iso) => (iso || '').slice(11, 16);
 const svDayOf = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
 const svDaysAgo = (iso) => { const d = new Date(iso); return isNaN(d) ? Infinity : Math.round((svDayOf(new Date()) - svDayOf(d)) / 864e5); };
 function svDay(iso) {
   const n = svDaysAgo(iso), d = new Date(iso);
-  if (n === 0) return 'Hoy';
-  if (n === 1) return 'Ayer';
-  if (n === Infinity) return 'Sin fecha';
-  return d.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
+  if (n === 0) return t('Hoy');
+  if (n === 1) return t('Ayer');
+  if (n === Infinity) return t('Sin fecha');
+  return d.toLocaleDateString(t.locale, { weekday: 'short', day: 'numeric', month: 'short', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
 }
 const svWhen = (iso) => svDaysAgo(iso) === Infinity ? '' : svDay(iso).toLowerCase() + ' ' + svTime(iso);
 // Quién es el cliente: el dato de inicio que más parece identificarlo (nombre, documento, teléfono…).
@@ -117,68 +117,68 @@ const svStartData = (s) => svFromStart(s.history || [])[0]?.data || {};
 // Etiqueta de color de una clasificación; si ya no existe en el agente, queda gris.
 function svTag(name) {
   const c = (agent.classifications || []).find((x) => x.name === name);
-  return h('span', c ? { class: 'sv-tag', style: markStyle(c) } : { class: 'sv-tag none', title: 'Esta clasificación ya no existe en el agente' }, name);
+  return h('span', c ? { class: 'sv-tag', style: markStyle(c) } : { class: 'sv-tag none', title: t('Esta clasificación ya no existe en el agente') }, name);
 }
 const svTags = (names) => names?.length ? h('span', { class: 'sv-tags' }, names.map(svTag)) : null;
 // Con qué versión contestó: "Producción · v3", "Pruebas · v2", "Borrador".
-const SV_ENVS = { production: 'Producción', staging: 'Pruebas', draft: 'Borrador' };
+const SV_ENVS = { production: t('Producción'), staging: t('Pruebas'), draft: t('Borrador') };
 const svEnvOf = (s) => s.environment || 'production';
 function svEnvTag(s) {
   const env = svEnvOf(s);
-  const label = env === 'draft' ? 'Borrador' : (SV_ENVS[env] || env) + ' · ' + (s.version == null ? 'borrador' : 'v' + s.version);
-  return h('span', { class: 'sv-env ' + env, title: s.version == null ? 'Contestó con el borrador (sin publicar)' : 'Contestó con la versión ' + s.version }, label);
+  const label = env === 'draft' ? t('Borrador') : (SV_ENVS[env] || env) + ' · ' + (s.version == null ? t('borrador') : 'v' + s.version);
+  return h('span', { class: 'sv-env ' + env, title: s.version == null ? t('Contestó con el borrador (sin publicar)') : t('Contestó con la versión {n}', { n: s.version }) }, label);
 }
 // la versión elegida en el chat de prueba (testEnv, en index.html)
-const svTestEnv = () => testEnv === 'draft' ? 'el borrador' : (SV_ENVS[testEnv] || testEnv) + (agent.environments?.[testEnv] != null ? ' (v' + agent.environments[testEnv] + ')' : '');
-const svState = (ended) => h('span', { class: 'sv-state ' + (ended ? 'done' : 'live') }, ended ? 'Terminada' : 'En curso');
-const svHandBadge = (ho) => h('span', { class: 'sv-badge', title: ho.reason ? 'Motivo: ' + ho.reason : null }, icon('hand'), ho.by ? 'La atiende ' + ho.by : 'Espera a una persona');
+const svTestEnv = () => testEnv === 'draft' ? t('el borrador') : (SV_ENVS[testEnv] || testEnv) + (agent.environments?.[testEnv] != null ? ' (v' + agent.environments[testEnv] + ')' : '');
+const svState = (ended) => h('span', { class: 'sv-state ' + (ended ? 'done' : 'live') }, ended ? t('Terminada') : t('En curso'));
+const svHandBadge = (ho) => h('span', { class: 'sv-badge', title: ho.reason ? t('Motivo: {reason}', { reason: ho.reason }) : null }, icon('hand'), ho.by ? t('La atiende {name}', { name: ho.by }) : t('Espera a una persona'));
 async function svGet(path, method) {
   const r = await fetch('/api/v1/bots/' + encodeURIComponent(agent.id) + '/sessions' + path, { method });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || 'el servidor respondió ' + r.status);
+  if (!r.ok) throw new Error(data.error || t('el servidor respondió {status}', { status: r.status }));
   return data;
 }
 
 window.sessionsView = () => {
-  const body = h('div', { class: 'empty', role: 'status' }, 'Cargando conversaciones…');
+  const body = h('div', { class: 'empty', role: 'status' }, t('Cargando conversaciones…'));
   const root = h('div', { class: 'sv' },
-    h('div', { class: 'stack', style: 'gap:4px' }, h('h1', {}, 'Conversaciones'),
-      h('p', { class: 'help' }, 'Lo que la gente habló con este agente. Abrí una para leerla, re-ejecutarla contra el bot o seguir hablando como ese cliente.')),
+    h('div', { class: 'stack', style: 'gap:4px' }, h('h1', {}, t('Conversaciones')),
+      h('p', { class: 'help' }, t('Lo que la gente habló con este agente. Abrí una para leerla, re-ejecutarla contra el bot o seguir hablando como ese cliente.'))),
     body);
   if (window.sessionsFilter) { if (window.sessionsFilter.classification) { svClass = window.sessionsFilter.classification; svSel = null; } if (window.sessionsFilter.environment) { svEnv = window.sessionsFilter.environment; svSel = null; } delete window.sessionsFilter; }
   const myAgent = agent;
   Promise.all([svGet(''), api('GET', '/' + myAgent.id + '/inbox').catch(() => ({ sessions: [] }))]).then(([{ sessions }, inbox]) => {
     svHand = new Map((inbox.sessions || []).map((s) => [s.sessionId, s.handoff || {}]));
     if (agent === myAgent && root.isConnected) body.replaceWith(svBrowser(sessions));
-  }, (e) => body.replaceWith(h('div', { class: 'notice warn', role: 'alert' }, 'No se pudieron cargar las conversaciones: ' + e.message + '.',
-    h('button', { class: 'link', onclick: render }, 'Probar de nuevo'))));
+  }, (e) => body.replaceWith(h('div', { class: 'notice warn', role: 'alert' }, t('No se pudieron cargar las conversaciones: {error}.', { error: e.message }),
+    h('button', { class: 'link', onclick: render }, t('Probar de nuevo')))));
   return root;
 };
 
 function svBrowser(sessions) {
   if (!sessions.length) return h('div', { class: 'empty' }, icon('history'),
-    h('strong', {}, 'Todavía no hay conversaciones'),
-    h('p', { class: 'help' }, 'Van a aparecer acá cuando alguien le escriba al agente por la API (mirá la sección API para conectarlo) o cuando lo pruebes en el chat de la derecha.'));
+    h('strong', {}, t('Todavía no hay conversaciones')),
+    h('p', { class: 'help' }, t('Van a aparecer acá cuando alguien le escriba al agente por la API (mirá la sección API para conectarlo) o cuando lo pruebes en el chat de la derecha.')));
 
-  const list = h('div', { class: 'sv-list', 'aria-label': 'Conversaciones' });
+  const list = h('div', { class: 'sv-list', 'aria-label': t('Conversaciones') });
   const count = h('p', { class: 'sv-count', role: 'status' });
   const detail = h('div', { class: 'panel sv-detail' });
-  const search = h('input', { type: 'search', placeholder: 'Buscar por cliente, id o mensaje', 'aria-label': 'Buscar conversaciones', value: svQuery,
+  const search = h('input', { type: 'search', placeholder: t('Buscar por cliente, id o mensaje'), 'aria-label': t('Buscar conversaciones'), value: svQuery,
     oninput: (e) => { svQuery = e.target.value; drawList(); } });
-  const channel = pick([['all', 'Todos los canales'], ['api', 'API'], ['prueba', 'Chat de prueba']], svChannel, (v) => { svChannel = v; drawList(); }, 'Canal');
-  const dates = pick([['all', 'Cualquier fecha'], ['0', 'Hoy'], ['7', 'Últimos 7 días'], ['30', 'Últimos 30 días']], svDate, (v) => { svDate = v; drawList(); }, 'Fecha');
+  const channel = pick([['all', t('Todos los canales')], ['api', 'API'], ['prueba', t('Chat de prueba')]], svChannel, (v) => { svChannel = v; drawList(); }, t('Canal'));
+  const dates = pick([['all', t('Cualquier fecha')], ['0', t('Hoy')], ['7', t('Últimos 7 días')], ['30', t('Últimos 30 días')]], svDate, (v) => { svDate = v; drawList(); }, t('Fecha'));
   const names = (agent.classifications || []).map((c) => c.name);
   if (svClass !== 'all' && svClass !== '__none__' && !names.includes(svClass)) names.push(svClass);  // una que vino de afuera o ya se borró
-  const classes = pick([['all', 'Toda clasificación'], ...names.map((n) => [n, n]), ['__none__', 'Sin clasificar']], svClass,
-    (v) => { svClass = v; drawList(); }, 'Clasificación');
-  const envs = pick([['all', 'Todo entorno'], ...Object.entries(SV_ENVS)], svEnv, (v) => { svEnv = v; drawList(); }, 'Entorno');
+  const classes = pick([['all', t('Toda clasificación')], ...names.map((n) => [n, n]), ['__none__', t('Sin clasificar')]], svClass,
+    (v) => { svClass = v; drawList(); }, t('Clasificación'));
+  const envs = pick([['all', t('Todo entorno')], ...Object.entries(SV_ENVS)], svEnv, (v) => { svEnv = v; drawList(); }, t('Entorno'));
 
   const marks = (s) => s.classifications || [];
   const matches = (s, q) => (svChannel === 'all' || (svChannel === 'prueba') === (s.channel === 'prueba'))
     && (svEnv === 'all' || svEnvOf(s) === svEnv)
     && (svDate === 'all' || svDaysAgo(s.updated) <= +svDate)
     && (svClass === 'all' || (svClass === '__none__' ? !marks(s).length : marks(s).includes(svClass)))
-    && (!q || [s.sessionId, s.first_message, s.last_message, ...Object.values(s.data || {}).map(svValue)].some((t) => (t || '').toLowerCase().includes(q)));
+    && (!q || [s.sessionId, s.first_message, s.last_message, ...Object.values(s.data || {}).map(svValue)].some((x) => (x || '').toLowerCase().includes(q)));
   if (!sessions.some((s) => s.sessionId === svSel)) svSel = (sessions.find((s) => matches(s, svQuery.trim().toLowerCase())) || sessions[0]).sessionId;
 
   const item = (s) => {
@@ -187,29 +187,29 @@ function svBrowser(sessions) {
       class: 'sv-item', 'aria-current': String(s.sessionId === svSel), title: who ? s.sessionId : null,
       onclick: () => { svSel = s.sessionId; svView = 'orig'; drawList(); drawDetail(); if (innerWidth <= 900) detail.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
     }, h('span', { class: 'sv-top' }, h('strong', {}, who || s.sessionId), h('time', { datetime: s.updated }, svTime(s.updated))),
-      h('span', { class: 'sv-preview' }, s.first_message || 'Sin mensajes del cliente'),
-      h('span', { class: 'sv-meta' }, ho ? svHandBadge(ho) : null, s.ended ? null : svState(false), svChannelName(s.channel) + ' · ' + s.messages + (s.messages === 1 ? ' mensaje' : ' mensajes'), svEnvTag(s)),
+      h('span', { class: 'sv-preview' }, s.first_message || t('Sin mensajes del cliente')),
+      h('span', { class: 'sv-meta' }, ho ? svHandBadge(ho) : null, s.ended ? null : svState(false), svChannelName(s.channel) + ' · ' + t.plural(s.messages, '{n} mensaje', '{n} mensajes'), svEnvTag(s)),
       svTags(s.classifications));
   };
   function drawList() {
     const q = svQuery.trim().toLowerCase();
     const shown = sessions.filter((s) => matches(s, q));
-    count.textContent = shown.length === sessions.length ? sessions.length + (sessions.length === 1 ? ' conversación' : ' conversaciones') : shown.length + ' de ' + sessions.length + ' conversaciones';
+    count.textContent = shown.length === sessions.length ? t.plural(sessions.length, '{n} conversación', '{n} conversaciones') : t('{shown} de {total} conversaciones', { shown: shown.length, total: sessions.length });
     const groups = [];        // vienen de la más reciente a la más vieja: se agrupan por día
     for (const s of shown) { const d = svDay(s.updated); if (groups[groups.length - 1]?.[0] !== d) groups.push([d, []]); groups[groups.length - 1][1].push(s); }
     list.replaceChildren(...(groups.length ? groups.map(([d, items]) => h('div', { role: 'group', 'aria-label': d }, h('div', { class: 'sv-day', 'aria-hidden': 'true' }, d), items.map(item)))
-      : [h('p', { class: 'help', style: 'padding:10px 12px' }, 'Ninguna conversación coincide con el filtro.')]));
+      : [h('p', { class: 'help', style: 'padding:10px 12px' }, t('Ninguna conversación coincide con el filtro.'))]));
   }
 
   let current = null;
   async function drawDetail() {
     const id = svSel;
-    detail.replaceChildren(h('p', { class: 'help' }, 'Cargando la conversación…'));
+    detail.replaceChildren(h('p', { class: 'help' }, t('Cargando la conversación…')));
     try {
       const s = await svGet('/' + encodeURIComponent(id));
       if (id === svSel) { current = s; redraw(); }
     } catch (e) {
-      if (id === svSel) detail.replaceChildren(h('div', { class: 'notice warn', role: 'alert' }, 'No se pudo abrir la conversación: ' + e.message + '.'));
+      if (id === svSel) detail.replaceChildren(h('div', { class: 'notice warn', role: 'alert' }, t('No se pudo abrir la conversación: {error}.', { error: e.message })));
     }
   }
   function redraw() { if (current && current.sessionId === svSel && detail.isConnected) detail.replaceChildren(...svDetail(current, redraw).filter(Boolean)); }
@@ -228,10 +228,10 @@ async function svReplay(s, redraw) {
     setChat(true);
     await startChat(svStartData(s));
     const sid = session;
-    chat.unshift({ who: 'event sv-imp', text: 'Re-ejecución de «' + s.sessionId + '» contra ' + env });
+    chat.unshift({ who: 'event sv-imp', text: t('Re-ejecución de «{id}» contra {env}', { id: s.sessionId, env }) });
     renderChat();
     for (const m of users) {
-      if (session !== sid || agent !== myAgent) throw new Error('se cortó porque empezó otra conversación en el chat de prueba');
+      if (session !== sid || agent !== myAgent) throw new Error(t('se cortó porque empezó otra conversación en el chat de prueba'));
       run.step++; redraw();
       await sendText(m.text);
     }
@@ -246,7 +246,7 @@ async function svImpersonate(s, who) {
   startData = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, svValue(v)])); startFor = agent.id;   // quedan cargados en «Empezar con datos» (sin pisar lo guardado)
   setChat(true);
   await startChat(data);
-  chat.unshift({ who: 'event sv-imp', text: 'Hablás como ' + who + (Object.keys(data).length ? ', con sus datos de inicio' : ' (esa conversación no trajo datos de inicio)') });
+  chat.unshift({ who: 'event sv-imp', text: (Object.keys(data).length ? t('Hablás como {who}, con sus datos de inicio', { who }) : t('Hablás como {who} (esa conversación no trajo datos de inicio)', { who })) });
   renderChat();
   $('#chat form input')?.focus();
 }
@@ -260,13 +260,13 @@ function svTurns(history) {
   }
   return turns;
 }
-const svBubble = (m) => m.from === 'human' ? h('div', { class: 'msg human' }, h('span', { class: 'who' }, m.by ? m.by + ' (persona)' : 'Una persona del equipo'), m.text)
-  : m.text.startsWith('⚠') ? h('div', { class: 'msg problem' }, 'Error en el flujo: ' + m.text.replace(/^⚠\s*/, '')) : h('div', { class: 'msg bot' }, m.file && m.text === m.file.name ? null : m.text, m.file ? window.fileCard(m.file) : null);   // fileCard: /static/files.js
-const svUnderstood = (m) => !m ? '' : m.answer_to ? 'respuesta para ' + m.answer_to : m.intent || 'no entendió';
+const svBubble = (m) => m.from === 'human' ? h('div', { class: 'msg human' }, h('span', { class: 'who' }, m.by ? t('{name} (persona)', { name: m.by }) : t('Una persona del equipo')), m.text)
+  : m.text.startsWith('⚠') ? h('div', { class: 'msg problem' }, t('Error en el flujo: {error}', { error: m.text.replace(/^⚠\s*/, '') })) : h('div', { class: 'msg bot' }, m.file && m.text === m.file.name ? null : m.text, m.file ? window.fileCard(m.file) : null);   // fileCard: /static/files.js
+const svUnderstood = (m) => !m ? '' : m.answer_to ? t('respuesta para {slot}', { slot: m.answer_to }) : m.intent || t('no entendió');
 
 function svCompare(orig, run) {
   const a = svTurns(svFromStart(orig.history)), b = svTurns(run.result.history);
-  const said = (t) => (t?.bots || []).filter((m) => m.from === 'bot').map((m) => m.text.trim()).join('\n');
+  const said = (tn) => (tn?.bots || []).filter((m) => m.from === 'bot').map((m) => m.text.trim()).join('\n');
   const n = Math.max(a.length, b.length);
   let first = -1, diffs = 0;
   const rows = [];
@@ -274,19 +274,19 @@ function svCompare(orig, run) {
     const same = said(a[i]) === said(b[i]);
     if (!same) { diffs++; if (first < 0) first = i; }
     const u = a[i]?.user || b[i]?.user, was = svUnderstood(a[i]?.user), now = svUnderstood(b[i]?.user);
-    const col = (label, t, cls) => h('div', { class: 'sv-col ' + cls }, h('span', { class: 'sv-col-h' }, label),
-      t?.bots.length ? t.bots.map(svBubble) : h('p', { class: 'help', style: 'font-size:14px' }, t ? 'No respondió nada.' : 'No llegó a este punto.'));
+    const col = (label, tn, cls) => h('div', { class: 'sv-col ' + cls }, h('span', { class: 'sv-col-h' }, label),
+      tn?.bots.length ? tn.bots.map(svBubble) : h('p', { class: 'help', style: 'font-size:14px' }, tn ? t('No respondió nada.') : t('No llegó a este punto.')));
     rows.push(h('div', { class: 'sv-turn ' + (same ? 'same' : 'diff') },
-      first === i ? h('span', { class: 'sv-split' }, icon('branch'), 'Acá se separó') : null,
-      u ? h('div', { class: 'msg user' }, u.text) : h('span', { class: 'sv-event' }, 'Al empezar'),
-      u && was !== now ? h('div', { class: 'read' }, 'Antes: ', h('strong', {}, was), ' · Ahora: ', h('strong', {}, now)) : null,
-      h('div', { class: 'sv-cols' }, col('Original', a[i], 'was'), col('Re-ejecución', b[i], 'now'))));
+      first === i ? h('span', { class: 'sv-split' }, icon('branch'), t('Acá se separó')) : null,
+      u ? h('div', { class: 'msg user' }, u.text) : h('span', { class: 'sv-event' }, t('Al empezar')),
+      u && was !== now ? h('div', { class: 'read' }, t('Antes: '), h('strong', {}, was), t(' · Ahora: '), h('strong', {}, now)) : null,
+      h('div', { class: 'sv-cols' }, col(t('Original'), a[i], 'was'), col(t('Re-ejecución'), b[i], 'now'))));
   }
   return h('div', { class: 'sv-cmp' },
     h('div', { class: 'notice' + (diffs ? ' warn' : ''), role: 'status' }, icon(diffs ? 'branch' : 'check'),
-      h('span', { class: 'grow' }, diffs ? 'Respondió distinto en ' + diffs + ' de ' + n + ' turnos. Se separó en ' + (first ? 'el mensaje ' + first + ' del cliente' : 'el saludo inicial') + '.'
-        : n === 1 ? 'Respondió igual.' : 'Respondió igual en los ' + n + ' turnos.', ' Contra ' + run.env + ', a las ' + run.at + '. Las fechas y horarios que dependen del día pueden cambiar solos.'),
-      h('button', { class: 'link', onclick: () => setChat(true) }, 'Seguir en el chat de prueba')),
+      h('span', { class: 'grow' }, diffs ? t('Respondió distinto en {diffs} de {n} turnos.', { diffs, n }) + ' ' + (first ? t('Se separó en el mensaje {n} del cliente.', { n: first }) : t('Se separó en el saludo inicial.'))
+        : n === 1 ? t('Respondió igual.') : t('Respondió igual en los {n} turnos.', { n }), ' ' + t('Contra {env}, a las {time}. Las fechas y horarios que dependen del día pueden cambiar solos.', { env: run.env, time: run.at })),
+      h('button', { class: 'link', onclick: () => setChat(true) }, t('Seguir en el chat de prueba'))),
     rows);
 }
 
@@ -294,74 +294,74 @@ function svDetail(s, redraw) {
   const data = svStartData(s), who = svWho(data);
   const users = svFromStart(s.history).filter((m) => m.from === 'user').length;
   const run = svReplays[s.sessionId];
-  const remove = () => confirmBox('¿Borrar esta conversación?', 'Se borra «' + s.sessionId + '» con todos sus mensajes. No se puede deshacer.', 'Borrar conversación', async () => {
+  const remove = () => confirmBox(t('¿Borrar esta conversación?'), t('Se borra «{id}» con todos sus mensajes. No se puede deshacer.', { id: s.sessionId }), t('Borrar conversación'), async () => {
     try { await svGet('/' + encodeURIComponent(s.sessionId), 'DELETE'); svSel = null; render(); }
-    catch (e) { alert('No se pudo borrar: ' + e.message); }
+    catch (e) { alert(t('No se pudo borrar: {error}', { error: e.message })); }
   });
 
   // la charla: burbujas, y debajo de cada mensaje del cliente lo que entendió el bot (se muestra con «Qué entendió el bot»)
   let lastAt = '';
-  const stamp = (m, cls) => { const t = svTime(m.at); if (t === lastAt) return null; lastAt = t; return h('div', { class: 'sv-at ' + (cls || '') }, t); };
+  const stamp = (m, cls) => { const tm = svTime(m.at); if (tm === lastAt) return null; lastAt = tm; return h('div', { class: 'sv-at ' + (cls || '') }, tm); };
   const items = s.history.map((m) => {
-    if (m.from === 'event' && m.classification) return h('div', { class: 'sv-event' }, 'Clasificada como', svTag(m.classification), '· ' + svTime(m.at));
+    if (m.from === 'event' && m.classification) return h('div', { class: 'sv-event' }, t('Clasificada como'), svTag(m.classification), '· ' + svTime(m.at));
     if (m.from === 'event') return h('div', { class: 'sv-event' }, m.text + ' · ' + svTime(m.at));
     if (m.from === 'user') {
       const ents = (m.entities || []).map((e) => [' ', h('mark', { 'data-entity': e.entity, style: markStyle(entityOf(e.entity)) }, e.value)]);
       const pct = m.confidence != null ? ' (' + Math.round(m.confidence * 100) + '%)' : '';
-      const read = m.answer_to ? ['Lo tomó como respuesta para ', h('strong', {}, m.answer_to)]
-        : m.intent ? [m.fallback ? 'No estuvo seguro. Lo más parecido: ' : 'Entendió ', h('strong', {}, m.intent), pct]
-        : ['No entendió qué quería'];
-      const where = m.flow ? ' · en «' + m.flow + '»' + (m.waiting ? ', esperando ' + m.waiting : '') : '';
+      const read = m.answer_to ? [t('Lo tomó como respuesta para '), h('strong', {}, m.answer_to)]
+        : m.intent ? [m.fallback ? t('No estuvo seguro. Lo más parecido: ') : t('Entendió '), h('strong', {}, m.intent), pct]
+        : [t('No entendió qué quería')];
+      const where = m.flow ? ' · ' + (m.waiting ? t('en «{flow}», esperando {slot}', { flow: m.flow, slot: m.waiting }) : t('en «{flow}»', { flow: m.flow })) : '';
       const missed = !m.answer_to && (!m.intent || m.fallback);
       return [h('div', { class: 'msg user' }, m.text), stamp(m, 'user'),
-        missed ? h('div', { class: 'sv-miss' }, 'No lo entendió') : null,
-        h('div', { class: 'read sv-tech' }, read, ents, where, m.via ? ' · respondió ' + (m.via === 'ia' ? 'la IA' : m.via === 'knowledge' ? 'Conocimiento' : m.via) : '')];
+        missed ? h('div', { class: 'sv-miss' }, t('No lo entendió')) : null,
+        h('div', { class: 'read sv-tech' }, read, ents, where, m.via ? ' · ' + t('respondió {who}', { who: m.via === 'ia' ? t('la IA') : m.via === 'knowledge' ? t('Conocimiento') : m.via }) : '')];
     }
     return [svBubble(m), stamp(m)];
   });
-  if (s.ended) items.push(h('div', { class: 'sv-event' }, 'Terminó la conversación · ' + svTime(s.updated)));
-  const log = h('div', { class: 'sv-log' + (svTech ? ' tech' : '') }, items.length ? items : h('p', { class: 'help' }, 'Esta conversación no tiene mensajes.'));
+  if (s.ended) items.push(h('div', { class: 'sv-event' }, t('Terminó la conversación') + ' · ' + svTime(s.updated)));
+  const log = h('div', { class: 'sv-log' + (svTech ? ' tech' : '') }, items.length ? items : h('p', { class: 'help' }, t('Esta conversación no tiene mensajes.')));
   const tech = h('button', { class: 'btn quiet small sv-toggle', 'aria-pressed': String(svTech), onclick: (e) => {
     svTech = !svTech; try { localStorage.setItem('parla.svTech', svTech ? '1' : '0'); } catch {}
     e.currentTarget.setAttribute('aria-pressed', String(svTech)); log.classList.toggle('tech', svTech);
-  } }, icon('sliders'), 'Qué entendió el bot');
+  } }, icon('sliders'), t('Qué entendió el bot'));
 
   // resumen arriba: quién, cómo terminó, si pasó a una persona, si algo falló
   const ho = s.handoff || (s.history.some((m) => m.from === 'human') ? {} : null);
   const errors = s.history.filter((m) => m.from === 'bot' && m.text.startsWith('⚠')).length;
   const dataList = Object.entries(data);
   const facts = [
-    ['Datos de inicio', dataList.length ? h('span', { class: 'sv-data' }, dataList.map(([k, v]) => h('span', {}, h('b', {}, k + ' '), svValue(v)))) : 'No llegaron datos al empezar'],
-    ['Resultado', svTags(s.classifications) || h('span', { class: 'sv-tag none' }, 'Sin clasificar')],
-    ho ? ['Persona', ho.active ? svHandBadge(ho) : h('span', { class: 'sv-badge quiet' }, icon('hand'), 'Pasó a una persona' + (ho.by ? ' (' + ho.by + ')' : '') + (ho.reason ? ': ' + ho.reason : ''))] : null,
-    errors ? ['Errores', h('span', { style: 'color:var(--warn);font-weight:600' }, errors + (errors === 1 ? ' paso falló' : ' pasos fallaron'))] : null,
-    !s.ended && s.waiting_for ? ['Quedó', ['esperando ', h('strong', {}, s.waiting_for), s.flow ? ' en el flujo «' + s.flow + '»' : '']] : null,
+    [t('Datos de inicio'), dataList.length ? h('span', { class: 'sv-data' }, dataList.map(([k, v]) => h('span', {}, h('b', {}, k + ' '), svValue(v)))) : t('No llegaron datos al empezar')],
+    [t('Resultado'), svTags(s.classifications) || h('span', { class: 'sv-tag none' }, t('Sin clasificar'))],
+    ho ? [t('Persona'), ho.active ? svHandBadge(ho) : h('span', { class: 'sv-badge quiet' }, icon('hand'), t('Pasó a una persona') + (ho.by ? ' (' + ho.by + ')' : '') + (ho.reason ? ': ' + ho.reason : ''))] : null,
+    errors ? [t('Errores'), h('span', { style: 'color:var(--warn);font-weight:600' }, t.plural(errors, '{n} paso falló', '{n} pasos fallaron'))] : null,
+    !s.ended && s.waiting_for ? [t('Quedó'), [t('esperando '), h('strong', {}, s.waiting_for), s.flow ? t(' en el flujo «{flow}»', { flow: s.flow }) : '']] : null,
   ].filter(Boolean);
   const slots = Object.entries(s.slots || {}).filter(([, v]) => v != null && v !== '');
 
-  const replayBtn = h('button', { class: 'btn small', disabled: !users || !!run?.running, title: users ? 'Manda los mismos mensajes, con los mismos datos de inicio, al bot del chat de prueba' : 'Esta conversación no tiene mensajes del cliente',
-    onclick: () => svReplay(s, redraw) }, icon('redo'), run?.result ? 'Re-ejecutar de nuevo' : 'Re-ejecutar como prueba');
-  const imperBtn = h('button', { class: 'btn quiet small', disabled: !!run?.running, title: 'Empieza una charla nueva en el chat de prueba con los datos de este cliente',
-    onclick: () => svImpersonate(s, who ? 'el cliente ' + who : 'el cliente de «' + s.sessionId + '»') }, icon('users'), 'Hablar como este cliente');
+  const replayBtn = h('button', { class: 'btn small', disabled: !users || !!run?.running, title: users ? t('Manda los mismos mensajes, con los mismos datos de inicio, al bot del chat de prueba') : t('Esta conversación no tiene mensajes del cliente'),
+    onclick: () => svReplay(s, redraw) }, icon('redo'), run?.result ? t('Re-ejecutar de nuevo') : t('Re-ejecutar como prueba'));
+  const imperBtn = h('button', { class: 'btn quiet small', disabled: !!run?.running, title: t('Empieza una charla nueva en el chat de prueba con los datos de este cliente'),
+    onclick: () => svImpersonate(s, who ? t('el cliente {name}', { name: who }) : t('el cliente de «{id}»', { id: s.sessionId })) }, icon('users'), t('Hablar como este cliente'));
   const cmp = run?.result && svView === 'cmp';
 
   return [
-    h('div', { class: 'sv-head' }, h('div', { class: 'grow stack', style: 'gap:4px;min-width:min(240px,100%)' }, h('h2', {}, who ? 'Cliente ' + who : s.sessionId),
-      h('span', { class: 'sv-sub' }, svState(s.ended), svEnvTag(s), [who ? s.sessionId : null, svChannelName(s.channel), 'empezó ' + svWhen(s.started)].filter(Boolean).join(' · '))),
+    h('div', { class: 'sv-head' }, h('div', { class: 'grow stack', style: 'gap:4px;min-width:min(240px,100%)' }, h('h2', {}, who ? t('Cliente {name}', { name: who }) : s.sessionId),
+      h('span', { class: 'sv-sub' }, svState(s.ended), svEnvTag(s), [who ? s.sessionId : null, svChannelName(s.channel), t('empezó {when}', { when: svWhen(s.started) })].filter(Boolean).join(' · '))),
       h('div', { class: 'sv-actions' }, replayBtn, imperBtn,
-        canEdit() && users ? h('button', { class: 'btn quiet small', title: 'Guarda esta charla en Pruebas, con lo que respondió el bot como lo esperado',
-          onclick: () => window.testFromHistory(s.history, s.slots, who ? 'Cliente ' + who : s.sessionId) }, icon('check'), 'Guardar como test') : null,
-        iconBtn('trash', 'Borrar conversación', remove))),
-    h('p', { class: 'sv-note' }, icon('globe'), h('span', {}, 'Re-ejecutar y hablar como el cliente usan el chat de prueba con ' + svTestEnv() + ' (se elige arriba del chat) y llaman de verdad a las integraciones del bot: APIs, reservas.')),
-    run?.running ? h('div', { class: 'notice', role: 'status' }, 'Re-ejecutando: mensaje ' + run.step + ' de ' + run.total + '. Lo ves en vivo en el chat de prueba.') : null,
-    run?.error ? h('div', { class: 'notice warn', role: 'alert' }, 'No se pudo re-ejecutar: ' + run.error + '.') : null,
+        canEdit() && users ? h('button', { class: 'btn quiet small', title: t('Guarda esta charla en Pruebas, con lo que respondió el bot como lo esperado'),
+          onclick: () => window.testFromHistory(s.history, s.slots, who ? t('Cliente {name}', { name: who }) : s.sessionId) }, icon('check'), t('Guardar como test')) : null,
+        iconBtn('trash', t('Borrar conversación'), remove))),
+    h('p', { class: 'sv-note' }, icon('globe'), h('span', {}, t('Re-ejecutar y hablar como el cliente usan el chat de prueba con {env} (se elige arriba del chat) y llaman de verdad a las integraciones del bot: APIs, reservas.', { env: svTestEnv() }))),
+    run?.running ? h('div', { class: 'notice', role: 'status' }, t('Re-ejecutando: mensaje {step} de {total}. Lo ves en vivo en el chat de prueba.', { step: run.step, total: run.total })) : null,
+    run?.error ? h('div', { class: 'notice warn', role: 'alert' }, t('No se pudo re-ejecutar: {error}.', { error: run.error })) : null,
     h('div', { class: 'sv-facts' }, h('dl', { class: 'kv' }, facts.map(([k, v]) => [h('dt', {}, k), h('dd', {}, v)]))),
     h('div', { class: 'sv-bar' },
-      run?.result ? h('div', { class: 'sv-seg', role: 'group', 'aria-label': 'Qué ver' }, [['orig', 'Conversación'], ['cmp', 'Comparar con la re-ejecución']].map(([k, t]) =>
-        h('button', { 'aria-pressed': String(svView === k), onclick: () => { svView = k; redraw(); } }, t))) : h('h2', {}, 'Conversación'),
+      run?.result ? h('div', { class: 'sv-seg', role: 'group', 'aria-label': t('Qué ver') }, [['orig', t('Conversación')], ['cmp', t('Comparar con la re-ejecución')]].map(([k, txt]) =>
+        h('button', { 'aria-pressed': String(svView === k), onclick: () => { svView = k; redraw(); } }, txt))) : h('h2', {}, t('Conversación')),
       cmp ? null : tech),
     cmp ? svCompare(s, run) : log,
-    h('details', { class: 'sv-end' }, h('summary', {}, 'Qué quedó anotado al final (' + slots.length + (slots.length === 1 ? ' dato)' : ' datos)')),
-      slots.length ? h('dl', { class: 'kv' }, slots.map(([k, v]) => [h('dt', {}, k), h('dd', {}, svValue(v))])) : h('p', { class: 'help' }, 'No quedó ningún dato anotado.')),
+    h('details', { class: 'sv-end' }, h('summary', {}, t.plural(slots.length, 'Qué quedó anotado al final ({n} dato)', 'Qué quedó anotado al final ({n} datos)')),
+      slots.length ? h('dl', { class: 'kv' }, slots.map(([k, v]) => [h('dt', {}, k), h('dd', {}, svValue(v))])) : h('p', { class: 'help' }, t('No quedó ningún dato anotado.'))),
   ];
 }

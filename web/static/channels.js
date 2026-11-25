@@ -7,11 +7,11 @@ document.head.append(h('style', {}, `
 `));
 
 const CH_HELP = {
-  WHATSAPP_TOKEN: 'Token de acceso permanente (usuario del sistema en Meta Business).',
-  WHATSAPP_APP_SECRET: 'Clave secreta de la app de Meta (Configuración de la app → Básica).',
-  WHATSAPP_VERIFY_TOKEN: 'Inventá una palabra larga y pegala también en Meta como «Token de verificación».',
-  TELEGRAM_TOKEN: 'El token que te da BotFather (123456:ABC…).',
-  TELEGRAM_WEBHOOK_SECRET: 'Se crea solo al tocar «Conectar webhook».',
+  WHATSAPP_TOKEN: t('Token de acceso permanente (usuario del sistema en Meta Business).'),
+  WHATSAPP_APP_SECRET: t('Clave secreta de la app de Meta (Configuración de la app → Básica).'),
+  WHATSAPP_VERIFY_TOKEN: t('Inventá una palabra larga y pegala también en Meta como «Token de verificación».'),
+  TELEGRAM_TOKEN: t('El token que te da BotFather (123456:ABC…).'),
+  TELEGRAM_WEBHOOK_SECRET: t('Se crea solo al tocar «Conectar webhook».'),
 };
 let chInfo = null, chFor = null, chError = '', chNote = '', chEditing = null, chBusy = false;
 
@@ -28,25 +28,25 @@ const chHook = (c) => chBase() + '/api/v1/bots/' + agent.id + '/' + c;
 function chUrl(url) {
   const pre = h('pre', { class: 'wg-snippet' }, url);
   return h('div', { class: 'ch-url' }, pre,
-    h('button', { class: 'btn small', type: 'button', onclick: (e) => wgCopy(url, e.currentTarget) }, icon('check'), h('span', {}, 'Copiar')));
+    h('button', { class: 'btn small', type: 'button', onclick: (e) => wgCopy(url, e.currentTarget) }, icon('check'), h('span', {}, t('Copiar'))));
 }
 
 function chSecrets(c) {
   const have = chInfo?.[c]?.secrets || {};
-  return h('div', { class: 'panel phrases' }, h('strong', {}, 'Claves'),
+  return h('div', { class: 'panel phrases' }, h('strong', {}, t('Claves')),
     Object.keys(have).map((n) => chEditing === n ? scForm(n, () => { chEditing = null; chLoad(); }) : h('div', { class: 'phrase-row' },
       h('span', { class: 'phrase' }, h('code', {}, n), h('small', { class: 'help', style: 'display:block' }, CH_HELP[n])),
-      h('span', { class: have[n] ? 'ch-ok' : 'ch-miss' }, have[n] ? 'Cargada' : 'Falta'),
+      h('span', { class: have[n] ? 'ch-ok' : 'ch-miss' }, have[n] ? t('Cargada') : t('Falta')),
       n === 'TELEGRAM_WEBHOOK_SECRET' ? null
-        : h('button', { class: 'btn quiet small', type: 'button', onclick: () => { chEditing = n; render(); } }, have[n] ? 'Cambiar' : 'Cargar'))));
+        : h('button', { class: 'btn quiet small', type: 'button', onclick: () => { chEditing = n; render(); } }, have[n] ? t('Cambiar') : t('Cargar')))));
 }
 
 function chStatus(c) {
   const s = chInfo?.[c]?.status || {};
   return h('dl', { class: 'kv' },
-    h('dt', {}, 'Último mensaje recibido'), h('dd', {}, s.last_in || 'ninguno desde que arrancó Parla'),
-    h('dt', {}, 'Última respuesta enviada'), h('dd', {}, s.last_out || 'ninguna desde que arrancó Parla'),
-    s.error ? [h('dt', {}, 'Último error'), h('dd', { class: 'wg-error' }, s.error + ' · ' + s.error_at)] : null);
+    h('dt', {}, t('Último mensaje recibido')), h('dd', {}, s.last_in || t('ninguno desde que arrancó Parla')),
+    h('dt', {}, t('Última respuesta enviada')), h('dd', {}, s.last_out || t('ninguna desde que arrancó Parla')),
+    s.error ? [h('dt', {}, t('Último error')), h('dd', { class: 'wg-error' }, s.error + ' · ' + s.error_at)] : null);
 }
 
 function chCheck(c, text, sub) {
@@ -61,7 +61,7 @@ async function chTelegram(connect) {
   try {
     await saveNow();                      // que el servidor ya tenga la dirección pública
     await api('POST', '/' + agent.id + '/channels/telegram', { connect });
-    chNote = connect ? 'Listo: Telegram ya le manda los mensajes a Parla. Probá escribirle a tu bot.' : 'Desconectado: Telegram dejó de mandar mensajes.';
+    chNote = connect ? t('Listo: Telegram ya le manda los mensajes a Parla. Probá escribirle a tu bot.') : t('Desconectado: Telegram dejó de mandar mensajes.');
   } catch (e) { chError = e.message; }
   chBusy = false; chLoad();
 }
@@ -70,30 +70,30 @@ window.channelsView = () => {
   if (chFor !== agent.id) { chFor = agent.id; chInfo = null; chEditing = null; chError = chNote = ''; chLoad(); }
   const wa = chConf('whatsapp'), tg = chConf('telegram'), base = chBase();
   return h('div', { class: 'page' },
-    h('div', { class: 'page-head' }, h('h1', {}, 'Canales')),
-    h('p', { class: 'help' }, 'Conectá este bot a WhatsApp y Telegram: contesta lo publicado en Producción, con sus botones y archivos, y lo que respondés desde la Bandeja también llega por ahí. Guía paso a paso en docs/channels_es.md.'),
+    h('div', { class: 'page-head' }, h('h1', {}, t('Canales'))),
+    h('p', { class: 'help' }, t('Conectá este bot a WhatsApp y Telegram: contesta lo publicado en Producción, con sus botones y archivos, y lo que respondés desde la Bandeja también llega por ahí. Guía paso a paso en docs/channels_es.md.')),
     chError ? h('p', { class: 'notice warn', role: 'alert' }, chError) : null,
     chNote ? h('p', { class: 'notice', role: 'status' }, chNote) : null,
     h('div', { class: 'panel' },
-      h('h2', {}, 'Dirección pública de Parla'),
-      h('p', { class: 'help' }, 'Meta y Telegram tienen que poder llegar a Parla por internet con HTTPS (un servidor, un proxy o un túnel). Escribí la dirección sin nada al final.'),
-      lab('Dirección pública', h('input', { ...bind(chAll(), 'public_url'), onchange: () => render(), placeholder: chInfo?.env_public_url || 'https://bots.midominio.com' })),
-      chInfo?.env_public_url && !chAll().public_url ? h('p', { class: 'help' }, 'Usando PARLA_PUBLIC_URL del servidor.') : null,
-      base && !/^https:\/\//.test(base) ? h('p', { class: 'wg-error' }, 'Tiene que empezar con https://') : null),
+      h('h2', {}, t('Dirección pública de Parla')),
+      h('p', { class: 'help' }, t('Meta y Telegram tienen que poder llegar a Parla por internet con HTTPS (un servidor, un proxy o un túnel). Escribí la dirección sin nada al final.')),
+      lab(t('Dirección pública'), h('input', { ...bind(chAll(), 'public_url'), onchange: () => render(), placeholder: chInfo?.env_public_url || 'https://bots.midominio.com' })),
+      chInfo?.env_public_url && !chAll().public_url ? h('p', { class: 'help' }, t('Usando PARLA_PUBLIC_URL del servidor.')) : null,
+      base && !/^https:\/\//.test(base) ? h('p', { class: 'wg-error' }, t('Tiene que empezar con https://')) : null),
     h('div', { class: 'panel' },
       h('h2', {}, 'WhatsApp'),
-      chCheck('whatsapp', 'Atender por WhatsApp', wa.enabled ? 'Prendido: Parla acepta los mensajes firmados por tu app de Meta.' : 'Apagado: el webhook responde 403.'),
-      lab('Identificador del número (Phone number ID)', h('input', { ...bind(wa, 'phone_number_id'), inputmode: 'numeric', placeholder: '123456789012345' })),
-      h('p', { class: 'help' }, 'En Meta, WhatsApp → Configuración → Webhook: pegá esta URL de devolución de llamada y tu token de verificación, y suscribite a «messages».'),
+      chCheck('whatsapp', t('Atender por WhatsApp'), wa.enabled ? t('Prendido: Parla acepta los mensajes firmados por tu app de Meta.') : t('Apagado: el webhook responde 403.')),
+      lab(t('Identificador del número (Phone number ID)'), h('input', { ...bind(wa, 'phone_number_id'), inputmode: 'numeric', placeholder: '123456789012345' })),
+      h('p', { class: 'help' }, t('En Meta, WhatsApp → Configuración → Webhook: pegá esta URL de devolución de llamada y tu token de verificación, y suscribite a «messages».')),
       chUrl(chHook('whatsapp')),
       chSecrets('whatsapp'), chStatus('whatsapp')),
     h('div', { class: 'panel' },
       h('h2', {}, 'Telegram'),
-      chCheck('telegram', 'Atender por Telegram', tg.enabled ? 'Prendido: Parla acepta los mensajes que traen el secreto del webhook.' : 'Apagado: el webhook responde 403.'),
+      chCheck('telegram', t('Atender por Telegram'), tg.enabled ? t('Prendido: Parla acepta los mensajes que traen el secreto del webhook.') : t('Apagado: el webhook responde 403.')),
       chSecrets('telegram'),
       h('div', { class: 'row' },
-        h('button', { class: 'btn small', type: 'button', disabled: chBusy || !tg.enabled || !/^https:\/\//.test(base), onclick: () => chTelegram(true) }, 'Conectar webhook'),
-        h('button', { class: 'btn quiet small', type: 'button', disabled: chBusy, onclick: () => chTelegram(false) }, 'Desconectar')),
-      h('p', { class: 'help' }, 'Conectar le dice a Telegram que mande los mensajes a ', h('code', {}, chHook('telegram')), '.'),
+        h('button', { class: 'btn small', type: 'button', disabled: chBusy || !tg.enabled || !/^https:\/\//.test(base), onclick: () => chTelegram(true) }, t('Conectar webhook')),
+        h('button', { class: 'btn quiet small', type: 'button', disabled: chBusy, onclick: () => chTelegram(false) }, t('Desconectar'))),
+      h('p', { class: 'help' }, t('Conectar le dice a Telegram que mande los mensajes a '), h('code', {}, chHook('telegram')), t('.')),
       chStatus('telegram')));
 };

@@ -16,7 +16,7 @@
 
   async function transcribe(blob, opts) {   // -> texto (puede ser ''); tira Error con un mensaje para mostrar
     const id = (opts && opts.agent) || (current() && current().id);
-    if (!id) throw new Error('No hay un agente abierto para transcribir el audio.');
+    if (!id) throw new Error(t('No hay un agente abierto para transcribir el audio.'));
     const res = await fetch('/api/agents/' + encodeURIComponent(id) + '/voice/transcribe', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       // context: la última pregunta del bot; el servidor la usa para que Whisper escriba bien «Bogotá», «presencial»…
@@ -24,7 +24,7 @@
     });
     const data = await res.json().catch(() => ({}));
     if (res.status === 401 && window.showLogin) window.showLogin();
-    if (!res.ok || data.error) throw new Error(data.error || 'No pude transcribir el audio.');
+    if (!res.ok || data.error) throw new Error(data.error || t('No pude transcribir el audio.'));
     return (data.text || '').trim();
   }
 
@@ -59,7 +59,7 @@
 
   function browserSay(text, language) {     // voz del navegador: si el servidor no tiene piper
     const synth = window.speechSynthesis;
-    if (!synth) return Promise.reject(new Error('La voz no está disponible.'));
+    if (!synth) return Promise.reject(new Error(t('La voz no está disponible.')));
     const u = new SpeechSynthesisUtterance(text);
     u.lang = language === 'es' ? 'es-AR' : language;
     u.voice = synth.getVoices().find(v => v.lang.replace('_', '-').startsWith(language)) || null;
@@ -109,7 +109,7 @@
       const fail = msg => { state('error', msg); opts.onError && opts.onError(msg); };
       let rec = null, stream = null, cancelled = false, timer = null;
       const stop = () => { cancelled = !rec; clearTimeout(timer); if (rec && rec.state !== 'inactive') rec.stop(); };
-      if (!this.available()) { fail('Este navegador no permite grabar audio.'); return () => {}; }
+      if (!this.available()) { fail(t('Este navegador no permite grabar audio.')); return () => {}; }
       navigator.mediaDevices.getUserMedia({audio: true}).then(s => {
         stream = s;
         if (cancelled) { s.getTracks().forEach(t => t.stop()); state('idle'); return; }
@@ -126,16 +126,16 @@
             const text = await transcribe(blob, opts);
             state('idle');
             if (text) onText(text);
-            else fail('No escuché nada. Probá de nuevo, más cerca del micrófono.');
-          } catch (e) { fail(e.message || 'No pude transcribir el audio.'); }
+            else fail(t('No escuché nada. Probá de nuevo, más cerca del micrófono.'));
+          } catch (e) { fail(e.message || t('No pude transcribir el audio.')); }
         };
         rec.start();
         state('listening');
         timer = setTimeout(stop, opts.maxMs || 55000); // el servidor acepta hasta 60 s
       }).catch(e => {
         fail(e && e.name === 'NotAllowedError'
-          ? 'No tengo permiso para usar el micrófono. Habilitalo en el candado de la barra de direcciones.'
-          : 'No encontré un micrófono disponible.');
+          ? t('No tengo permiso para usar el micrófono. Habilitalo en el candado de la barra de direcciones.')
+          : t('No encontré un micrófono disponible.'));
       });
       return stop;
     },
@@ -165,7 +165,7 @@
       const a = player = new Audio(URL.createObjectURL(blob));
       await new Promise((done, fail) => {
         a.onended = a.onpause = done;
-        a.onerror = () => fail(new Error('No pude reproducir el audio.'));
+        a.onerror = () => fail(new Error(t('No pude reproducir el audio.')));
         a.play().catch(fail);
       }).finally(() => { URL.revokeObjectURL(a.src); if (player === a) player = null; });
     },
@@ -183,7 +183,7 @@
     // suena directo (aec: false) y mientras habla el bot no se escucha el micrófono.
     // call.say(texto) -> 'done' | 'cut'; call.listen() -> texto o null (no habló en 15 s / colgó); mute(bool); close().
     async openCall(opts = {}) {
-      if (!this.available() || !window.AudioContext && !window.webkitAudioContext) throw new Error('Este navegador no permite llamadas de voz.');
+      if (!this.available() || !window.AudioContext && !window.webkitAudioContext) throw new Error(t('Este navegador no permite llamadas de voz.'));
       const ctx = opts.ctx || this.unlock();
       let stream;
       try {
@@ -191,8 +191,8 @@
       } catch (e) {
         ctx.close().catch(() => {});
         throw new Error(e && e.name === 'NotAllowedError'
-          ? 'No tengo permiso para usar el micrófono. Habilitalo en el candado de la barra de direcciones y volvé a llamar.'
-          : 'No encontré un micrófono disponible.');
+          ? t('No tengo permiso para usar el micrófono. Habilitalo en el candado de la barra de direcciones y volvé a llamar.')
+          : t('No encontré un micrófono disponible.'));
       }
       ctx.resume().catch(() => {});
       // El micrófono crudo (PCM) por un AudioWorklet: VAD por cuadro de ~10 ms, pre-roll exacto y WAV sin MediaRecorder.
@@ -200,7 +200,7 @@
         await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([TAP], {type: 'application/javascript'})));
       } catch (e) {
         stream.getTracks().forEach(t => t.stop()); ctx.close().catch(() => {});
-        throw new Error('Este navegador no permite procesar el audio del micrófono (AudioWorklet).');
+        throw new Error(t('Este navegador no permite procesar el audio del micrófono (AudioWorklet).'));
       }
       const tap = new AudioWorkletNode(ctx, 'parla-tap');
       const sink = ctx.createGain();
@@ -251,8 +251,8 @@
           let cut = false, started = false, src = null;
           // sentenceAt: el VAD mide el eco que queda (sobre todo en los primeros 300 ms de cada oración) y pide un margen claro encima
           const turn = {bargeable: !!route, sentenceAt: 0, stop() { cut = true; try { src && src.stop(); } catch (e) { /* ya paró */ } window.speechSynthesis && speechSynthesis.cancel(); }};
-          const synth = t => closed ? Promise.reject(new Error('colgó')) : fetch('/api/voice/speak', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: t, language: language2}), signal: abort.signal})
-            .then(async r => closed ? Promise.reject(new Error('colgó')) : r.ok ? ctx.decodeAudioData(await r.arrayBuffer()) : Promise.reject(new Error((await r.json().catch(() => ({}))).error || 'La voz del bot no está disponible.')));
+          const synth = txt => closed ? Promise.reject(new Error('colgó')) : fetch('/api/voice/speak', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: txt, language: language2}), signal: abort.signal})
+            .then(async r => closed ? Promise.reject(new Error('colgó')) : r.ok ? ctx.decodeAudioData(await r.arrayBuffer()) : Promise.reject(new Error((await r.json().catch(() => ({}))).error || t('La voz del bot no está disponible.'))));
           const play = audio => new Promise(done => {
             if (closed || cut) return done();
             src = ctx.createBufferSource();
