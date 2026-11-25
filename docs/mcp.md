@@ -1,4 +1,4 @@
-# MCP and «Conectar con IA»
+# MCP and “Connect to AI”
 
 **English** · [Español](mcp_es.md)
 
@@ -10,9 +10,9 @@ it, tests it and fixes it.
 
 Parla has to be running while you use it.
 
-## «Conectar con IA» (one click)
+## “Connect to AI” (one click)
 
-In the interface, **Conectar con IA** (Connect to AI) shows Claude Code, Codex, Claude Desktop and Cursor, whether
+In the interface, **Connect to AI** shows Claude Code, Codex, Claude Desktop and Cursor, whether
 they're installed and whether they're already connected. When you connect:
 
 - **Claude Code**: runs `claude mcp add --scope user parla ...` (if it was already there, it removes it and adds it
@@ -23,8 +23,8 @@ they're installed and whether they're already connected. When you connect:
 - **Cursor**: adds `parla` to `~/.cursor/mcp.json`.
 
 Before touching a file it saves a `*.parla-backup` copy; if the file can't be read, it leaves it alone and shows
-you what to paste by hand («Hacerlo a mano», Do it by hand). If Parla has users, it creates an API key for your
-user («Conectar con …») and puts it in `PARLA_TOKEN`. Then restart the assistant (Claude Desktop, Codex and Cursor)
+you what to paste by hand (**Do it manually**). If Parla has users, it creates an API key for your
+user (named «Conectar con …») and puts it in `PARLA_TOKEN`. Then restart the assistant (Claude Desktop, Codex and Cursor)
 and ask it «armame un bot que…» ("build me a bot that…").
 
 This feature only answers requests made to `127.0.0.1`/`localhost`.
@@ -35,7 +35,7 @@ The `mcp` package is already in `requirements.txt`. There are two ways to run it
 
 ```sh
 .venv/bin/python mcp_server.py                         # stdio: the assistant starts it (the usual way)
-make mcp                                               # HTTP at http://127.0.0.1:8001/mcp (see «Hosted»)
+make mcp                                               # HTTP at http://127.0.0.1:8001/mcp (see “Hosted”)
 ```
 
 It uses the official `mcp` 2.x SDK (`MCPServer`). It doesn't talk to the files directly: it calls Parla's HTTP API

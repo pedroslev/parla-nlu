@@ -5,7 +5,7 @@
 Parla exposes two APIs on the same port:
 
 - **The public API `/api/v1`**: the one your website, your system, an IVR or a CRM uses to talk to a bot. It is
-  stable. The same reference, with examples for each bot, is in the UI under **Publicar → API** (Publish → API).
+  stable. The same reference, with examples for each bot, is in the UI under **Publish → API**.
 - **The internal API** (`/api/agents`, `/api/auth`, `/api/users`, `/api/ai`, `/api/voice`, `/api/connect`): the one
   the web UI and the MCP server use. It is documented [below](#internal-api), but it may change between versions.
 
@@ -15,7 +15,8 @@ General notes:
 - Request bodies and responses are JSON. The body must be a JSON object (otherwise 400). Maximum size (otherwise
   413): 25 MB for uploading files, knowledge documents, audio and Rasa projects; 2 MB for audio from the public widget; 1 MB for
   everything else.
-- Errors: `{"error": "mensaje en castellano"}` (a message in Spanish) with 400, 401, 403, 404, 405, 409, 413, 415
+- Errors: `{"error": "mensaje en castellano"}` (in Spanish by default; send `Accept-Language: en` or `pt` for
+  English or Portuguese) with 400, 401, 403, 404, 405, 409, 413, 415
   or 429 (409: publishing to production with failing tests). An exception inside a route (for example, requesting a version that doesn't exist) comes back as 400 with the
   message.
 - `{bot}` can be the id (`654a0008`), the exact name (case-insensitive) or the slug (`pizzeria`). If the name is
@@ -30,7 +31,7 @@ As long as no user exists, everything is open (no login or key required).
 With users, every request to `/api/` (except `/api/auth/*`) needs one of these two:
 
 - **API key** (for your system, the MCP or `curl`): `Authorization: Bearer parla_xxxxxxxx`. Created in
-  **Usuarios → tu usuario → Claves de API** (Users → your user → API keys).
+  **Users → your user → API keys**.
 - **Session cookie** `parla_session` (used by the UI): lasts 12 hours and is stored in `parla.db` (it survives a
   server restart).
 
@@ -41,7 +42,7 @@ Without either: 401. What you can do depends on the user's role:
 | `owner` | Everything, including managing users (`/api/users*`). Sees all bots. |
 | `editor` | Everything except managing users. |
 | `analyst` | Only `GET` requests (read-only), plus `POST /api/agents/{id}/tests/run` (running tests changes nothing). Any other method: 403. |
-| `agent` (support) | Only the Bandeja (Inbox): `GET /api/agents`, `GET /api/agents/{id}`, `GET /api/agents/{id}/inbox`, `POST /api/agents/{id}/sessions/{sid}/take\|reply\|release` and `GET /api/v1/bots/{bot}/sessions/{sid}[/messages]`. |
+| `agent` (support) | Only the Inbox: `GET /api/agents`, `GET /api/agents/{id}`, `GET /api/agents/{id}/inbox`, `POST /api/agents/{id}/sessions/{sid}/take\|reply\|release` and `GET /api/v1/bots/{bot}/sessions/{sid}[/messages]`. |
 
 Users who aren't owners can have a list of visible bots (`bots`). A request to a bot they can't see returns 404, as
 if it didn't exist. `GET /api/v1/bots` and `GET /api/agents` list only the ones they see.
@@ -208,7 +209,7 @@ values and `data` come with personal data masked («[email]», «[teléfono]», 
 ### `GET /api/v1/bots/{bot}/sessions/{sessionId}/messages?after=N`
 
 What's new since index `N` (the `next` of the previous response). Use it to receive what a person writes from the
-Bandeja (Inbox).
+Inbox.
 
 ```json
 {"sessionId": "cliente-42", "messages": [{"from": "human", "text": "Hola Ana, soy Marta", "at": "...", "by": "marta"}],
@@ -254,7 +255,7 @@ and `sessionId` `wa-<phone>` or `tg-<chat_id>`; the `replies` are sent back thro
 Parla rejects with 403 requests to `/api/` that carry an `Origin` header whose host isn't `127.0.0.1:<port>`,
 `localhost:<port>` or one of `PARLA_HOSTS`, so that arbitrary pages can't use your Parla. The only exceptions are
 `events`, `audio` and `sessions/{id}/messages` of a bot with the widget enabled, from the sites listed in
-**Widget web** (Web widget) (`widget.origins`, or `*` for any). For those routes it also answers the `OPTIONS`
+**Web widget** (`widget.origins`, or `*` for any). For those routes it also answers the `OPTIONS`
 preflight (204, methods `POST, GET, OPTIONS`). From your backend (without `Origin`) there is no origin restriction.
 
 In addition, against DNS rebinding, a request to `/api/` whose `Host` isn't `127.0.0.1`, `localhost`, `[::1]` (any
@@ -310,7 +311,7 @@ The actions recorded are listed in [security.md](security.md#audit-log).
 | `POST /api/agents/{id}/train` | `{"fingerprint"?}` | `{"at", "fingerprint", "phrases", "marked", "log"}`; `log` has the steps, the self-evaluation (`self_check`), the CRF and the tips (`warnings`). |
 | `POST /api/agents/{id}/chat` | `{"session", "text", "environment"?}` (`draft` by default) | One turn of the test chat (channel `prueba`): `messages`, `buttons`, `replies`, `nlu` (`intent`, `confidence`, `ranking`, `entities`), `slots`, `trace`, `answer_to`, `rejected`, `fallback`, `handoff`, `language`, `via`, `sources`. |
 | `POST /api/agents/{id}/reset` | `{"session"}` | `{}`. Ends that conversation. |
-| `POST /api/agents/{id}/http` | `{"step": http step, "vars": {slot: value}}` | `{"status", "body"}`: the editor's «Probar consulta» (Test request) (with the agent's secrets). |
+| `POST /api/agents/{id}/http` | `{"step": http step, "vars": {slot: value}}` | `{"status", "body"}`: the editor's **Test the call** (with the agent's secrets). |
 | `POST /api/agents/{id}/functions/test` | `{"function": definition, "inputs": {}}`, with `Content-Type: application/json` (otherwise 415) | `{"ok", "result" \| "error", "traceback"?, "logs", "ms"}` |
 
 ### Versions
@@ -347,12 +348,12 @@ The actions recorded are listed in [security.md](security.md#audit-log).
 | `POST /api/agents/{id}/sessions/{sid}/take` | — | A person takes over the conversation. Returns the state plus `history`. |
 | `POST /api/agents/{id}/sessions/{sid}/reply` | `{"text"}` | Writes to the person (if it wasn't taken, takes it). On a `whatsapp` or `telegram` conversation it is also sent through that channel. |
 | `POST /api/agents/{id}/sessions/{sid}/release` | — | Hands it back to the bot (stops the flow that was halfway through). |
-| `GET /api/agents/{id}/channels` | — | «Canales» (Channels): `{"public_url", "env_public_url", "whatsapp"/"telegram": {"enabled", "webhook", "secrets": {name: loaded?}, "status": {"last_in", "last_out", "error", "error_at"}}}`. Status is in memory. |
+| `GET /api/agents/{id}/channels` | — | **Channels**: `{"public_url", "env_public_url", "whatsapp"/"telegram": {"enabled", "webhook", "secrets": {name: loaded?}, "status": {"last_in", "last_out", "error", "error_at"}}}`. Status is in memory. |
 | `POST /api/agents/{id}/channels/telegram` | `{"connect": true \| false}` | Calls Telegram's `setWebhook` (creating `TELEGRAM_WEBHOOK_SECRET` if missing) or `deleteWebhook`: `{"connected"}`. Owner or editor. |
-| `GET /api/agents/{id}/insights/unrecognized` | Filters `from`, `to`, `channel`, `classification` | `{"groups": [{"label", "count", "texts", "examples", "suggested_intent"}]}`: «Para enseñar» (To teach). |
+| `GET /api/agents/{id}/insights/unrecognized` | Filters `from`, `to`, `channel`, `classification` | `{"groups": [{"label", "count", "texts", "examples", "suggested_intent"}]}`: **Improve**. |
 | `GET /api/agents/{id}/insights/analytics` | The same filters | `{"sessions", "contained", "handoff", "contained_rate", "handoff_rate", "user_messages", "fallbacks", "fallback_rate", "csat", "abandoned", "drop_off", "flows", "by_day"}` |
 
-### AI, voice and «Conectar con IA» (Connect with AI)
+### AI, voice and “Connect to AI”
 
 | Route | Body | Response |
 |---|---|---|

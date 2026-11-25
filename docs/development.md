@@ -74,12 +74,12 @@ All are optional. Nothing loads `.env` automatically: export them in your shell.
 | `parla/runner.py` | `run_function`: functions in a separate process. |
 | `parla/vault.py` | Per-agent secrets: `put`, `delete`, `names`, `values`, `mask`. |
 | `parla/voice.py` | `transcribe`, `speak` and `prewarm` (cache of fixed phrases). |
-| `parla/connect.py` | «Conectar con IA» (Connect with AI). |
+| `parla/connect.py` | “Connect to AI”. |
 | `parla/mcp_server.py` | MCP server: format validator (`validate`), format guide and tools. |
 | `web/index.html` | The UI (JS with no build step): editor, test chat and voice call. Each large section lives in `web/static/*.js`. |
 | `web/static/voice.js` | Dictation, read aloud and the call (local WebRTC + voice activity detector). |
 | `web/static/files.js`, `sessions.js`, `functions.js`, … | Files for the `file` step; conversations (re-run as a test, continue as that customer); functions (editor with syntax highlighting, examples and testing); and the rest of the sections. |
-| `web/static/audit.js` | The «Auditoría» (Audit) page, owner only (`#/auditoria`). |
+| `web/static/audit.js` | The **Audit log** page, owner only (`#/auditoria`). |
 | `web/static/widget.js` | The widget, with no dependencies, in a Shadow DOM. |
 
 On disk (`PARLA_DATA`): `agents/<id>.json` (the draft), `<id>.model.json` and `<id>.crfsuite` (the trained model),
@@ -177,8 +177,9 @@ and, for the tests that need it, starts its own copy of the server on a free por
 ## Style
 
 - **Small functions** that do one thing and read top to bottom.
-- **Comments in Spanish**, to explain the why, not the what. User-facing messages too, in Rioplatense Spanish and
-  saying what to do («Revisá que los slots que usa existan» — check that the slots it uses exist).
+- **Comments in Spanish**, to explain the why, not the what. User-facing messages too, in Rioplatense Spanish
+  (they're the keys that `web/static/i18n.js` and `parla/i18n.py` translate to English and Portuguese) and saying
+  what to do («Revisá que los slots que usa existan» — check that the slots it uses exist).
 - **The simplest thing that works**: standard library before a new dependency, JSON files before a database
   (conversations are the exception: they live in SQLite, still standard library), no abstractions nobody asked
   for.

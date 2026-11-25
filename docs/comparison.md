@@ -22,7 +22,7 @@ chat. It ships an MCP server with 27 tools, versions with `staging` / `productio
 API keys, a per-agent secret vault, an inbox for human handoff, analytics, a "to teach" queue for unrecognized
 phrases and conversation replay against another version. Channels today are the HTTP API (`/api/v1`) and an
 embeddable web widget. It can be deployed with Docker, docker-compose, Kubernetes or k3s. The interface is in
-Spanish (i18n is planned). Parla has a **no-open-core pledge**: every feature stays open source.
+English, Spanish and Portuguese. Parla has a **no-open-core pledge**: every feature stays open source.
 
 ## Summary table
 
@@ -124,7 +124,6 @@ Being honest about gaps matters more than a long feature list. These are on the 
 - **SSO** (SAML / OIDC).
 - **End-to-end conversation test suites** (replay against another version exists; full test suites do not).
 - **Observability exports** (OpenTelemetry, Prometheus or similar).
-- **Interface languages:** the UI is in Spanish; i18n is planned.
 
 If any of these is a hard requirement today, one of the platforms above is probably a better fit.
 

@@ -16,24 +16,25 @@ Between 5 and 10 different ones already work well. Check the self-evaluation aft
 confused, add phrases that tell them apart or merge them.
 
 **I changed phrases and the chat doesn't notice.**
-Click **Entrenar** (Train). The chat uses the latest trained model. While it trains, the bot keeps answering with
+Click **Train**. The chat uses the latest trained model. While it trains, the bot keeps answering with
 the previous one.
 
 **I changed the bot and the API still answers the old way.**
-The API talks to **Producción** (Production). Publish a version and put it in production. (If you never published
+The API talks to **Production**. Publish a version and put it in production. (If you never published
 anything, the API uses the draft.) Conversations already in progress keep the version they started with.
 
 **How do I roll back?**
-In **Versiones** (Versions), point production to the previous version. To undo draft changes, use **Restaurar**
-(Restore) on a version.
+In **Versions**, point production to the previous version. To undo draft changes, click **Use as draft**
+on a version.
 
 **Which languages does it work in?**
-The embedding model is multilingual. The interface and dates are in Spanish; the bot's messages can be translated
+The embedding model is multilingual. The interface is available in English, Spanish and Portuguese; dates are
+understood in Spanish. The bot's messages can be translated
 to Portuguese and English, and Parla detects the language of the first message (or receives it in
 `data.idioma`).
 
 **How do I put it on my website?**
-**Publicar → Widget web** (Publish → Web widget): turn it on, add your site's address and paste the `<script>`:
+**Publish → Web widget**: turn it on, add your site's address and paste the `<script>`:
 ```html
 <script src="http://127.0.0.1:8000/static/widget.js" data-bot="pizzeria" data-title="Hablá con nosotros"
         data-color="#2f6bff" data-greeting="¡Hola!" data-position="right" data-voice="false" async></script>
@@ -43,11 +44,11 @@ the `src` has to point to that address.
 
 **Can I talk to it by voice?**
 Yes, with the voice extras installed: a microphone in the test chat and in the widget (`data-voice="true"`), and in
-**Probar → Llamada (voz)** (Test → Call (voice)) a full voice conversation, like a phone call, that you can
+**Try it → Call (voice)** a full voice conversation, like a phone call, that you can
 interrupt by speaking. See [ai-and-voice.md](ai-and-voice.md#voice).
 
 **Can the bot send a PDF or a photo?**
-Yes, with the «Enviar un archivo» (Send a file) step (`file`): you upload the file from the step itself (up to
+Yes, with the **Send a file** step (`file`): you upload the file from the step itself (up to
 10 MB). The link is public to whoever receives it, so don't upload anything private. See
 [concepts.md](concepts.md#file-send-a-file).
 
@@ -60,11 +61,11 @@ telephony are on the roadmap.
 
 **How do I hand a conversation off to a person?**
 With a `handoff` step, or when the person asks for it («quiero hablar con alguien», "I want to talk to someone").
-It shows up in the **Bandeja** (Inbox): there you take it over, reply and hand it back to the bot. The widget
+It shows up in the **Inbox**: there you take it over, reply and hand it back to the bot. The widget
 receives those replies automatically.
 
 **Where do I see what the bot didn't understand?**
-In **Operar → Para enseñar** (Operate → To teach): grouped by similarity, with a suggested intent, so you can
+In **Operate → Improve**: grouped by similarity, with a suggested intent, so you can
 teach it to an intent.
 
 **I forgot the password of the only owner.**
@@ -77,7 +78,7 @@ Read [security.md](security.md#functions-not-a-sandbox).
 
 **Can I use a model that isn't from Ollama?**
 Yes, any OpenAI-compatible endpoint with `provider: "openai"`: your own (vLLM, llama.cpp server, LM Studio,
-LocalAI) or a hosted one (OpenAI, Azure OpenAI, Groq, OpenRouter), with the API key stored in «Claves». With a hosted
+LocalAI) or a hosted one (OpenAI, Azure OpenAI, Groq, OpenRouter), with the API key stored in **Secrets**. With a hosted
 provider the conversation text leaves your machine. See [ai-and-voice.md](ai-and-voice.md#openai-compatible-endpoints).
 
 **How do I change the theme?**

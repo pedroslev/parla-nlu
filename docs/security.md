@@ -14,7 +14,7 @@ it. This page covers what it protects, what it doesn't, and what to do before ex
   check (see below) stops browsers, but a program like `curl` can send `Host: localhost` and get through anyway.
 - **Create the owner before exposing it.** While there are no users, whoever makes the first `POST /api/users`
   creates the owner, whoever they are. There is no default username or password (there's no `admin/admin`): you
-  create the first user yourself in **Usuarios** (Users) and it becomes the owner (`owner`). From then on all of
+  create the first user yourself in **Users** and it becomes the owner (`owner`). From then on all of
   `/api/` requires a session or a key, except the widget's public chat.
 - Anyone who can edit a bot is trusted: they can make the server call any URL (`http` steps) and, if functions are
   on and they're the owner, run code on the machine.
@@ -44,11 +44,11 @@ it. This page covers what it protects, what it doesn't, and what to do before ex
 ## Audit log
 
 Parla records successful write operations in the `audit` table of `parla.db`: who (user and role), when, on which
-agent, what, and a short detail. The owner sees it in **Auditoría** (Audit, `#/auditoria`, from the avatar menu,
-next to «Administrar usuarios») or with `GET /api/audit` ([api.md](api.md)); other roles get 403.
+agent, what, and a short detail. The owner sees it in **Audit log** (`#/auditoria`, from the avatar menu,
+next to **Manage users**) or with `GET /api/audit` ([api.md](api.md)); other roles get 403.
 
 - Actions: `login` (successful **and failed**, with the IP; never the password), `logout`, `user.create`,
-  `user.update`, `user.role`, `user.delete`, `key.create` (also «Conectar con IA»), `key.revoke`, `agent.create`,
+  `user.update`, `user.role`, `user.delete`, `key.create` (also “Connect to AI”), `key.revoke`, `agent.create`,
   `agent.import`, `agent.save`, `agent.delete`, `agent.train`, `agent.publish`, `agent.deploy`, `agent.restore`,
   `secret.set` / `secret.delete` (the name only, never the value), `file.upload` / `file.delete`,
   `channel.update` (a save that changed `channels`), `channel.telegram`, `inbox.take` / `inbox.release` /
@@ -65,7 +65,7 @@ next to «Administrar usuarios») or with `GET /api/audit` ([api.md](api.md)); o
   with no activity for that many days. Without either, they're kept forever. See
   [concepts.md](concepts.md#retention-and-personal-data).
 - **Masking (`pii_redaction`):** replaces emails, phones, cards, ID numbers and bank accounts with «[email]»,
-  «[teléfono]», etc. in what's **stored** (history, Bandeja, insights, analytics, the API's history). The live turn
+  «[teléfono]», etc. in what's **stored** (history, Inbox, insights, analytics, the API's history). The live turn
   (flow, `http` steps, functions and that turn's reply) still sees the real value, and the conversation's working
   state keeps it until the conversation ends; with masking on, conversations idle for 24 h are closed so it's
   wiped.
@@ -75,18 +75,17 @@ next to «Administrar usuarios») or with `GET /api/audit` ([api.md](api.md)); o
 
 ## API keys
 
-- For the API and MCP: `Authorization: Bearer parla_...`. They're created in **Usuarios → a user → Claves de API**
-  (Users → a user → API keys). Only the owner manages users and keys, for any user.
+- For the API and MCP: `Authorization: Bearer parla_...`. They're created in **Users → a user → API keys**. Only the owner manages users and keys, for any user.
 - They act with the role and bots **of the user they belong to**: an analyst's key can only make `GET` requests.
 - They're shown only once. They're stored as a SHA-256 hash in `users.json`; deleting the key (or the user) cuts
   it off immediately.
 - With a valid key you can call `/api/` even if the `Host` isn't a known one (your backend behind a proxy). With a
   cookie you can't: the `Host` has to be local or in `PARLA_HOSTS`.
 
-### «Conectar con IA» (Connect to AI) (`/api/connect`)
+### “Connect to AI” (`/api/connect`)
 
-Once users exist, every time someone clicks **Conectar** (Connect) Parla **creates a new key** for that user
-(«Conectar con Claude Code», etc.) and puts it in the assistant's configuration:
+Once users exist, every time someone clicks **Connect** Parla **creates a new key** for that user
+(named «Conectar con Claude Code», etc.) and puts it in the assistant's configuration:
 
 - In Claude Code it's registered with `claude mcp add ... -e PARLA_TOKEN=parla_...`: the key goes **on the command
   line**, so while that command runs, anyone who can list processes (`ps`) on the machine can see it.
@@ -94,7 +93,7 @@ Once users exist, every time someone clicks **Conectar** (Connect) Parla **creat
   `~/.codex/config.toml`, the Claude Desktop configuration or `~/.cursor/mcp.json`), with that file's normal
   permissions.
 - Disconnecting doesn't delete the key, and reconnecting creates another one. **Delete the old ones** in
-  **Usuarios → Claves de API**.
+  **Users → API keys**.
 - It only responds if the `Host` is exactly `127.0.0.1:<port>` or `localhost:<port>`: it doesn't work through a
   proxy. It requires `POST` with `Content-Type: application/json`, so an analyst or support user can't use it.
 
@@ -102,10 +101,10 @@ Once users exist, every time someone clicks **Conectar** (Connect) Parla **creat
 
 | Role | In the interface | Can |
 |---|---|---|
-| `owner` | Dueño (Owner) | Everything, including managing users and keys. Always sees every bot. The only one who can create or change function code while functions are on. There must be at least one. |
-| `editor` | Editor | Everything on the bots they see, except managing users and keys. With functions on, **they can't add or change function code**: not when saving the bot, importing one that includes functions, restoring a version with different functions, or with «Probar» (Test) (403). They can delete or reorder them. |
-| `analyst` | Analista (Analyst) | Only `GET` requests, on everything they see: bot definitions, conversations, reports, inbox, key names. Any other method: 403. |
-| `agent` | Atención (Support) | A minimal view: the list of bots and each bot without its definition (no intents, flows, functions or knowledge), the Bandeja (Inbox, `inbox`), taking, replying to and handing back conversations, and reading a conversation via `/api/v1/bots/{bot}/sessions/{id}`. Everything else: 403. |
+| `owner` | Owner | Everything, including managing users and keys. Always sees every bot. The only one who can create or change function code while functions are on. There must be at least one. |
+| `editor` | Editor | Everything on the bots they see, except managing users and keys. With functions on, **they can't add or change function code**: not when saving the bot, importing one that includes functions, restoring a version with different functions, or with **Try it** (403). They can delete or reorder them. |
+| `analyst` | Analyst | Only `GET` requests, on everything they see: bot definitions, conversations, reports, inbox, key names. Any other method: 403. |
+| `agent` | Support | A minimal view: the list of bots and each bot without its definition (no intents, flows, functions or knowledge), the Inbox (`inbox`), taking, replying to and handing back conversations, and reading a conversation via `/api/v1/bots/{bot}/sessions/{id}`. Everything else: 403. |
 
 With functions off (`PARLA_FUNCTIONS=0`) the code rule doesn't apply: an editor can save functions, but they don't
 run.
@@ -172,7 +171,7 @@ authenticates on its own instead:
 - WhatsApp `POST`: `X-Hub-Signature-256` has to be `sha256=` + the HMAC-SHA256 of the raw body with the app secret
   (`WHATSAPP_APP_SECRET`). The verification `GET` has to bring `hub.verify_token` equal to `WHATSAPP_VERIFY_TOKEN`.
 - Telegram `POST`: `X-Telegram-Bot-Api-Secret-Token` has to be equal to `TELEGRAM_WEBHOOK_SECRET` (Parla generates it
-  when you press **Conectar webhook**, Connect webhook).
+  when you press **Connect webhook**).
 - Comparisons are constant-time. Channel off, missing key or bad signature: **403 with no details**. Body up to 1 MB.
 - Only messages for the configured `phone_number_id` are processed; repeated message ids are processed once.
 - The tokens (`WHATSAPP_TOKEN`, `TELEGRAM_TOKEN`) and secrets live in the vault, never in the agent's JSON; outbound
@@ -185,7 +184,7 @@ Setup and limits in [channels.md](channels.md).
 
 ## Key vault (secrets)
 
-In **Publicar → Claves** (Publish → Keys) you store tokens and passwords for external services, per agent.
+In **Publish → Secrets** you store tokens and passwords for external services, per agent.
 
 - They're stored separately, in `agents/<id>.secrets.json` (permissions 600), **unencrypted**: protect the data
   folder as you would a `.env`. They're deleted when the agent is deleted.
@@ -219,7 +218,7 @@ agent's key; review agents built by someone else before enabling them. See
   function.
 - 10 s timeout, up to 1 MB of the response is read, and redirects are followed.
 - **SSRF:** an `http` step calls any URL the Parla server can reach: your internal network, `localhost` (Ollama,
-  other services) or the cloud metadata service (`169.254.169.254`). «Probar consulta» (Test request) returns the
+  other services) or the cloud metadata service (`169.254.169.254`). **Test the call** returns the
   response to whoever runs the test. The same applies to importing knowledge from a URL and to an agent's AI
   address. Any editor can use this: review bots built by an AI or by someone else, and in Kubernetes restrict
   outbound traffic with an egress `NetworkPolicy` (or the server's firewall).
@@ -239,7 +238,7 @@ processes.
   with the owner's key can too.
 - Code that's already saved runs every time a conversation reaches that step, including those from the public
   widget.
-- When they're off, `function` steps and «Probar» (Test) fail with a notice.
+- When they're off, `function` steps and **Try it** fail with a notice.
 
 ```sh
 PARLA_FUNCTIONS=0 .venv/bin/python app.py
@@ -247,7 +246,7 @@ PARLA_FUNCTIONS=0 .venv/bin/python app.py
 
 ## Uploaded files
 
-Files for the «Enviar un archivo» (Send a file) step:
+Files for the **Send a file** step:
 
 - Up to 10 MB. Only `pdf png jpg jpeg gif webp txt csv doc docx xls xlsx ppt pptx zip`. The type comes from the
   extension, never from the browser: HTML and SVG aren't accepted.
@@ -290,7 +289,7 @@ publish it, protect it at the proxy and set `PARLA_MCP_ALLOWED_HOSTS` (the accep
 8. **Backups:** the data folder holds conversations, users and keys (`parla.db` included, see
    [deployment.md](deployment.md#backups)). Keep backups somewhere private and keep
    `users.json` and `*.secrets.json` at permissions 600 when restoring.
-9. Review `http` steps, widget origins and old API keys (especially the ones from «Conectar con IA»).
+9. Review `http` steps, widget origins and old API keys (especially the ones from “Connect to AI”).
 10. If you use MCP with `--http`, protect it at the proxy.
 11. Add a rate limit at the proxy: Parla only has one on login.
 

@@ -21,7 +21,7 @@ An **agent** (or bot) is a JSON file with everything that defines it. The main f
 | `ai` | Local AI (see [ai-and-voice.md](ai-and-voice.md)). |
 | `widget` | `{"enabled", "origins", "title", "color", "greeting", "position", "voice"}`. |
 | `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id"}, "telegram": {"enabled"}}`. Tokens go in the vault, see [channels.md](channels.md). |
-| `ignored_phrases` | Phrases that «Para enseñar» (To teach) no longer shows. |
+| `ignored_phrases` | Phrases that **Improve** no longer shows. |
 | `tests` | Conversation tests: expected conversations that run before publishing to production (see [testing-bots.md](testing-bots.md)). |
 | `retention_days` | Days to keep conversations with no activity. Absent or `null`: `PARLA_RETENTION_DAYS`; `0`: forever. See [Retention and personal data](#retention-and-personal-data). |
 | `pii_redaction` | Mask personal data in stored conversations: `false` (default), `true` (everything) or a list of categories. Same section. |
@@ -48,11 +48,11 @@ A piece of data inside the message. Types (the `kind` in the JSON):
 
 | `kind` | In the UI | How it is recognized |
 |---|---|---|
-| `examples` | «Por los ejemplos que marco en las frases» (By the examples I mark in the phrases) | A CRF (python-crfsuite) learns from the context of the marked values, like Rasa's `CRFEntityExtractor`. Stores the value as it was written. |
-| `list` | «De una lista de opciones» (From a list of options) | `values` and `synonyms` (`{"muzzarella": ["muzza"]}`): stores the canonical value. |
+| `examples` | From the examples I mark in the phrases | A CRF (python-crfsuite) learns from the context of the marked values, like Rasa's `CRFEntityExtractor`. Stores the value as it was written. |
+| `list` | From a list of options | `values` and `synonyms` (`{"muzzarella": ["muzza"]}`): stores the canonical value. |
 | `number`, `email`, `phone`, `dni` | Número, email, teléfono, DNI (number, email, phone, national ID) | A regex set by the UI. |
-| `date` | «Fecha u hora» (Date or time) | Rules for Rioplatense Spanish (`dates.py`): «mañana», «el jueves que viene a la tarde», «15/12 a las 10». Stores `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`. |
-| `custom` | «Un formato propio (regex)» (A custom format) | Your regex (case-insensitive). If it has a group, stores group 1. |
+| `date` | Date or time | Rules for Rioplatense Spanish (`dates.py`): «mañana», «el jueves que viene a la tarde», «15/12 a las 10». Stores `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`. |
+| `custom` | A custom format (regex) | Your regex (case-insensitive). If it has a group, stores group 1. |
 
 In practice the engine decides by the fields, not by `kind`: if there is a `regex`, it uses the regex; if there are
 `values`, the list; if it is `date`, the date rules; if it has none of those, the CRF learns it. Marks in phrases are
@@ -76,7 +76,7 @@ doesn't end up in `cantidad`).
 - Without an entity (or with an `examples` entity), the whole answer to the question is stored.
 - With AI: `{"name": "nombre", "fill": "ai", "description": "el nombre y apellido de la persona"}` lets the AI read
   the value from the message (only if it is written there).
-- `"start": true` marks it as initial data: «Empezar con datos» (Start with data) in the test chat shows only those.
+- `"start": true` marks it as initial data: **Start with data** in the test chat shows only those.
   It doesn't change the engine: when a conversation is started through the API, any `data` field named like a slot
   is stored.
 
@@ -193,14 +193,14 @@ The function is defined in `functions`:
 ```
 It receives the slots it declares in `inputs` (and `inputs["secret"]["API_KEY"]`). Whatever it returns under a slot's
 name is stored automatically (`auto_save`, on by default). If it fails and no `saves` looks at `ok` or `error`, the
-flow stops with a warning. Timeout 5 s. JavaScript requires Node.js. The **Funciones** (Functions) section has
+flow stops with a warning. Timeout 5 s. JavaScript requires Node.js. The **Functions** section has
 ready-to-use examples and a button to test them. See [security.md](security.md): it is not a sandbox.
 
 ### `handoff`: hand over to a person
 ```json
 {"type": "handoff", "text": "Te paso con alguien del local.", "reason": "reclamo"}
 ```
-The bot goes quiet and the conversation appears in the **Bandeja** (Inbox) until a person hands it back. Without
+The bot goes quiet and the conversation appears in the **Inbox** until a person hands it back. Without
 `text`, it uses the one from `system.handoff`.
 
 ### `agent`: let the AI converse
@@ -242,7 +242,7 @@ Conversation repairs that come enabled (or not) and are edited in `system`:
 | `anything_else` | off | When a flow finishes: «¿Te ayudo con algo más?» (Can I help you with anything else?). |
 | `resume` | on | When returning from an interruption: «Sigamos con lo de antes.» (Let's continue where we left off.). |
 | `correction` | on | «mejor de fugazza» (make it fugazza instead) while it asks something else: changes a value already given (only slots this flow has already asked for) and continues from that question. |
-| `handoff` | on | «quiero hablar con una persona» (I want to talk to a person): hands over to the Bandeja. |
+| `handoff` | on | «quiero hablar con una persona» (I want to talk to a person): hands over to the Inbox. |
 | `csat` | off | When the conversation's first flow finishes: «¿Cómo te atendí? Del 1 al 5.» (How did I do? From 1 to 5.) with buttons. Accepts `4` or `4/5`. |
 
 Each one has `enabled`, `text` (and `translations`) and, for those recognized by phrases (`cancel`, `repeat`,
@@ -307,26 +307,26 @@ wins). Messages use `translations[language]` if present; otherwise, the original
 
 ## Versions and environments
 
-- **Borrador** (Draft): what you edit.
-- **Versión** (Version): a numbered, immutable copy of the draft, with its own trained model.
-- **Entornos** (Environments): `staging` (Pruebas) and `production` (Producción) each point to a version.
+- **Draft**: what you edit.
+- **Version**: a numbered, immutable copy of the draft, with its own trained model.
+- **Environments**: `staging` (**Staging**) and `production` (**Production**) each point to a version.
 
 The API talks to `production` by default (or to the draft if nothing has been published yet). Each conversation
 stays tied to the version it started with: publishing doesn't change the steps in the middle of a conversation.
-Rollback = pointing the environment to another version. «Restaurar» (Restore) brings the draft back to what a
+Rollback = pointing the environment to another version. **Use as draft** brings the draft back to what a
 version had.
 
 What belongs to the bot rather than to a version: secrets, files, conversations and the operational settings
-`retention_days` and `pii_redaction` (they aren't versioned and «Restaurar» keeps them).
+`retention_days` and `pii_redaction` (they aren't versioned and **Use as draft** keeps them).
 
-The conversation **tests** (section «Tests») are part of the definition, so each version keeps its own. Publishing
+The conversation **tests** (section **Tests**) are part of the definition, so each version keeps its own. Publishing
 to `production` runs them against the draft first and stops if any fails; publishing to `staging` and `deploy`
 don't. See [testing-bots.md](testing-bots.md).
 
 ## Retention and personal data
 
-Conversations are stored in `parla.db`, in the data folder. Both settings are in the agent's **Ajustes**
-(Settings) → **Privacidad y datos** (Privacy and data).
+Conversations are stored in `parla.db`, in the data folder. Both settings are in the agent's **Settings** →
+**Privacy and data**.
 
 **Retention (`retention_days`).** Conversations whose last activity is older than that many days are deleted. Without
 the field (or `null`), `PARLA_RETENTION_DAYS` applies; `0`, or neither of the two, keeps them forever. The cleanup
@@ -343,14 +343,14 @@ never deletes them.
 | `id` | «[documento]» | CUIT/CUIL (11 digits), DNI (7 or 8 digits, with or without dots) and any other run of 9 or more digits. |
 | `bank` | «[cuenta]» | CBU/CVU (22 digits) and IBAN (validated with mod 97). |
 
-It applies to what is **stored**: the history text, entity values and the start data. So the Bandeja (Inbox), the
-conversation viewer, «lo que no entendió», analytics and the API's history see the masked text. It doesn't apply
+It applies to what is **stored**: the history text, entity values and the start data. So the Inbox, the
+conversation viewer, **Improve**, analytics and the API's history see the masked text. It doesn't apply
 to the live turn: the flow, `http` steps and functions get the real value, and that turn's reply carries the real
 text. Slots and the AI context keep the real values while the conversation is open (later steps need them) and
 are wiped when it ends; with masking on, conversations idle for 24 hours (not in handoff) are closed so that
 happens.
 
 Limits: it's a heuristic, so it can miss a format or mask a number that isn't personal data (an order number with 9
-or more digits); the operator's replies in the Bandeja are stored masked too (a widget reading the history sees
+or more digits); the operator's replies in the Inbox are stored masked too (a widget reading the history sees
 them masked); turning it on doesn't rewrite what was already stored (each conversation is masked from its next
 save on); and it doesn't apply to the server's console output.

@@ -27,7 +27,7 @@ En **Versiones**, apuntá producción a la versión anterior. Para deshacer camb
 versión.
 
 **¿En qué idiomas funciona?**
-El modelo de vectores es multilingüe. La interfaz y las fechas están en español; los mensajes del bot se pueden
+El modelo de vectores es multilingüe. La interfaz está en español, inglés y portugués; las fechas se entienden en español; los mensajes del bot se pueden
 traducir a portugués e inglés y Parla detecta el idioma del primer mensaje (o lo recibe en `data.idioma`).
 
 **¿Cómo lo pongo en mi web?**

@@ -3,12 +3,12 @@
 **English** · [Español](channels_es.md)
 
 A bot can answer on **WhatsApp** (Meta's WhatsApp Business Cloud API) and **Telegram**, besides the web widget and
-the API. It is the same bot and the same conversation engine: it answers with what is published in **Producción**
-(Production), or the draft if nothing has been published yet, with its buttons and files. Conversations show up in
-**Conversaciones** (Conversations) with channel `whatsapp` or `telegram`. When the conversation is handed to a person, what
-that person writes in the **Bandeja** (Inbox) reaches the customer's WhatsApp or Telegram too.
+the API. It is the same bot and the same conversation engine: it answers with what is published in **Production**,
+or the draft if nothing has been published yet, with its buttons and files. Conversations show up in
+**Conversations** with channel `whatsapp` or `telegram`. When the conversation is handed to a person, what that
+person writes in the **Inbox** reaches the customer's WhatsApp or Telegram too.
 
-Everything is configured in **Publicar → Canales** (Publish → Channels).
+Everything is configured in **Publish → Channels**.
 
 ## Requirements
 
@@ -21,7 +21,7 @@ Everything is configured in **Publicar → Canales** (Publish → Channels).
   - `POST /api/v1/bots/{bot}/telegram`
 - **Tell Parla its public address**, in one of two ways:
   - The `PARLA_PUBLIC_URL` environment variable (`https://bots.mydomain.com`), for the whole server.
-  - **Dirección pública** (Public address) in **Canales**, per bot (`channels.public_url` in the agent JSON). It wins over the variable.
+  - **Public address** in **Channels**, per bot (`channels.public_url` in the agent JSON). It wins over the variable.
 
   It is used to show the webhook URL and to connect Telegram. You **don't** need to add that domain to
   `PARLA_HOSTS`: webhooks are allowed from any `Host` (they authenticate with a signature, see below).
@@ -34,8 +34,7 @@ you a test number).
 1. **Create the app.** At [developers.facebook.com](https://developers.facebook.com/apps) → *Create app* → type
    *Business*. Add the **WhatsApp** product.
 2. **Phone number ID.** In *WhatsApp → API Setup*, choose the number (or the test one) and copy the **Phone number
-   ID** (a long number; not the phone number itself). In Parla, **Canales → WhatsApp → Identificador del número**
-   (Phone number ID).
+   ID** (a long number; not the phone number itself). In Parla, **Channels → WhatsApp → Phone number ID**.
 3. **Permanent token.** The token shown in *API Setup* lasts 24 hours: good for a first test only. For real use:
    *Business Settings → Users → System users* → add one (admin) → *Assign assets*: your app, with full control →
    *Generate token* with the permissions `whatsapp_business_messaging` and `whatsapp_business_management`. In
@@ -44,28 +43,28 @@ you a test number).
    to check that each message really comes from Meta (`X-Hub-Signature-256` header).
 5. **Verify token.** Make up a long random word (for example the output of `openssl rand -hex 24`) and load it in
    `WHATSAPP_VERIFY_TOKEN`.
-6. **Turn on** «Atender por WhatsApp» (Answer on WhatsApp) in Parla. Until then the webhook answers 403, and Meta can't verify it.
+6. Turn on **Answer on WhatsApp** in Parla. Until then the webhook answers 403, and Meta can't verify it.
 7. **Webhook.** In Meta, *WhatsApp → Configuration → Webhook → Edit*:
-   - *Callback URL*: the one shown by **Canales** (`https://bots.mydomain.com/api/v1/bots/<id>/whatsapp`).
+   - *Callback URL*: the one shown by **Channels** (`https://bots.mydomain.com/api/v1/bots/<id>/whatsapp`).
    - *Verify token*: the same word as `WHATSAPP_VERIFY_TOKEN`.
    - *Verify and save*. Meta makes a `GET` with that token, and Parla answers with the challenge.
    - In *Webhook fields*, **subscribe to `messages`**.
 8. **Test.** With the test number, add your phone to the allowed recipients list in *API Setup*. Write to the
    number: the bot answers. To serve everyone, the app has to be in *Live* mode and the number verified.
 
-**Canales** shows the last message received, the last answer sent and the last error (for example a token
+**Channels** shows the last message received, the last answer sent and the last error (for example a token
 that expired), since Parla started.
 
 ## Telegram
 
 1. Talk to [@BotFather](https://t.me/BotFather), send `/newbot`, pick a name and a user, and copy the **token**
    (`123456789:AA…`).
-2. In Parla, **Canales → Telegram**: turn on «Atender por Telegram» (Answer on Telegram), load the token in `TELEGRAM_TOKEN` and check that
-   the **Dirección pública** (Public address) starts with `https://`.
-3. Press **Conectar webhook** (Connect webhook). Parla generates a random secret (`TELEGRAM_WEBHOOK_SECRET`, in the vault) and calls
+2. In Parla, **Channels → Telegram**: turn on **Answer on Telegram**, load the token in `TELEGRAM_TOKEN` and check that
+   the **Public address** starts with `https://`.
+3. Press **Connect webhook**. Parla generates a random secret (`TELEGRAM_WEBHOOK_SECRET`, in the vault) and calls
    Telegram's `setWebhook` with the URL `…/api/v1/bots/<id>/telegram` and that secret. Telegram sends it in every
    request (`X-Telegram-Bot-Api-Secret-Token` header), and Parla rejects requests that don't have it.
-4. Write to your bot. **Desconectar** (Disconnect) calls `deleteWebhook`.
+4. Write to your bot. **Disconnect** calls `deleteWebhook`.
 
 Telegram only calls webhooks on ports 443, 80, 88 or 8443. To check what Telegram sees:
 `curl https://api.telegram.org/bot<token>/getWebhookInfo` (it shows the last error, if any).
@@ -76,7 +75,7 @@ Telegram only calls webhooks on ports 443, 80, 88 or 8443. To check what Telegra
 |---|---|---|
 | Text | Text message (up to 4096 characters). | Text message (up to 4096), no formatting. |
 | 1 to 3 buttons | Reply buttons (title cut to 20 characters). | One button per row (`inline_keyboard`). |
-| 4 to 10 buttons | A list with a «Opciones» (Options) button (titles cut to 24 characters). | Same as above. |
+| 4 to 10 buttons | A list with an “Options” button, in the bot's language (titles cut to 24 characters). | Same as above. |
 | More than 10 buttons | Only the first 10 are shown. | All of them. |
 | File (`file` step) | It is uploaded to Meta (`/media`) and sent as an image (JPG/PNG up to 5 MB) or a document, with the text as caption. | It is uploaded as a photo (JPG/PNG up to 5 MB) or a document. |
 
@@ -88,7 +87,7 @@ What comes from the person:
 - Text, buttons and list choices go to the bot as a message.
 - Images, audio, documents, videos, stickers and locations aren't downloaded: the bot receives the caption or a
   placeholder (`[imagen]`, `[audio]`…), and the conversation keeps `media` (`type`, `id`, `mime`) so whoever reads the
-  Bandeja knows something arrived. Voice notes aren't transcribed.
+  Inbox knows something arrived. Voice notes aren't transcribed.
 - On Telegram, `/start` starts the conversation from scratch (the `start` event: it runs the `__start__` flow).
   WhatsApp has no such event: the first message goes straight to the bot and the `__start__` flow doesn't run.
 
@@ -97,17 +96,17 @@ Conversation ids are `wa-<phone>` and `tg-<chat_id>`: the same person keeps the 
 ## Handoff to a person
 
 It works the same as on the web: when a flow or the person asks for a human, the conversation shows up in the
-**Bandeja** and the bot stays quiet. The person's messages keep arriving there (without a bot answer); what the human
-writes from the Bandeja is sent through the channel. **Devolver al bot** (Return to the bot) gives it back.
+**Inbox** and the bot stays quiet. The person's messages keep arriving there (without a bot answer); what the human
+writes from the Inbox is sent through the channel. **Hand back to the bot** gives it back.
 
 ## Limits
 
 - **WhatsApp's 24-hour window.** WhatsApp only allows free-form messages within 24 hours of the person's last
   message. After that, a message has to be an approved **template**. Parla **doesn't support templates or
-  starting conversations** yet: a Bandeja reply after 24 hours fails (Meta answers error 131047), and you see that
-  in **Canales → Último error** (Last error).
+  starting conversations** yet: an Inbox reply after 24 hours fails (Meta answers error 131047), and you see that
+  in **Channels → Last error**.
 - No outbound or bulk sending: the bot only answers.
-- The duplicate filter, the per-conversation order and the status in **Canales** live in memory: they are lost on
+- The duplicate filter, the per-conversation order and the status in **Channels** live in memory: they are lost on
   restart and don't work across several replicas (run one; see [deployment.md](deployment.md)).
 - If Meta or Telegram retry a message right after a restart, it could be answered twice.
 - Telegram groups: by default a bot only sees commands and replies to it (BotFather's *privacy mode*).

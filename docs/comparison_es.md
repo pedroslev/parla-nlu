@@ -24,7 +24,7 @@ prueba. Incluye un servidor MCP con 27 herramientas, versiones con `staging` / `
 usuarios, roles y claves de API, una bóveda de secretos por agente, una bandeja para la atención humana,
 analítica, una cola «para enseñar» con las frases no reconocidas y la reproducción de conversaciones contra otra
 versión. Los canales hoy son la API HTTP (`/api/v1`) y un widget web embebible. Se puede desplegar con Docker,
-docker-compose, Kubernetes o k3s. La interfaz está en español (la internacionalización está planificada). Parla
+docker-compose, Kubernetes o k3s. La interfaz está en español, inglés y portugués. Parla
 tiene un **compromiso de no open core**: todas las funciones siguen siendo de código abierto.
 
 ## Tabla resumen
@@ -134,7 +134,6 @@ Ser honestos con lo que falta importa más que una lista larga de funciones. Est
 - **Suites de pruebas de conversación de punta a punta** (existe la reproducción contra otra versión; las suites
   completas, no).
 - **Exportación de observabilidad** (OpenTelemetry, Prometheus o similares).
-- **Idiomas de la interfaz:** la interfaz está en español; la internacionalización está planificada.
 
 Si alguna de estas es un requisito excluyente hoy, probablemente te convenga una de las plataformas de arriba.
 

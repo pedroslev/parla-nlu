@@ -13,7 +13,7 @@ In the UI the section is called **Tests**.
 
 Tests are stored inside the agent JSON, in `"tests": [...]`. That means they travel with the agent: they are
 exported and imported (the `.parla.json` file), they are part of each published version (restoring a version also
-restores its tests) and they show up in the version diff (`tests`, «Tests»).
+restores its tests) and they show up in the version diff (`tests`, **Tests**).
 
 ```json
 {"name": "Pedido completo", "start": {"nombre": "Ana"}, "environment": "draft",
@@ -56,8 +56,8 @@ nombre precargado».
 
 ## How tests run
 
-- In memory, with the engine: no session is saved. Tests never appear in Conversaciones (Conversations), Bandeja
-  (Inbox), Para enseñar (To teach), Reportes (Reports) or the analytics.
+- In memory, with the engine: no session is saved. Tests never appear in Conversations, Inbox, Improve,
+  Reports or the analytics.
 - `http` steps, functions and AI (the `agent` step and the generative fallback) run **for real**. See
   [limitations](#limitations).
 - Against `draft`, tests use the current draft definition. If intents or entities changed since the last training,
@@ -66,19 +66,19 @@ nombre precargado».
 
 ## In the UI
 
-**Tests** is in the side menu, in the «Publicar» (Publish) group, above «Versiones» (Versions).
+**Tests** is in the side menu, in the **Publish** group, above **Versions**.
 
-- It lists the tests. **Correr todos** (Run all) runs the whole suite and **Correr** (Run) a single test, against the
+- It lists the tests. **Run all** runs the whole suite and **Run** a single test, against the
   environment you pick.
-- Each turn shows green or red; the failed checks read «esperaba … / recibió …» (expected … / got …).
+- Each turn shows green or red; the failed checks read “expected … / got …”.
 - Expectations are edited inline: intent (a list), says, buttons (comma-separated), slots (`slot=valor`,
   comma-separated), flow (a list) and handoff (a checkbox). You can also edit the start data and add or remove turns
   and tests.
 
-### «Guardar como test» (Save as test)
+### Save as test
 
-The fastest way to write a test: have the conversation and save it. The button is in **Conversaciones** (on an open
-conversation) and in the **Probar** (Try) chat panel. It turns the transcript into a test with the expectations
+The fastest way to write a test: have the conversation and save it. The button is in **Conversations** (on an open
+conversation) and in the **Try it** chat panel. It turns the transcript into a test with the expectations
 filled in from what happened: the intent, `says` with the bot's last message of each turn, the buttons offered and,
 on the last turn, the final slots.
 
@@ -87,10 +87,10 @@ that matters, or use a regex.
 
 ## Publish gate
 
-Publishing to **Producción** runs the whole suite against the draft first, if the agent has tests. If any test fails,
+Publishing to **Production** runs the whole suite against the draft first, if the agent has tests. If any test fails,
 nothing is published.
 
-- In the UI, the publish dialog shows the failures and a **Publicar igual** (Publish anyway) button.
+- In the UI, the publish dialog shows the failures and a **Publish anyway** button.
 - In the API, `POST /api/agents/{id}/versions` with `"environment": "production"` answers 409:
 
   ```json
@@ -153,7 +153,7 @@ Parla's own CI runs `python -m parla.bottests examples/pizzeria.json` after the 
 
 ### GitHub Actions for your bot
 
-Export your bot («Exportar agente», the `.parla.json` file), commit it to your repository and copy this workflow into
+Export your bot (**Export agent**, the `.parla.json` file), commit it to your repository and copy this workflow into
 `.github/workflows/bot-tests.yml`. Change `bots/mybot.parla.json` to your file's path.
 
 ```yaml

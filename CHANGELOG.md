@@ -9,32 +9,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- English UI: every screen of the web interface in English or Spanish (`web/static/i18n.js`, `t()` with the Spanish
-  text as key), chosen in the ⋯ menu, the home screen or the sign-in screen (`?lang=en` also works) and remembered
-  per browser. Server errors and warnings shown in the UI follow the UI language (`Accept-Language`,
-  `parla/i18n.py`); logs stay in Spanish. The web widget takes its labels from the bot's main language
-  (`data-lang`). Bots whose main language is English get English defaults for the system flows.
-  `tests/test_i18n.py` fails on any UI string without an English translation.
+- English and Portuguese (pt-BR) UI: every screen of the web interface in English, Spanish or Portuguese
+  (`web/static/i18n.js`, `t()` with the Spanish text as key), chosen next to the theme picker (the ⋯ menu, the home
+  screen or the sign-in screen; `?lang=en` also works) and remembered per browser. `PARLA_LANG` sets the install
+  default for users who haven't picked one (`scripts/setup.sh --lang en|es|pt` writes it to `.env`). Server errors
+  and warnings shown in the UI follow the UI language (`Accept-Language`, `parla/i18n.py`); logs stay in Spanish.
+  The web widget takes its labels from the bot's main language (`data-lang`). Bots whose main language is English
+  get English defaults for the system flows. `tests/test_i18n.py` fails on any UI string without an English
+  translation.
 - OpenAI-compatible model endpoints for the AI features (`ai.provider: "openai"`): vLLM, llama.cpp, LM Studio,
   LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter. API key from the agent's vault (`ai.api_key_secret`), JSON mode
-  with a prompt-only fallback, Spanish error messages with the key masked, «Probar conexión» and a privacy warning
+  with a prompt-only fallback, error messages with the key masked, **Test connection** and a privacy warning
   for non-local URLs ([docs/ai-and-voice.md](docs/ai-and-voice.md#openai-compatible-endpoints)).
-- Conversation test suites («Tests»): expected conversations stored in the agent (`tests`), run from the UI, the
+- Conversation test suites (**Tests**): expected conversations stored in the agent (`tests`), run from the UI, the
   API (`POST /api/agents/{id}/tests/run`), the MCP (`run_tests`) and the command line
-  (`python -m parla.bottests`, with GitHub Actions annotations); «Guardar como test» from a conversation or the
+  (`python -m parla.bottests`, with GitHub Actions annotations); **Save as test** from a conversation or the
   test chat; publishing to production runs the suite first and stops on failures unless forced
   ([docs/testing-bots.md](docs/testing-bots.md)).
 - Per-agent conversation retention (`retention_days`, or `PARLA_RETENTION_DAYS` for all agents), applied at startup
   and every hour; uploaded files are never deleted by it.
 - Audit log of write operations (logins, users, keys, agents, versions, secrets, files, channels, Inbox), with an
-  owner-only «Auditoría» page and `GET /api/audit`; entries older than `PARLA_AUDIT_DAYS` (365) are deleted.
+  owner-only **Audit log** page and `GET /api/audit`; entries older than `PARLA_AUDIT_DAYS` (365) are deleted.
 - Optional masking of personal data in stored conversations (`pii_redaction`: emails, phones, Luhn-valid cards,
   DNI/CUIT and other long numbers, CBU/CVU and IBAN). The live turn still sees the real values.
-- «Privacidad y datos» panel in the agent's «Ajustes» for retention and masking.
+- **Privacy and data** panel in the agent's **Settings** for retention and masking.
 - Rasa 3.x project importer (classic and CALM) from the UI, API, CLI and MCP, with a warnings report
   ([docs/migrate-from-rasa.md](docs/migrate-from-rasa.md)).
 - WhatsApp (Cloud API) and Telegram channels: signed webhooks, native buttons, file uploads, Inbox replies
-  delivered to the channel, and a «Canales» screen ([docs/channels.md](docs/channels.md)).
+  delivered to the channel, and a **Channels** screen ([docs/channels.md](docs/channels.md)).
 - Apache-2.0 license, `NOTICE` file and a "no open core" pledge: every feature stays in the open-source project.
 - `CONTRIBUTING.md` (setup, tests, style, DCO sign-off), `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1) and
   `SECURITY.md` (private vulnerability reporting through GitHub).

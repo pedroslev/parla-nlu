@@ -12,8 +12,9 @@ una edición paga que se guarde funciones.
 
 ## Recién salido
 
-- **Interfaz en inglés**: toda la interfaz, los mensajes del servidor y el widget web en inglés o en español, a
-  elección de cada usuario (menú ⋯ o pantalla de entrada); los bots con inglés como idioma principal traen en
+- **Interfaz en inglés y portugués**: toda la interfaz, los mensajes del servidor y el widget web en español, inglés
+  o portugués (pt-BR), a elección de cada usuario (al lado del selector de tema: inicio, menú ⋯ o pantalla de
+  entrada), con un idioma por defecto de la instalación en `PARLA_LANG` (`scripts/setup.sh --lang en|es|pt`); los bots con inglés como idioma principal traen en
   inglés los textos de los flujos del sistema. Para sumar un idioma, ver
   [CONTRIBUTING_es.md](../CONTRIBUTING_es.md#traducciones).
 - **Canal de WhatsApp** (WhatsApp Business Cloud API) y **canal de Telegram**, con botones, archivos y respuestas

@@ -12,8 +12,10 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Shipped recently
 
-- **English UI**: the whole interface, server messages and the web widget in English or Spanish, chosen per user
-  (⋯ menu or sign-in screen); bots whose main language is English get English system-flow defaults. See
+- **English and Portuguese UI**: the whole interface, server messages and the web widget in English, Spanish or
+  Portuguese (pt-BR), chosen per user (next to the theme picker: home screen, ⋯ menu or sign-in screen), with an
+  install default in `PARLA_LANG` (`scripts/setup.sh --lang en|es|pt`); bots whose main language is English get
+  English system-flow defaults. See
   [CONTRIBUTING.md](../CONTRIBUTING.md#translations) to add a language.
 - **WhatsApp channel** (WhatsApp Business Cloud API) and **Telegram channel**, with buttons, files and Inbox
   replies. See [channels.md](channels.md).

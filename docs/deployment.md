@@ -18,7 +18,7 @@ file there (`parla.db`). That shapes how it's deployed:
 | `PARLA_DATA` | `/data` | Agents, versions, conversations, `users.json`, voice models. |
 | `PARLA_EMBED_CACHE` | `/data/models/embeddings` | Embedding model cache (fastembed, ~1.2 GB). |
 | `HF_HOME` | `/data/models/hf` | Hugging Face cache (fastembed downloads). |
-| `PARLA_FUNCTIONS` | `0` | «función» (function) steps (the bots' code). Off in the image; `1` to turn them on. |
+| `PARLA_FUNCTIONS` | `0` | `function` steps (the bots' code). Off in the image; `1` to turn them on. |
 | `PARLA_WHISPER` | `base` | Dictation model (`tiny` if the machine is slow). |
 | `PARLA_LANG` | browser's language | Default interface language (`en`, `es` or `pt`) for users who haven't picked one. |
 | `PARLA_HOSTS` | | Domains (`host` or `host:port`, comma-separated) that can also be used to reach the interface and `/api/`. |
@@ -95,7 +95,7 @@ With the `ai` profile, pull a model and point the agent at Ollama:
 docker compose exec ollama ollama pull qwen2.5:0.5b
 ```
 
-In the agent: **IA → dirección** (AI → address) `http://ollama:11434` (or the interface's download button, which
+In the agent: **AI → URL** `http://ollama:11434` (or the interface's download button, which
 uses that address). Ollama doesn't publish ports: only Parla talks to it.
 
 Data is kept in the `parla-data` and `ollama-models` volumes. `docker compose down` doesn't delete them;
@@ -143,7 +143,7 @@ kubectl apply -n parla -f deploy/k8s/ingress.yaml
 ```
 
 Don't publish `/` or all of `/api/`: with no users created Parla doesn't ask for a login, and the interface over a
-domain needs `PARLA_HOSTS` (see below). If your bots send files (the «Enviar un archivo», Send a file, step), also
+domain needs `PARLA_HOSTS` (see below). If your bots send files (the **Send a file** step), also
 publish `/files/`.
 
 The WhatsApp and Telegram webhooks (`/api/v1/bots/{bot}/whatsapp` and `/telegram`) are under `/api/v1/`, so these
@@ -176,8 +176,8 @@ listens on) or one of `PARLA_HOSTS` is rejected with 403, except the widget's pu
 
 - **The full interface behind a domain (`https://bots.midominio.com`) needs
   `PARLA_HOSTS=bots.midominio.com`.** Without it, the page opens but all of `/api/` (login included) responds 403.
-  With HTTPS, add `PARLA_SECURE_COOKIE=1` or have the proxy send `X-Forwarded-Proto: https`. «Conectar con IA»
-  (Connect to AI) still only works from `127.0.0.1` / `localhost`.
+  With HTTPS, add `PARLA_SECURE_COOKIE=1` or have the proxy send `X-Forwarded-Proto: https`. “Connect to AI”
+  still only works from `127.0.0.1` / `localhost`.
 - To administer remotely without exposing the interface: tunnel to the port, with the same number on both sides.
 
 ```sh
@@ -220,7 +220,7 @@ server {
 ```
 
 - The widget is loaded from `https://bots.midominio.com/static/widget.js` and talks to that same server. Add the
-  site where you embed it in **Widget web → sitios autorizados** (Web widget → authorized sites).
+  site where you embed it in **Web widget → Allowed sites**.
 - WhatsApp and Telegram call `/api/v1/bots/{bot}/whatsapp` and `/telegram`, already covered by `/api/v1/` (see
   [channels.md](channels.md)). Don't rate-limit them too tightly: Meta and Telegram retry when they get errors.
 - Parla has no rate limiting of its own (except on login): add it at the proxy.
@@ -231,10 +231,10 @@ server {
 no default password. So, before publishing anything:
 
 1. Go in through `127.0.0.1` (or the tunnel / port-forward).
-2. In **Usuarios** (Users), create the first user: it becomes the owner and from then on login is required.
+2. In **Users**, create the first user: it becomes the owner and from then on login is required.
 3. Create the others with the minimum role and, for integrations, API keys.
 
-Changing a password: **Usuarios → editar** (Users → edit). Only an owner can do it, for their own or someone
+Changing a password: **Users → Change password**. Only an owner can do it, for their own or someone
 else's. Changing it or deleting the user ends their sessions. If you lost the password of the only owner, stop
 Parla, delete `users.json` from the data folder (it goes back to open, with no users) and create a new one:
 
@@ -326,8 +326,8 @@ docker run --rm -v parla-data:/data -v "$PWD":/backup python:3.12-slim \
   sh -c 'tar xzf /backup/parla-AAAA-MM-DD.tar.gz -C /data && mv /data/parla.db.backup /data/parla.db && chown -R 10001:10001 /data'
 ```
 
-(`AAAA-MM-DD` is the backup's date, YYYY-MM-DD.) To move a single bot to another installation use «Exportar
-agente» / «Importar agente» (Export agent / Import agent); it doesn't carry versions, conversations or keys.
+(`AAAA-MM-DD` is the backup's date, YYYY-MM-DD.) To move a single bot to another installation use **Export
+agent** / **Import agent**; it doesn't carry versions, conversations or keys.
 
 ## Upgrades
 

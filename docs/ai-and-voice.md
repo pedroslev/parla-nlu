@@ -14,7 +14,7 @@ It isn't optional and it isn't "generative AI": it's what the NLU uses to compar
   prefix `task: sentence similarity | query: `. It was chosen by measuring with an appointments bot: it got more
   answers right than `paraphrase-multilingual-MiniLM` and `mpnet`, with no errors, in about 10 ms per message.
 - It's used by intents, [understanding answers by meaning](#understanding-answers-by-meaning), the knowledge base
-  and «Para enseñar» (To teach). It's loaded only once.
+  and **Improve**. It's loaded only once.
 - It's downloaded the first time it's used (~1.2 GB) to `data/models/embeddings` inside the repo, even if you change
   `PARLA_DATA`. For a different folder: `PARLA_EMBED_CACHE=/ruta`.
 
@@ -25,9 +25,9 @@ It isn't optional and it isn't "generative AI": it's what the NLU uses to compar
    ```sh
    ollama pull qwen2.5:0.5b
    ```
-   (`scripts/setup.sh --ollama` does it for you.) You can also download it from the **IA** (AI) section with
-   «Descargar» (Download).
-3. In the agent, **Inteligencia → IA** (Intelligence → AI): turn it on and test the connection.
+   (`scripts/setup.sh --ollama` does it for you.) You can also download it from the **AI** section with
+   **Download**.
+3. In the agent, **Intelligence → AI**: turn it on and test the connection.
 
 Parla talks to Ollama at `http://127.0.0.1:11434`. Ollama is the default and nothing leaves your machine. To use
 another server, see [OpenAI-compatible endpoints](#openai-compatible-endpoints).
@@ -58,7 +58,7 @@ The defaults:
 
 ## OpenAI-compatible endpoints
 
-With `"provider": "openai"` (in the UI: **Programa → Compatible con OpenAI**) every AI feature calls
+With `"provider": "openai"` (in the UI: **Program → OpenAI-compatible**) every AI feature calls
 `POST {url}/chat/completions` (`model`, `messages`, `temperature`, `max_tokens`, `stream: false`). That covers vLLM,
 llama.cpp server, LM Studio, LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter and anything else that speaks that API.
 
@@ -66,7 +66,7 @@ llama.cpp server, LM Studio, LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter and
 |---|---|
 | `url` | Base URL, usually ending in `/v1` (`http://localhost:8000/v1`). A URL with no path (`http://127.0.0.1:1234`) gets `/v1` added. |
 | `model` | The model id the server expects. In the UI it's free text, with suggestions from `GET {url}/models` when the server lists them. |
-| `api_key_secret` | The **name** of a key in the agent's **Claves** (Keys) vault, for example `OPENAI_KEY`. The key itself is never stored in the agent JSON. The «API key» field in the AI screen saves it to the vault for you (as `AI_API_KEY` unless you already picked a name). |
+| `api_key_secret` | The **name** of a key in the agent's **Secrets** vault, for example `OPENAI_KEY`. The key itself is never stored in the agent JSON. The “API key” field in the AI screen saves it to the vault for you (as `AI_API_KEY` unless you already picked a name). |
 | `azure` | `true` for Azure OpenAI: the key goes in the `api-key` header instead of `Authorization: Bearer`, and `?api-version=` is added (`api_version`, default `2024-10-21`). Turned on automatically for `*.openai.azure.com` URLs. |
 
 Examples (`agent.ai`; leave `api_key_secret` out when the server has no key):
@@ -95,13 +95,13 @@ How it behaves:
   `response_format: {"type": "json_object"}` plus the schema in a system message. If the server rejects
   `response_format` with a 400, Parla retries without it (JSON asked for in the prompt only, and pulled out of
   a ```` ```json ```` block if needed) and remembers that for that URL until the server restarts.
-- **Status:** «Volver a mirar» calls `GET {url}/models`. Servers that don't implement it (404) show as
-  "connected, try it": use **Probar conexión** (Test connection), which sends one message and shows the reply and
+- **Status:** **Check again** calls `GET {url}/models`. Servers that don't implement it (404) show as
+  "connected, try it": use **Test connection**, which sends one message and shows the reply and
   the latency.
-- **Errors** are shown in Spanish: 401/403 (bad or missing key, without echoing the provider's message, which often
+- **Errors** are shown in the interface language: 401/403 (bad or missing key, without echoing the provider's message, which often
   repeats part of the key), 404 (wrong URL or model), 429 (rate limit or no credit), 5xx and timeouts. The key is
   masked (`••••`) in every error. When the provider fails, the bot carries on as if the AI were off.
-- **Downloading models** («Descargar») is Ollama-only; on other servers you load the model there.
+- **Downloading models** (**Download**) is Ollama-only; on other servers you load the model there.
 - **Embeddings stay local** (fastembed): intents, meaning matching and the knowledge base search never call the
   provider.
 
@@ -168,7 +168,7 @@ answer with question marks («¿y el jueves hay algo?»); if it's a question, th
 
 ### Knowledge base (`use_knowledge`)
 
-You load documents in **Inteligencia → Conocimiento** (Intelligence → Knowledge): text, HTML, a PDF or a URL (a
+You load documents in **Intelligence → Knowledge**: text, HTML, a PDF or a URL (a
 page of up to 3 MB). Parla splits them into chunks of about 500 characters ("P: / R:" FAQs stay together) and
 searches them with the same embedding model as the NLU.
 
@@ -245,9 +245,9 @@ You need `ffmpeg` on the system for audio formats PyAV can't open (Parla looks f
 
 Where it's used:
 
-- **Test chat**: when you click **Probar** (Test) you choose **Chat** or **Llamada (voz)** (Call (voice)). The
+- **Test chat**: when you click **Try it** you choose **Chat** or **Call (voice)**. The
   chat has a microphone for dictation and a button to read replies aloud.
-- **Llamada (voz)**: the whole conversation by voice, like a phone call. The browser listens with its own voice
+- **Call (voice)**: the whole conversation by voice, like a phone call. The browser listens with its own voice
   detector (it cuts off after ~0.5 s of silence; if you don't speak for 15 s, it keeps waiting without sending
   anything), the server transcribes, the bot replies and the reply is read sentence by sentence while the next one
   is requested. The bot's voice goes through a local WebRTC connection so the browser's echo canceller subtracts it

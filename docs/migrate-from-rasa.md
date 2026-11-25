@@ -10,7 +10,7 @@ Only `.yml`/`.yaml` files are read. Your custom action code (`actions/*.py`) is 
 
 ## How to run it
 
-**From the UI.** On the home screen («Tus agentes»), click **Importar de Rasa** and choose a `.zip` of your project
+**From the UI.** On the home screen (**Your agents**), click **Import from Rasa** and choose a `.zip` of your project
 folder (the one with `domain.yml`, `config.yml` and `data/`). The agent is created and trained, and a dialog lists
 the warnings. Zip it without `models/` and `.venv/` (only the `.yml` matter; maximum 18 MB).
 
@@ -25,7 +25,7 @@ curl -s http://127.0.0.1:8000/api/agents/import/rasa -H 'Content-Type: applicati
 Returns `{"agent": {...}, "warnings": ["..."]}`. Zip limits: 500 `.yml` files, 20 MB uncompressed; paths that are
 absolute or contain `..` are skipped (with a warning).
 
-**From the command line** (doesn't need Parla running; writes a file you can load with «Importar agente»):
+**From the command line** (doesn't need Parla running; writes a file you can load with **Import agent**):
 
 ```sh
 .venv/bin/python -m parla.rasa_import path/to/rasa-project -o moodbot.parla.json
@@ -52,7 +52,7 @@ machine and calls the API. Ask it «import my Rasa bot in ~/bots/moodbot and fix
 | Entity never annotated named `email`, `number`, `phone`, `date`, `time` | The matching preset kind (it probably came from Duckling/spaCy). |
 | Other entities | `examples` kind (learned by the CRF from the annotations). |
 | Slot `from_entity` | Slot with that `entity`. |
-| Slot `from_text`, `from_llm`, no mappings | Slot without entity: takes the whole answer when asked. For `from_llm` there's a warning: turn on AI and use «Lo completa la IA» to extract. |
+| Slot `from_text`, `from_llm`, no mappings | Slot without entity: takes the whole answer when asked. For `from_llm` there's a warning: turn on AI and use **Filled by the AI** to extract. |
 | `categorical` slot with `values` and no entity | A `list` entity with those values. |
 | `bool` slot with no entity | A `list` entity `true`/`false` with yes/no synonyms (en, es, pt). |
 | `from_intent`, `from_trigger_intent`, `custom` mappings, `initial_value`, mapping conditions | Not imported (warning). |

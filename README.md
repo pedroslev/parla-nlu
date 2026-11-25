@@ -30,8 +30,8 @@ message (entities), what to remember (slots) and what to do in each case (flows)
 a side chat panel, publish a version and connect it to your website, your system or an IVR through a simple HTTP
 API.
 
-The interface is available in English and Spanish (pick it in the ⋯ menu or on the sign-in screen), and Parla's
-language understanding is built Spanish-first, with Portuguese and English too.
+The interface is available in English, Spanish and Portuguese (pick it next to the theme picker: home screen,
+⋯ menu or sign-in screen), and Parla's language understanding is built Spanish-first, with Portuguese and English too.
 
 **Who is it for?**
 
@@ -80,17 +80,17 @@ language understanding is built Spanish-first, with Portuguese and English too.
   instantly.
 
 ### Operations
-- **Bandeja** (Inbox): take over a conversation, reply to the person and hand it back to the bot.
+- **Inbox**: take over a conversation, reply to the person and hand it back to the bot.
 - Saved conversations with filters, classifications and daily reports. Each one can be replayed as a test against
   another version, or you can keep talking as that customer.
-- **Para enseñar** (To teach): what people wrote that the bot didn't understand, grouped by similarity and with a
+- **Improve**: what people wrote that the bot didn't understand, grouped by similarity and with a
   suggested intent.
 - Analytics: containment, handoffs, fallbacks, CSAT and drop-off by flow and question.
 
 ### Publishing
 - Draft → immutable numbered versions → `staging` and `production` environments. Diff before publishing, rollback
   by pointing to an earlier version, and each conversation stays tied to the version it started with.
-- Conversation test suites («Tests»): expected conversations stored in the bot, run from the UI, the API, the MCP
+- Conversation test suites (**Tests**): expected conversations stored in the bot, run from the UI, the API, the MCP
   or the command line in CI, and run before every publish to production
   ([docs/testing-bots.md](docs/testing-bots.md)).
 - Public HTTP API (`/api/v1`), web widget embeddable with a `<script>`, agent export and import.
@@ -108,7 +108,7 @@ language understanding is built Spanish-first, with Portuguese and English too.
 
 ### Integrations
 - MCP server with 27 tools to build, validate, train, test, publish and analyze bots.
-- **Conectar con IA** (Connect to AI): one button registers Parla in Claude Code, Codex, Claude Desktop or Cursor.
+- **Connect to AI**: one button registers Parla in Claude Code, Codex, Claude Desktop or Cursor.
 - Functions in Python or JavaScript for logic that an HTTP step can't handle.
 - **Import from Rasa**: upload your Rasa 3.x project (classic or CALM) as a .zip and get a Parla agent plus a list of what
   couldn't be migrated. See [docs/migrate-from-rasa.md](docs/migrate-from-rasa.md).
@@ -160,10 +160,10 @@ python3 -m venv .venv
 
 Open `http://127.0.0.1:8000`. The first time, a sample bot is created («Seguimiento de pedidos», order tracking)
 and, when you train, the embedding model is downloaded (~1.2 GB, only once). To try something more complete,
-import `examples/pizzeria.json` or `examples/turnos-clinica.json` with **Importar agente** (Import agent).
+import `examples/pizzeria.json` or `examples/turnos-clinica.json` with **Import agent**.
 
 **Login:** as long as no user exists, Parla is open: anyone who reaches the page can see and change everything.
-The first user you create (in **Usuarios**, Users) becomes the owner, and from then on login is required.
+The first user you create (in **Users**) becomes the owner, and from then on login is required.
 
 Local AI (optional):
 
@@ -171,7 +171,7 @@ Local AI (optional):
 ollama pull qwen2.5:0.5b          # or: scripts/setup.sh --ollama
 ```
 
-Then turn it on in the agent's **IA** (AI) section. More in [docs/ai-and-voice.md](docs/ai-and-voice.md).
+Then turn it on in the agent's **AI** section. More in [docs/ai-and-voice.md](docs/ai-and-voice.md).
 
 With Docker:
 
@@ -223,13 +223,13 @@ parla/
   brain.py              AI on top of the engine (rescue, slots, reading answers, fallback, agent step)
   llm.py                LLM client (local Ollama / any OpenAI-compatible endpoint)
   knowledge.py          knowledge base: text extraction and search
-  files.py              files sent by the «Enviar un archivo» (Send a file) step
+  files.py              files sent by the “Send a file” step
   dates.py              rule-based natural-language dates
-  insights.py           «para enseñar» (to teach) and analytics
+  insights.py           “Improve” and analytics
   runner.py             functions in a separate process
   vault.py              per-agent secrets
   voice.py              local voice (and cache of pre-generated phrases)
-  connect.py            «Conectar con IA» (Connect to AI)
+  connect.py            “Connect to AI”
   mcp_server.py         MCP server
 web/index.html          the interface
 web/static/*.js         interface sections and the widget

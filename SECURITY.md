@@ -34,7 +34,7 @@ fix before disclosing publicly.
 
 In scope: the code in this repository, including the HTTP server and engine (`parla/`), authentication, roles and
 API keys, the secret vault, the public API and web widget (`/api/v1`, `web/static/widget.js`), the MCP server,
-«Conectar con IA», the `Dockerfile`, `docker-compose.yml` and the manifests in `deploy/`.
+“Connect to AI”, the `Dockerfile`, `docker-compose.yml` and the manifests in `deploy/`.
 
 Out of scope, or working as documented in [docs/security.md](docs/security.md):
 

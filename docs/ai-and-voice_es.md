@@ -96,7 +96,7 @@ Cómo se comporta:
   ```` ```json ```` si hace falta) y lo recuerda para esa URL hasta que se reinicia el servidor.
 - **Estado:** «Volver a mirar» llama a `GET {url}/models`. Los servidores que no lo tienen (404) quedan como
   «conectado, probalo»: usá **Probar conexión**, que manda un mensaje y muestra la respuesta y cuánto tardó.
-- **Errores** en castellano: 401/403 (key mala o faltante, sin repetir el mensaje del proveedor, que suele incluir
+- **Errores** en el idioma de la interfaz: 401/403 (key mala o faltante, sin repetir el mensaje del proveedor, que suele incluir
   parte de la key), 404 (dirección o modelo equivocados), 429 (límite de pedidos o sin crédito), 5xx y timeouts.
   La key se tapa (`••••`) en todos los errores. Si el proveedor falla, el bot sigue como si la IA estuviera apagada.
 - **Descargar modelos** («Descargar») es solo para Ollama; en los otros servidores el modelo se carga ahí.
