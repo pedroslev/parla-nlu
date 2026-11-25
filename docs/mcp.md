@@ -139,6 +139,7 @@ en el proxy (ver [security.md](security.md)).
 | `search_knowledge(agent, query)` | Busca como el bot; `answers` dice si llegaría a contestar (puntaje ≥ `knowledge_threshold`). |
 | `list_unrecognized(agent, date_from, date_to)` | Lo que no entendió, agrupado y con intención sugerida. |
 | `teach_phrases(agent, intent, phrases)` | Agrega frases a una intención (saltea repetidas). No reentrena: después `train_agent`. |
+| `list_files(agent)` | Los archivos que la persona subió al agente (id, nombre, tipo, tamaño), para usarlos en un paso `file`. El MCP no sube archivos. |
 | `list_secret_names(agent)` | Los **nombres** de las claves, cuáles usa y cuáles faltan. El MCP nunca lee ni escribe valores. |
 
 **Prompt**: `build_bot(description)` enseña buenas prácticas: botones para opciones cerradas, conocimiento para

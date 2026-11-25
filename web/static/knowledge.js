@@ -130,7 +130,7 @@ function knEditor(d) {
 }
 
 function knTester() {
-  const th = agent.knowledge_threshold ?? 0.55;
+  const th = agent.knowledge_threshold ?? 0.75;
   const input = h('input', { class: 'grow', value: kn.test, placeholder: 'Por ejemplo: ¿hacen envíos al interior?', 'aria-label': 'Pregunta de prueba', oninput: (e) => { kn.test = e.target.value; } });
   const go = async (e) => {
     e.preventDefault(); if (!kn.test.trim()) return;
@@ -152,7 +152,7 @@ function knTester() {
 }
 
 function knThreshold() {
-  const th = agent.knowledge_threshold ?? 0.55, pct = h('strong', {}, Math.round(th * 100) + '%');
+  const th = agent.knowledge_threshold ?? 0.75, pct = h('strong', {}, Math.round(th * 100) + '%');
   return h('div', { class: 'panel' }, h('h2', {}, 'Qué tan parecido tiene que ser'),
     h('div', { class: 'row' }, 'Flexible', h('input', { class: 'grow', type: 'range', min: 0.3, max: 0.9, step: 0.05, value: th, 'aria-label': 'Parecido mínimo', style: 'padding:0',
       oninput: (e) => { agent.knowledge_threshold = Number(e.target.value); pct.textContent = Math.round(agent.knowledge_threshold * 100) + '%'; touch(); } }), 'Estricto', pct),

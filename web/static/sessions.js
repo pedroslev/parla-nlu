@@ -243,7 +243,7 @@ async function svReplay(s, redraw) {
 }
 async function svImpersonate(s, who) {
   const data = svStartData(s);
-  startData = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, svValue(v)]));   // quedan cargados en «Empezar con datos»
+  startData = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, svValue(v)])); startFor = agent.id;   // quedan cargados en «Empezar con datos» (sin pisar lo guardado)
   setChat(true);
   await startChat(data);
   chat.unshift({ who: 'event sv-imp', text: 'Hablás como ' + who + (Object.keys(data).length ? ', con sus datos de inicio' : ' (esa conversación no trajo datos de inicio)') });
@@ -261,7 +261,7 @@ function svTurns(history) {
   return turns;
 }
 const svBubble = (m) => m.from === 'human' ? h('div', { class: 'msg human' }, h('span', { class: 'who' }, m.by ? m.by + ' (persona)' : 'Una persona del equipo'), m.text)
-  : m.text.startsWith('⚠') ? h('div', { class: 'msg problem' }, 'Error en el flujo: ' + m.text.replace(/^⚠\s*/, '')) : h('div', { class: 'msg bot' }, m.text);
+  : m.text.startsWith('⚠') ? h('div', { class: 'msg problem' }, 'Error en el flujo: ' + m.text.replace(/^⚠\s*/, '')) : h('div', { class: 'msg bot' }, m.file && m.text === m.file.name ? null : m.text, m.file ? window.fileCard(m.file) : null);   // fileCard: /static/files.js
 const svUnderstood = (m) => !m ? '' : m.answer_to ? 'respuesta para ' + m.answer_to : m.intent || 'no entendió';
 
 function svCompare(orig, run) {

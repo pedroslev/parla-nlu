@@ -93,11 +93,12 @@
   .top .logo { font: 700 17px var(--display); color: var(--brand); letter-spacing: -.02em; padding-right: 4px; }
   .import-error { color: var(--warn); }
   .agents { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
-  .agent { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 6px; min-height: 120px; }
-  .agent:hover { border-color: var(--brand); }
-  .agent strong { font: 700 20px/1.2 var(--display); }
-  .agent span { color: var(--muted); font-size: 14px; }
-  .agent.new { border-style: dashed; background: none; color: var(--brand); align-items: center; justify-content: center; font-weight: 600; flex-direction: row; }
+  /* :where() = misma especificidad que «.agent», pero sin pisar «.badge.agent» (el ícono del paso «Conversar con IA») */
+  :where(.agents) > .agent { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 6px; min-height: 120px; }
+  :where(.agents) > .agent:hover { border-color: var(--brand); }
+  :where(.agents) > .agent strong { font: 700 20px/1.2 var(--display); }
+  :where(.agents) > .agent span { color: var(--muted); font-size: 14px; }
+  :where(.agents) > .agent.new { border-style: dashed; background: none; color: var(--brand); align-items: center; justify-content: center; font-weight: 600; flex-direction: row; }
 
   /* Espacio de trabajo */
   .work { height: 100%; display: grid; grid-template: 56px minmax(0, 1fr) / 228px minmax(0, 1fr) 360px; }
@@ -294,8 +295,7 @@
   #chat form input { flex: 1; border-radius: 999px; padding: 10px 16px; }
   #chat details { border-top: 1px solid var(--line); padding: 10px 16px; font-size: 13px; }
   #chat details summary { cursor: pointer; color: var(--muted); font-weight: 500; }
-  #chat .start-box { border-top: 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
-  #chat .start-box[open] { max-height: 45vh; overflow-y: auto; }
+  #chat .start-box { padding: 8px 16px; border-bottom: 1px solid var(--line); }
   .start-box .help { font-size: 13px; margin-top: 4px; }
   .start-box .btn { align-self: flex-start; }
   .msg.event { align-self: center; max-width: 100%; background: none; color: var(--muted); font-size: 13px; text-align: center; padding: 2px 8px; }
@@ -360,6 +360,8 @@ const ICONS = {
   inbox: 'M3 13l3-9h12l3 9v7H3z|M3 13h5l1 3h6l1-3h5', users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z|M2 21c0-4 3-6 7-6s7 2 7 6|M16 3.5a4 4 0 0 1 0 7|M18 15c2.5.5 4 2.5 4 6',
   mic: 'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z|M5 11a7 7 0 0 0 14 0|M12 18v3', volume: 'M4 9h4l5-4v14l-5-4H4z|M16 9a4 4 0 0 1 0 6|M19 6a8 8 0 0 1 0 12',
   hand: 'M8 13V5a1.5 1.5 0 0 1 3 0v6|M11 11V4a1.5 1.5 0 0 1 3 0v7|M14 11V5.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7c-3 0-4.5-1.5-6-4l-1.5-3a1.5 1.5 0 0 1 2.6-1.5L8 15',
+  clip: 'M20 11.5l-8.4 8.4a5 5 0 0 1-7.1-7.1l8.4-8.4a3.3 3.3 0 0 1 4.7 4.7l-8.4 8.4a1.7 1.7 0 0 1-2.4-2.4l7.7-7.7',
+  phone: 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z',
   call: 'M4 4h7v7H4z|M7.5 11v5a3 3 0 0 0 3 3H17|M14 16l3 3-3 3', lightbulb: 'M9 18h6|M10 21h4|M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z',
 };
 const COLORS = [['#FFE566', '#5C4A00'], ['#FFB8D9', '#7A1447'], ['#B5F0B0', '#14531B'], ['#AEDDFF', '#0B4A75'], ['#FFCF99', '#7A3E00'], ['#D9C7FF', '#452089']];
@@ -376,6 +378,7 @@ const KINDS = [
 ];
 const STEP_MENU = [
   ['message', 'chat', 'Enviar un mensaje', 'El bot dice algo'],
+  ['file', 'clip', 'Enviar un archivo', 'Manda un PDF, una imagen o un documento que subiste'],
   ['ask', 'question', 'Hacer una pregunta', 'Pregunta y guarda la respuesta en un slot'],
   ['http', 'globe', 'Consultar un servicio', 'Trae o envía datos por internet (HTTP)'],
   ['function', 'braces', 'Ejecutar una función', 'Corre código propio con los slots que elijas'],
@@ -452,6 +455,7 @@ function h(tag, props, ...kids) {
 function icon(name) {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', 'ic'); s.setAttribute('aria-hidden', 'true');
+  if (!ICONS[name]) { console.warn('[Parla] falta el ícono «' + name + '»'); return s; }   // un ícono que falta no tira abajo la pantalla
   s.innerHTML = ICONS[name].split('|').map((d) => '<path d="' + d + '"/>').join('');
   return s;
 }
@@ -983,7 +987,7 @@ function slotChips(field) {            // botones que insertan {{ slot }} donde 
 function newStep(type) {
   return { type, ...{ message: { text: '' }, ask: { slot: '', text: '' }, http: { method: 'GET', url: '', headers: [], body: '', saves: [] },
     function: { function: '', auto_save: true, saves: [] }, if: { cond: { var: '', op: 'eq', value: '' }, then: [], else: [] }, set: { slot: '', mode: 'text', text: '' }, goto: { flow: '' },
-    call: { flow: '' }, agent: { instructions: '', functions: [], knowledge: true, slots: [], goal: '', max_turns: 8 },
+    call: { flow: '' }, file: { file: '', text: '' }, agent: { instructions: '', functions: [], knowledge: true, slots: [], goal: '', max_turns: 8 },
     handoff: { text: 'Te paso con una persona, ya te escriben.', reason: '' }, classify: { classification: '' }, end: {} }[type] };
 }
 // ---------- idiomas, botones y selección múltiple ----------
@@ -1135,6 +1139,7 @@ function stepView(s, list, i) {
       mode === 'cel' ? h('input', { class: 'grow', ...bind(s, 'expr'), placeholder: 'int(cantidad) * 9500', 'aria-label': 'Fórmula', spellcheck: 'false' }) : null));
   }
   if (s.type === 'classify') return card('classify', 'bookmark', 'Clasificar la conversación', classifyPicker(s));
+  if (s.type === 'file') return card('file', 'clip', 'Enviar un archivo', window.fileStepView(s));   // en /static/files.js
   const here = sel.system ? null : agent.flows[sel.flows]?.name;
   const flowPick = () => [pick([['', 'Elegí un flujo…'], ...agent.flows.filter((f) => f.name !== here).map((f) => [f.name, f.name])], s.flow, (v) => { s.flow = v; touch(); }, 'Flujo'),
     s.flow && !agent.flows.some((f) => f.name === s.flow) ? h('p', { class: 'help', style: 'font-size:14px;color:var(--warn)' }, '«' + s.flow + '» ya no existe. Elegí otro.') : null];
@@ -1272,7 +1277,7 @@ function settingsView() {
 
 // ---------- probar ----------
 const START = '__start__';        // trigger de un flujo que corre apenas empieza la conversación (igual que en parla/server.py)
-let startMoved = null, startData = {}, startOpen = false, testEnv = 'draft';   // testEnv: draft, staging o production (static/releases.js)
+let startMoved = null, startData = {}, testEnv = 'draft';   // testEnv: draft, staging o production (static/releases.js)
 async function startChat(data) {   // empieza una conversación nueva, con los datos que llegarían de afuera (un IVR, un CRM)
   const old = session;
   stopHandoff(); lastLang = null;
@@ -1291,24 +1296,52 @@ async function startChat(data) {   // empieza una conversación nueva, con los d
   } catch (err) { chat.push({ who: 'problem', text: 'No se pudo empezar: ' + err.message }); }
   renderChat();
 }
+// Los datos de inicio quedan guardados por agente en este navegador. startData es la copia en uso (sessions.js la pisa al
+// «Hablar como este cliente», sin guardarla); startFor dice de qué agente es.
+let startFor = null;
+const startKey = () => 'parla.start.' + agent.id;
+function syncStart() {
+  if (startFor === agent.id) return;
+  try { startData = JSON.parse(localStorage.getItem(startKey()) || '{}') || {}; } catch { startData = {}; }
+  startFor = agent.id;
+}
 function startBox() {
+  syncStart();
+  const n = agent.slots.filter((s) => String(startData[s.name] ?? '').trim()).length;
+  return h('div', { class: 'start-box' }, h('button', { type: 'button', class: 'btn quiet small', 'aria-haspopup': 'dialog', onclick: startDialog },
+    icon('sliders'), 'Empezar con datos', n ? h('span', { class: 'chip' }, n + (n === 1 ? ' dato' : ' datos')) : null));
+}
+function startDialog() {
+  syncStart();
   const hasStart = agent.flows.some((f) => f.trigger === START);
   const initial = agent.slots.filter((s) => s.start);   // los marcados como dato inicial; si no hay, todos
   const shown = initial.length ? initial : agent.slots;
-  const go = () => startChat(Object.fromEntries(Object.entries(startData).map(([k, v]) => [k, v.trim()]).filter(([k, v]) => v && agent.slots.some((s) => s.name === k))));
+  const save = () => { try { localStorage.setItem(startKey(), JSON.stringify(startData)); } catch {} };
+  const go = (e) => {
+    e?.preventDefault(); d.close();
+    startChat(Object.fromEntries(Object.entries(startData).map(([k, v]) => [k, String(v).trim()]).filter(([k, v]) => v && agent.slots.some((s) => s.name === k))));
+  };
+  const leave = (fn) => () => { d.close(); fn(); };
   const create = () => {
     const f = { name: uniqueName(agent.flows, 'Bienvenida'), trigger: START, steps: [] };
     agent.flows.push(f); sel.flows = agent.flows.length - 1; sel.system = null; section = 'flows'; touch(); render(); renderChat();
   };
-  return h('details', { class: 'start-box', open: startOpen, ontoggle: (e) => { startOpen = e.target.open; } }, h('summary', {}, 'Empezar con datos'),
-    h('p', { class: 'help' }, 'Probá cómo arranca la conversación cuando llegan datos de antes, por ejemplo el DNI que ya pidió el conmutador.'),
-    shown.length ? shown.map((s) => lab(s.name, h('input', { value: startData[s.name] ?? '', placeholder: 'valor que llega al iniciar', autocomplete: 'off',
-      oninput: (e) => { startData[s.name] = e.target.value; }, onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); go(); } } })))
+  const inputs = shown.map((s) => h('input', { value: startData[s.name] ?? '', placeholder: 'valor que llega al iniciar', autocomplete: 'off',
+    oninput: (e) => { startData[s.name] = e.target.value; save(); } }));
+  const clear = () => { startData = {}; try { localStorage.removeItem(startKey()); } catch {} inputs.forEach((i) => { i.value = ''; }); inputs[0]?.focus(); };
+  const d = h('dialog', { class: 'start-box', 'aria-labelledby': 'start-title' }, h('form', { onsubmit: go },   // Enter en cualquier campo = empezar
+    h('h2', { id: 'start-title' }, 'Empezar con datos'),
+    h('p', { class: 'help' }, 'Probá cómo arranca la conversación cuando llegan datos de antes, por ejemplo el DNI que ya pidió el conmutador. Quedan guardados para la próxima.'),
+    shown.length ? shown.map((s, i) => lab(s.name, inputs[i]))
       : h('p', { class: 'help' }, 'Este agente todavía no tiene slots. Creá uno en Slots para poder cargarle datos.'),
     !initial.length && agent.slots.length > 4 ? h('p', { class: 'help' }, 'Para ver solo los que llegan al iniciar, marcalos como «Dato inicial» en ',
-      h('button', { class: 'link', onclick: () => { section = 'slots'; render(); } }, 'Slots'), '.') : null,
-    hasStart ? null : h('p', { class: 'help' }, 'Los datos se guardan en los slots. Para usarlos apenas empieza, ', h('button', { class: 'link', onclick: create }, 'creá un flujo «Al empezar la conversación»'), '.'),
-    h('button', { class: 'btn small', onclick: go }, 'Empezar conversación'));
+      h('button', { type: 'button', class: 'link', onclick: leave(() => { section = 'slots'; render(); }) }, 'Slots'), '.') : null,
+    hasStart ? null : h('p', { class: 'help' }, 'Los datos se guardan en los slots. Para usarlos apenas empieza, ', h('button', { type: 'button', class: 'link', onclick: leave(create) }, 'creá un flujo «Al empezar la conversación»'), '.'),
+    h('div', { class: 'row' }, h('button', { class: 'btn' }, 'Empezar conversación'),
+      inputs.length ? h('button', { type: 'button', class: 'btn quiet', onclick: clear }, 'Borrar datos') : null,
+      h('button', { type: 'button', class: 'btn quiet', onclick: () => d.close() }, 'Cancelar'))));
+  d.onclose = () => { d.remove(); renderChat(); };
+  document.body.append(d); d.showModal();
 }
 function readLine(m) {
   if (!m.nlu) return null;
@@ -1356,15 +1389,15 @@ function markAnswer(ev, m, slot) {     // "mi nombre es olivia": la persona elig
     h('div', { style: 'padding:4px 8px' }, save)]);
 }
 // ---------- turno: mensajes, botones, quién respondió, idioma y paso a una persona ----------
-let lastLang = null, handoff = null, pollAfter = 0, pollSession = null, voiceState = '', voiceStop = null;
+let lastLang = null, handoff = null, pollAfter = 0, pollSession = null, voiceState = '', voiceStop = null, call = null, callState = '';
 let speakOn = (() => { try { return localStorage.getItem('parla.speak') === '1'; } catch { return false; } })();
 const voiceOk = () => { try { return !!window.parlaVoice?.available?.(); } catch { return false; } };
-const say = (text) => { if (speakOn && voiceOk() && text) Promise.resolve(window.parlaVoice.speak(text, lastLang || langs()[0])).catch(() => {}); };
+const say = (text) => { if (!call && speakOn && voiceOk() && text) Promise.resolve(window.parlaVoice.speak(text, lastLang || langs()[0])).catch(() => {}); };
 function takeTurn(r) {
   lastSlots = r.slots || lastSlots; lastTrace = r.trace || [];
   if (r.language) lastLang = r.language;
   const bots = [];
-  (r.messages || []).forEach((t) => { const m = { who: t.startsWith('⚠') ? 'problem' : 'bot', text: t.replace(/^⚠ /, '') }; chat.push(m); if (m.who === 'bot') bots.push(m); });
+  (r.messages || []).forEach((t, i) => { const m = { who: t.startsWith('⚠') ? 'problem' : 'bot', text: t.replace(/^⚠ /, ''), file: r.replies?.[i]?.file }; chat.push(m); if (m.who === 'bot') bots.push(m); });
   const last = bots[bots.length - 1];
   if (last && r.buttons?.length) last.buttons = r.buttons;               // los botones son del último mensaje
   if (last && r.via) { last.via = r.via; last.sources = r.sources || []; }
@@ -1412,13 +1445,42 @@ async function toggleMic() {            // grabar → pasar a texto → mandar
     voiceStop = await window.parlaVoice.record((text) => {
       voiceState = ''; voiceStop = null;
       if (String(text || '').trim()) sendText(String(text).trim()); else renderChat();
-    }, { language: lastLang || langs()[0], agent: agent.id, onState: (st) => { voiceState = ['listening', 'thinking'].includes(st) ? st : ''; renderChat(); } });
+    }, { language: lastLang || langs()[0], agent: agent.id, onState: (st) => { voiceState = ['listening', 'thinking'].includes(st) ? st : ''; renderChat(); },
+      onError: (msg) => { voiceStop = null; chat.push({ who: 'problem', text: msg }); renderChat(); } });   // antes el error se perdía y el micrófono «no hacía nada»
   } catch (err) { voiceState = ''; voiceStop = null; chat.push({ who: 'problem', text: 'No se pudo usar el micrófono: ' + (err?.message || err) }); renderChat(); }
 }
-const VIA = { ia: ['spark', 'Respondió la IA'], knowledge: ['book', 'Respondió con Conocimiento'] };
+async function startCall() {            // llamada: escucha → pasa a texto → responde el bot → lo lee en voz alta → escucha de nuevo
+  if (call || !agent) return;
+  const id = agent.id;
+  let me;
+  try { me = call = await window.parlaVoice.openCall(); } catch (err) { chat.push({ who: 'problem', text: err.message }); renderChat(); return; }
+  const live = () => call === me && agent?.id === id;
+  const set = (st) => { if (live()) { callState = st; renderChat(); } };
+  let errors = 0;
+  while (live()) {
+    set('listening');
+    let text = null;
+    try { text = await me.listen({ language: lastLang || langs()[0], onState: set }); errors = 0; }
+    catch (err) { if (live()) { chat.push({ who: 'problem', text: err.message }); renderChat(); } if (++errors >= 3) break; continue; }
+    if (!text || !live()) continue;
+    set('thinking');
+    const before = chat.length;
+    await sendText(text);
+    const reply = chat.slice(before).filter((m) => m.who === 'bot').map((m) => m.text).join('\n');
+    if (reply && live()) { set('speaking'); await window.parlaVoice.speak(reply, lastLang || langs()[0]).catch(() => {}); }
+  }
+  if (call === me) hangUp();            // cambió de agente o falló 3 veces seguidas: se corta sola
+}
+function hangUp() {
+  const c = call; call = null; callState = '';
+  try { c?.close(); window.parlaVoice.hush(); } catch {}
+  renderChat();
+}
+const VIA = { ia: ['spark', 'Respondió la IA'], knowledge: ['book', 'Respondió con Conocimiento'], significado: ['spark', 'Lo entendió por el significado'] };
 const sourceName = (x) => typeof x === 'string' ? x : x?.title || x?.doc || x?.text || '';
 function chatItem(m, i) {
-  const out = [h('div', { class: 'msg ' + m.who }, m.who === 'human' ? h('span', { class: 'who' }, m.by ? m.by + ' (persona)' : 'Una persona del equipo') : null, m.text)];
+  const out = [h('div', { class: 'msg ' + m.who }, m.who === 'human' ? h('span', { class: 'who' }, m.by ? m.by + ' (persona)' : 'Una persona del equipo') : null,
+    m.file && m.text === m.file.name ? null : m.text, m.file ? window.fileCard(m.file) : null)];
   if (m.via && VIA[m.via]) {
     const names = (m.sources || []).map(sourceName).filter(Boolean);
     out.push(h('span', { class: 'via', title: names.length ? 'Fuentes: ' + names.join(' · ') : null }, icon(VIA[m.via][0]), VIA[m.via][1], names.length ? ' (' + names.length + (names.length === 1 ? ' fuente)' : ' fuentes)') : null));
@@ -1456,10 +1518,16 @@ function renderChat() {
     agent && canEdit() && testEnv === 'draft' && untrained() && !training ? trainNote() : null,
     handoff ? h('div', { class: 'notice handoff-bar', role: 'status' }, icon('hand'), 'Ahora responde una persona (Bandeja). El bot no contesta hasta que la devuelvan.') : null,
     voiceState ? h('p', { class: 'voice-state', role: 'status' }, voiceState === 'listening' ? 'Escuchando… tocá el micrófono para terminar.' : 'Pasando tu voz a texto…') : null,
+    call ? h('div', { class: 'notice handoff-bar', role: 'status' }, icon('phone'),
+      h('span', { class: 'grow' }, { listening: 'En llamada · Escuchando… hablá cuando quieras.', thinking: 'En llamada · Pensando…', speaking: 'En llamada · Hablando el bot…' }[callState] || 'En llamada'),
+      h('button', { type: 'button', class: 'btn small', style: 'background:var(--warn)', onclick: hangUp }, 'Colgar')) : null,
     h('form', { onsubmit: send }, input,
       voice ? h('button', { type: 'button', class: 'icon-btn' + (voiceState === 'listening' ? ' listening' : ''), style: 'width:40px;height:40px;border-radius:50%',
         'aria-label': voiceState === 'listening' ? 'Terminar de grabar' : 'Hablarle al bot', title: voiceState === 'listening' ? 'Terminar de grabar' : 'Hablarle al bot',
-        disabled: voiceState === 'thinking', onclick: toggleMic }, icon('mic')) : null,
+        disabled: voiceState === 'thinking' || !!call, onclick: toggleMic }, icon('mic')) : null,
+      voice ? h('button', { type: 'button', class: 'icon-btn' + (call ? ' listening' : ''), style: 'width:40px;height:40px;border-radius:50%',
+        'aria-label': call ? 'Colgar la llamada' : 'Llamar al bot (hablar por voz)', title: call ? 'Colgar la llamada' : 'Llamar al bot: hablás y te responde en voz alta',
+        disabled: !!voiceState, onclick: () => call ? hangUp() : startCall() }, icon('phone')) : null,
       voice ? h('button', { type: 'button', class: 'icon-btn', style: 'width:40px;height:40px;border-radius:50%', 'aria-pressed': String(speakOn),
         'aria-label': 'Leer en voz alta las respuestas', title: speakOn ? 'Lee en voz alta las respuestas (tocá para apagar)' : 'Leer en voz alta las respuestas',
         onclick: () => { speakOn = !speakOn; try { localStorage.setItem('parla.speak', speakOn ? '1' : '0'); } catch {} renderChat(); } }, icon('volume')) : null,
@@ -1478,6 +1546,7 @@ addEventListener('DOMContentLoaded', () => {     // después de cargar /static/u
 <script src="/static/trainlog.js"></script>
 <script src="/static/classifications.js"></script>
 <script src="/static/functions.js"></script>
+<script src="/static/files.js"></script>
 <script src="/static/apidocs.js"></script>
 <script src="/static/connect.js"></script>
 <script src="/static/releases.js"></script>

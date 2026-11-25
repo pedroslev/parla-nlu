@@ -32,7 +32,7 @@ PARLA_TOKEN = os.environ.get("PARLA_TOKEN", "")
 # ---------- Lo que acepta el motor (copiado de server.py / web/index.html) ----------
 
 START = "__start__"
-STEP_TYPES = {"message", "ask", "set", "http", "if", "goto", "classify", "function", "end", "handoff", "call", "agent"}
+STEP_TYPES = {"message", "ask", "set", "http", "if", "goto", "classify", "function", "end", "handoff", "call", "agent", "file"}
 SYSTEM_KEYS = ("cancel", "repeat", "clarify", "anything_else", "resume", "correction", "handoff", "csat")   # app.SYSTEM_DEFAULTS
 LANG_OK = re.compile(r"[a-z]{2}")
 SECRET_REF = re.compile(r"\bsecret\.([A-Za-z_]\w*)")
@@ -135,8 +135,9 @@ def names_in(expr):
     return set(_NAMES.findall(_STRINGS.sub('""', expr))) - {"true", "false", "null", "in"}
 
 
-def validate(data):
-    """(agente normalizado, errores, advertencias). Errores = el bot no anda o anda distinto de lo que parece."""
+def validate(data, files=None):
+    """(agente normalizado, errores, advertencias). Errores = el bot no anda o anda distinto de lo que parece.
+    files: [{id, name}] subidos a ese agente, para chequear los pasos file (None = no se sabe: solo advierte)."""
     errors, warnings = [], []
     if not isinstance(data, dict):
         return data, ["el agente tiene que ser un objeto JSON"], []
@@ -150,9 +151,9 @@ def validate(data):
         errors.append("el agente está vacío: Parla rechaza importar un agente sin intents, entities, slots ni flows")
     if not str(agent.get("name") or "").strip():
         warnings.append("falta «name»: se va a llamar «Nuevo agente»")
-    threshold = agent.get("threshold", 0.55)
+    threshold = agent.get("threshold", 0.75)
     if not isinstance(threshold, (int, float)) or isinstance(threshold, bool) or not 0 <= threshold <= 1:
-        errors.append("«threshold» tiene que ser un número entre 0 y 1 (la interfaz usa 0.2 a 0.9; 0.55 por defecto)")
+        errors.append("«threshold» tiene que ser un número entre 0 y 1 (la interfaz usa 0.2 a 0.9; 0.75 por defecto)")
     fb = agent.get("fallback")
     if "fallback" in agent and not (isinstance(fb, str) or (isinstance(fb, list) and fb and all(isinstance(x, str) and x.strip() for x in fb))):
         errors.append("«fallback» tiene que ser un texto o una lista de textos no vacíos")
@@ -221,9 +222,9 @@ def validate(data):
         seen_docs.add(doc.get("id"))
         if not str(doc.get("title") or "").strip():
             warnings.append("knowledge #%d no tiene «title»: el título ayuda a encontrar la respuesta" % n)
-    kt = agent.get("knowledge_threshold", 0.55)
+    kt = agent.get("knowledge_threshold", 0.75)
     if not isinstance(kt, (int, float)) or isinstance(kt, bool) or not 0 <= kt <= 1:
-        errors.append("«knowledge_threshold» tiene que ser un número entre 0 y 1 (0.55 por defecto)")
+        errors.append("«knowledge_threshold» tiene que ser un número entre 0 y 1 (0.75 por defecto)")
 
     # flujos del sistema
     system = agent.get("system")
@@ -413,6 +414,10 @@ def validate(data):
                             "Sumalo a «inputs»%s" % (w, name, "" if name in slot_names else " (y creá ese slot)"))
 
     # intents
+    for f in flows:
+        if "interrupts" in f and f["interrupts"] not in (True, False, "always"):
+            errors.append("flow «%s»: «interrupts» es true, false (no corta una pregunta pendiente) o \"always\" (la corta "
+                          "siempre, aunque el mensaje traiga el dato: urgencias)" % f["name"])
     triggers = [f.get("trigger") for f in flows]
     for i in intents:
         examples = i.get("examples")
@@ -530,6 +535,20 @@ def validate(data):
                     errors.append("%s: «also» es una lista de entidades que también cuentan como respuesta (entidades: %s)"
                                   % (w, ", ".join(sorted(entity_names)) or "ninguna"))
                 bubble(w, step)
+            elif kind == "file":
+                ref = str(step.get("file") or "").strip()
+                known = {x for f in files or [] for x in (f["id"], f["name"].lower())}
+                if not ref:
+                    errors.append("%s: falta «file» con el id o el nombre del archivo (list_files los muestra)" % w)
+                elif files is None:
+                    warnings.append("%s: no puedo comprobar que el archivo «%s» exista: lo sube la persona en Parla "
+                                    "(paso «Enviar un archivo») y list_files muestra los que hay" % (w, ref))
+                elif ref not in known and ref.lower() not in known:
+                    errors.append("%s: el archivo «%s» no está subido a este agente (hay: %s)"
+                                  % (w, ref, ", ".join(f["name"] for f in files) or "ninguno"))
+                check_template(w + " text", step.get("text"))
+                for lang, value in check_translations(w, step.get("translations")).items():
+                    check_template("%s translations.%s" % (w, lang), value)
             elif kind == "handoff":
                 if step.get("reason") is not None and not isinstance(step.get("reason"), str):
                     errors.append("%s: «reason» tiene que ser un texto (por qué se pasa: «reclamo», «venta grande»)" % w)
@@ -698,8 +717,8 @@ def secret_warnings(agent_id, agent):
             "(el MCP no puede ver ni escribir valores)" % ", ".join(missing)] if missing else []
 
 
-def validated(agent_json):
-    agent, errors, warnings = validate(as_dict(agent_json))
+def validated(agent_json, files=None):
+    agent, errors, warnings = validate(as_dict(agent_json), files)
     if errors:
         raise ToolError("El agente tiene errores, no lo guardé:\n- " + "\n- ".join(errors) +
                         ("\nAdvertencias:\n- " + "\n- ".join(warnings) if warnings else ""))
@@ -709,7 +728,7 @@ def validated(agent_json):
 # ---------- Guía del formato ----------
 
 DEMO_IVR = {
-    "name": "Demo IVR", "threshold": 0.55, "fallback": "No entendí, ¿me lo decís de otra forma?",
+    "name": "Demo IVR", "threshold": 0.75, "fallback": "No entendí, ¿me lo decís de otra forma?",
     "intents": [
         {"name": "Consultar saldo", "examples": ["quiero saber mi saldo", "cuánta plata tengo", "saldo de mi cuenta", "cuánto me queda"]},
         {"name": "Hablar con alguien", "examples": ["quiero hablar con una persona", "pasame con un operador", "necesito un humano"]}],
@@ -784,7 +803,7 @@ PIZZA_SNIPPET = {
 }
 
 TURNOS_SNIPPET = {
-    "name": "Turnos médicos", "threshold": 0.55, "fallback": "No te entendí. Puedo darte un turno o cancelarlo.",
+    "name": "Turnos médicos", "threshold": 0.75, "fallback": "No te entendí. Puedo darte un turno o cancelarlo.",
     "classifications": [
         {"name": "Cita agendada", "color": 1, "description": "La persona confirmó un turno"},
         {"name": "Cancelación", "color": 4, "description": "La persona canceló su turno"}],
@@ -824,7 +843,7 @@ def run(inputs):
 """
 
 SOPORTE_SNIPPET = {
-    "name": "Soporte Tienda", "threshold": 0.55, "languages": ["es", "pt"],
+    "name": "Soporte Tienda", "threshold": 0.75, "languages": ["es", "pt"],
     "fallback": ["No te entendí bien. ¿Me lo decís de otra forma?",
                  "Perdón, no lo entendí. Puedo ayudarte con tu pedido, una devolución o un reclamo."],
     "fallback_translations": {"pt": ["Não entendi. Pode dizer de outro jeito?"]},
@@ -835,7 +854,7 @@ SOPORTE_SNIPPET = {
                    "P: ¿Qué días abren?\nR: De lunes a sábado de 9 a 20 h. Los domingos y feriados está cerrado.\n\n"
                    "P: ¿Hacen envíos?\nR: Sí, a todo el país. Llegan en 2 a 5 días hábiles y son gratis desde $ 50.000.\n\n"
                    "P: ¿Cómo puedo pagar?\nR: Con tarjeta de crédito o débito, transferencia o efectivo en el local."}],
-    "knowledge_threshold": 0.55,
+    "knowledge_threshold": 0.75,
     "system": {"cancel": {"enabled": True}, "repeat": {"enabled": True}, "clarify": {"enabled": True},
                "resume": {"enabled": True}, "correction": {"enabled": True},
                "handoff": {"enabled": True, "text": "Te paso con una persona del equipo, ya te escriben.",
@@ -924,14 +943,14 @@ Al crear/importar se ignoran "id" y "trained" (los pone Parla). También se acep
 
 ## Campos de primer nivel
 - name (texto, máx 80): nombre visible. El slug para la API sale de acá ("Pizzería Don Luis" -> "pizzeria-don-luis").
-- threshold (número 0..1, default 0.55): similitud mínima para aceptar la intención detectada. Debajo -> fallback.
+- threshold (número 0..1, default 0.75): similitud mínima para aceptar la intención detectada. Debajo -> fallback.
 - fallback (texto o lista de textos): lo que responde cuando no entiende o la intención no tiene flujo. Con una
   lista elige una al azar sin repetir la anterior; conviene 3 o 4 variantes para que suene natural.
 - languages (lista de códigos de 2 letras, default ["es"]): el primero es el idioma por defecto. La charla toma el
   idioma que viene en start data {"idioma": "pt"} o el que se adivina del primer mensaje. Las frases de las intents
   pueden mezclar idiomas (los embeddings son multilingües): sumá 1-2 frases por idioma extra en cada intent.
 - fallback_translations: {"pt": ["Não entendi..."]}: el fallback en los otros idiomas.
-- knowledge_threshold (0..1, default 0.55): puntaje mínimo para contestar con la base de conocimiento.
+- knowledge_threshold (0..1, default 0.75): puntaje mínimo para contestar con la base de conocimiento.
 
 ## intents: [{name, examples: [frases]}]
 - La intención se detecta por vecino más cercano con embeddings multilingües sobre las frases (sin las marcas).
@@ -976,9 +995,12 @@ values, la aprende el CRF por contexto de las frases marcadas. "kind" lo usa la 
   datos» muestra solo esos slots (si ninguno está marcado, muestra todos). No cambia el motor: start data puede
   precargar cualquier slot. Marcá los que manda el canal (DNI, número de cliente) y no los de trabajo interno.
 
-## flows: [{name, trigger, steps}]
+## flows: [{name, trigger, steps, interrupts?}]
 - trigger: nombre exacto de una intent, "__start__" (corre al empezar la conversación; uno solo por agente) o ""
   (solo se llega por goto o call). Si dos flujos tienen el mismo trigger, gana el primero.
+- interrupts: false para los flujos de charla (saludar, agradecer, despedirse): nunca cortan una pregunta pendiente
+  («ah, entonces sí» no puede terminar en una despedida) y la IA no los ofrece como «otra acción».
+  "always" para lo que no puede esperar (urgencias): corta la pregunta aunque el mensaje traiga el dato pedido.
 - Mientras una pregunta espera respuesta, el mensaje se toma como respuesta. Si la respuesta no sirve (no trae la
   entidad) y dispara otra intención, el bot atiende eso y después vuelve a la pregunta (interrupción). Los flujos del
   sistema (cancelar, repetir, pasar con una persona) funcionan siempre.
@@ -1030,6 +1052,12 @@ values, la aprende el CRF por contexto de las frases marcadas. "kind" lo usa la 
      una "isla" de IA (necesita ai.enabled): conversa libremente, puede llamar a esas funciones, leer la base de
      conocimiento y completar esos slots; termina al cumplir goal o a los max_turns y sigue con el paso siguiente.
      Usalo poco: para asesorar o negociar, no para pedir datos (para eso: ask).
+  - {"type": "file", "file": "Lista de precios.pdf", "text": "Acá tenés la lista, {{ nombre }}", "translations": {...}}
+     manda un archivo que la persona subió a este agente (PDF, imagen, Word/Excel/PowerPoint, CSV, TXT o ZIP; hasta
+     10 MB). file = id o nombre de list_files (el id no cambia si renombran). text opcional (plantillas; sin text, el
+     mensaje es el nombre del archivo). En la API, el mensaje va en messages como siempre y replies[i].file trae
+     {id, name, mime, size, url}; url es relativa al servidor de Parla y se abre sin sesión. Los archivos son del
+     agente, no de una versión: borrarlo rompe el paso también en lo publicado. Para «pasame la lista de precios».
 - Máximo 200 pasos seguidos por turno (corta loops de goto). Un paso que falla muestra "⚠ Hay un problema..." en el chat.
 
 ## classifications: [{name, color?, description?}]
@@ -1273,7 +1301,7 @@ def update_agent(agent: str, agent_json: dict | str) -> dict:
     This edits the DRAFT only: production/staging keep answering with their published version (real users and
     conversations in progress are NOT affected) until you publish_agent and deploy_version."""
     agent_id = resolve(agent)
-    data, warnings = validated(agent_json)
+    data, warnings = validated(agent_json, call("GET", "/api/agents/%s/files" % agent_id)["files"])
     call("PUT", "/api/agents/" + agent_id, data)
     trained = call("POST", "/api/agents/%s/train" % agent_id, {})
     warnings += secret_warnings(agent_id, data)
@@ -1298,7 +1326,7 @@ def test_conversation(agent: str, messages: list[str], start_data: dict | None =
     the final slots, plus the classifications applied so far (per turn and final). Replies starting with "⚠" are
     flow errors. Each turn also has language, handoff (true = a person took over: the bot stays silent) and, when
     present, buttons [{label, value}] (send a button's value or label as the next message to "press" it), via
-    ("ia" | "knowledge" = who answered) and sources (knowledge documents used). The session is deleted afterwards
+    ("ia" | "knowledge" = who answered), sources (knowledge documents used) and files (names of files sent). The session is deleted afterwards
     unless keep=True. To start in another language pass start_data={"idioma": "pt"}.
     `environment`: "draft" (default: your unpublished edits, with the last TRAINED intents/entities), "staging" or
     "production" (what real users get: their published version). Returns the environment and version used
@@ -1340,6 +1368,9 @@ def extras(turn):
     for key in ("buttons", "via", "sources"):
         if turn.get(key):
             out[key] = turn[key]
+    sent = [r["file"]["name"] for r in turn.get("replies") or [] if r.get("file")]
+    if sent:
+        out["files"] = sent
     return out
 
 
@@ -1487,7 +1518,7 @@ def add_knowledge(agent: str, title: str = "", text: str | None = None, url: str
     """Add a document to the agent's knowledge base (FAQs, policies, hours, prices): pass `text` (plain text; FAQ
     pairs as "P: ¿...?\\nR: ..." work best) OR `url` (Parla downloads the page and extracts its text). A document
     with the same title is replaced. When no intent matches, the bot answers from these documents if a fragment
-    scores >= knowledge_threshold (0.55 default), with or without AI. Edits the DRAFT; no retraining needed.
+    scores >= knowledge_threshold (0.75 default), with or without AI. Edits the DRAFT; no retraining needed.
     Check it with search_knowledge. Returns {id, title, source, chars, preview, documents}."""
     if bool(text and text.strip()) == bool(url and url.strip()):
         raise ToolError("pasá «text» o «url» (uno de los dos)")
@@ -1516,7 +1547,7 @@ def search_knowledge(agent: str, query: str, k: int = 3) -> dict:
     knowledge_threshold (the bot would answer with that fragment). Use it to check FAQs before testing."""
     agent_id = resolve(agent)
     results = call("POST", "/api/agents/%s/knowledge/search" % agent_id, {"query": query, "k": k}).get("results") or []
-    threshold = float(call("GET", "/api/agents/" + agent_id).get("knowledge_threshold", 0.55))
+    threshold = float(call("GET", "/api/agents/" + agent_id).get("knowledge_threshold", 0.75))
     return {"results": results, "threshold": threshold, "answers": bool(results) and results[0]["score"] >= threshold}
 
 
@@ -1570,6 +1601,15 @@ def get_analytics(agent: str, date_from: str | None = None, date_to: str | None 
     Optional `date_from`/`date_to` (YYYY-MM-DD, by start day)."""
     query = query_string(**{"from": date_from, "to": date_to})
     return call("GET", "/api/agents/%s/insights/analytics%s" % (resolve(agent), query))
+
+
+@mcp.tool()
+def list_files(agent: str) -> dict:
+    """Files the person uploaded to this agent (price lists, catalogs, photos) that a {"type": "file"} step can send.
+    Returns {files: [{id, name, mime, size}]}; reference one in a step by id (stable) or by name. This server can't
+    upload: if the file is missing, ask the person to upload it in Parla (step «Enviar un archivo» in Flujos)."""
+    return {"files": [{k: f[k] for k in ("id", "name", "mime", "size")}
+                      for f in call("GET", "/api/agents/%s/files" % resolve(agent))["files"]]}
 
 
 @mcp.tool()

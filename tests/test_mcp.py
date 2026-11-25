@@ -33,6 +33,14 @@ def has(errors, *needles):
 
 
 # ---------- validación ----------
+FILE_BOT = dict(m.DEMO_IVR, flows=m.DEMO_IVR["flows"] + [{"name": "Precios", "trigger": "", "steps": [
+    {"type": "file", "file": "Lista.pdf", "text": "Acá va, {{ nombre }}"}, {"type": "file"}]}])
+_, errs, warns = m.validate(FILE_BOT)
+assert errs == ["flow «Precios», paso 2 (file): falta «file» con el id o el nombre del archivo (list_files los muestra)"], errs
+assert any("no puedo comprobar" in w and "Lista.pdf" in w for w in warns), warns          # sin saber los archivos: advierte
+FILE_BOT["flows"][-1]["steps"].pop()
+assert m.validate(FILE_BOT, [{"id": "a" * 22, "name": "lista.PDF"}])[1] == []              # por nombre, sin importar mayúsculas
+has(m.validate(FILE_BOT, [])[1], "Lista.pdf", "no está subido", "ninguno")
 good = m.validate_agent(m.DEMO_IVR)
 assert good == {"ok": True, "errors": [], "warnings": []}, good
 assert m.validate_agent(json.dumps(m.DEMO_IVR))["ok"]                      # también como texto JSON
@@ -216,7 +224,7 @@ print("validación de lo nuevo: ok (%d errores, %d advertencias)" % (len(nerrs),
 # ---------- punta a punta contra Parla ----------
 NAME = "zz MCP test " + m.uuid.uuid4().hex[:6]
 TEST = {
-    "name": NAME, "threshold": 0.5, "fallback": "No entendí.",
+    "name": NAME, "threshold": 0.75, "fallback": "No entendí.",
     "intents": [{"name": "Pedir turno", "examples": [
         "quiero un turno", "necesito sacar turno", "me das un turno para el [lunes](dia)", "turno para el [martes](dia)",
         "quiero reservar", "sacame un turno"]},
@@ -282,8 +290,25 @@ try:
     changed = copy.deepcopy(TEST)
     changed["fallback"] = "Perdón, no te entendí."
     assert m.update_agent(created["id"], changed)["id"] == created["id"]
-    assert m.test_conversation(created["id"], ["asdf qwerty zxcv"])["transcript"][1]["bot"] == ["Perdón, no te entendí."]
+    _t = m.test_conversation(created["id"], ["asdf qwerty zxcv"])["transcript"][1]
+    assert _t["bot"] == ["Perdón, no te entendí."], _t
     assert m.train_agent(NAME)["phrases"] == 10
+    # paso file: el archivo lo sube la persona; list_files lo muestra y update_agent rechaza los que no existen
+    import base64
+    up = m.call("POST", "/api/agents/%s/files" % created["id"], {"name": "Precios.pdf", "data": base64.b64encode(b"%PDF-1.4").decode()})
+    assert m.list_files(NAME) == {"files": [{"id": up["id"], "name": "Precios.pdf", "mime": "application/pdf", "size": 8}]}
+    with_file = copy.deepcopy(changed)
+    with_file["flows"][0]["steps"].append({"type": "file", "file": "precios.pdf", "text": "La lista, {{ cliente }}"})
+    m.update_agent(created["id"], with_file)
+    t = m.test_conversation(created["id"], [], start_data={"cliente": "Ana"})["transcript"][0]
+    assert t["bot"] == ["Hola Ana.", "La lista, Ana"] and t["files"] == ["Precios.pdf"], t
+    with_file["flows"][0]["steps"][-1]["file"] = "otro.pdf"
+    try:
+        m.update_agent(created["id"], with_file)
+        raise AssertionError("update_agent con un archivo que no existe tenía que fallar")
+    except m.ToolError as error:
+        assert "otro.pdf" in str(error) and "Precios.pdf" in str(error), error
+    m.update_agent(created["id"], changed)
 
     # ---------- versiones y entornos ----------
     agent_id, junk = created["id"], ["asdf qwerty zxcv"]
@@ -453,7 +478,7 @@ try:
     k2 = m.add_knowledge(sid_, "Horarios del local", text="P: ¿Abren los feriados?\nR: Los feriados abrimos de 10 a 18.")
     assert k2["replaced"] and k2["id"] == k["id"] and k2["documents"] == 2, k2
     s_ = m.search_knowledge(sid_, "¿abren los feriados?")
-    assert s_["answers"] and "10 a 18" in s_["results"][0]["text"] and s_["threshold"] == 0.55, s_
+    assert s_["answers"] and "10 a 18" in s_["results"][0]["text"] and s_["threshold"] == 0.75, s_
     u = m.add_knowledge(sid_, url="http://127.0.0.1:%d/envios" % page.server_address[1])
     assert u["source"] == "url" and u["title"] == "Envíos y cambios" and "todo el país" in u["preview"] and u["documents"] == 3, u
     doc = [d for d in m.get_agent(sid_)["knowledge"] if d["id"] == u["id"]][0]

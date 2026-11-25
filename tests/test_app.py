@@ -342,20 +342,85 @@ BOT = {"threshold": 0.5, "fallback": "no entendí", "languages": ["es", "pt"], "
                                                              {"type": "message", "text": "Plan {{ plan }}"}]}]}
 say = lambda st, text, agent=BOT: app.handle(agent, st, text, R)
 # 0. una pregunta en medio de una pregunta: no llena el slot aunque nombre una opción; contesta y vuelve a preguntar.
-#    Y una opción dicha con otras palabras la elige la IA (acá simulada); si no, «No reconocí».
-saved_side, saved_pick = brain.side_question, brain.pick_value
+#    Con IA (acá simulada), el turno entero: responde con otras palabras, pregunta, pide otra acción o nada.
+saved_side, saved_read, saved_answer = brain.side_question, brain.understand, brain.answer
 brain.side_question = lambda agent, st, text, asked: {"text": "Ventas vende.", "sources": [], "via": "knowledge"} if "?" in text else None
-brain.pick_value = lambda agent, entity, text, asked, st=None: "soporte" if "ayuda" in text else None
+READS = {"necesito ayuda técnica": {"tipo": "responde", "opcion": "soporte", "accion": None},
+         "y cuánto sale eso": {"tipo": "pregunta", "opcion": None, "accion": None},
+         "ah, gracias, horario": {"tipo": "nada", "opcion": None, "accion": None},      # la NLU ve «horario»: no interrumpe
+         "pasame el horario": {"tipo": "accion", "opcion": None, "accion": "horario"}}
+brain.understand = lambda agent, st, text, asked, entity=None, flow=None: READS.get(text)
+brain.answer = lambda agent, st, text: {"text": "No lo sé.", "sources": [], "via": "ia"}
 st = {}
 say(st, "menu")
 r = say(st, "¿qué hace ventas?")
 assert r["messages"] == ["Ventas vende.", "¿Con qué área?"] and st["slots"]["area"] is None and r["answer_to"] is None, r
+r = say(st, "y cuánto sale eso")
+assert r["messages"] == ["No lo sé.", "¿Con qué área?"] and st["slots"]["area"] is None, r
+r = say(st, "ah, gracias, horario")
+assert r["messages"] == ["¿Con qué área?"], r   # charla: vuelve a preguntar, sin «No reconocí» (antes: «Abrimos de 9 a 18»)
+r = say(st, "pasame el horario")
+assert r["messages"][0] == "Abrimos de 9 a 18", r
+st = {}
+say(st, "menu")
 r = say(st, "necesito ayuda técnica")
 assert r["messages"] == ["Área: soporte"] and r["via"] == "ia", r
 st = {}
 say(st, "menu")
 assert say(st, "cualquier cosa")["messages"][0] == "No reconocí ese dato, probemos de nuevo."
-brain.side_question, brain.pick_value = saved_side, saved_pick
+# la captura: «¿qué es X?» (se contesta) y después «ah entonces si» elige X. Sin IA: la IA ni se consulta.
+brain.understand = lambda *a, **k: 1 / 0
+st = {}
+say(st, "menu")
+say(st, "¿qué es soporte?")
+r = say(st, "ah entonces si")
+assert r["messages"] == ["Área: soporte"] and st["slots"]["area"] == "soporte", r
+st = {}
+say(st, "menu")
+say(st, "¿qué es soporte?")
+say(st, "eh?")                                    # el «sí» solo vale justo después de la explicación
+assert say(st, "dale")["messages"][0] == "No reconocí ese dato, probemos de nuevo."
+# un flujo de charla ("interrupts": false) no corta una pregunta pendiente (antes: despedida + repregunta)
+CHAT = dict(BOT, flows=[dict(f, interrupts=False) if f["name"] == "horario" else f for f in BOT["flows"]])
+st = {}
+say(st, "menu", CHAT)
+r = say(st, "ah ok, y el horario", CHAT)
+assert r["messages"] == ["No reconocí ese dato, probemos de nuevo.", "¿Con qué área?"], r
+# dos opciones en el mismo mensaje («hablar DE UNA urgencia, NO PUEDO…»): ambiguo, no se elige la primera palabra
+st = {}
+say(st, "menu")
+r = say(st, "ventas o soporte, no sé")
+assert st["slots"]["area"] is None and r["messages"][0] == "No reconocí ese dato, probemos de nuevo.", r
+# "interrupts": "always" (urgencias) corta la pregunta aunque el mensaje traiga el dato pedido
+ALWAYS = dict(BOT, flows=[dict(f, interrupts="always") if f["name"] == "humano" else f for f in BOT["flows"]])
+st = {}
+say(st, "menu", ALWAYS)
+r = say(st, "soporte, y tengo un reclamo", ALWAYS)
+assert r["messages"][0] == "Ok" and r["handoff"] and st["slots"]["area"] is None, r
+# por significado: lo que read_answer entiende entra sin la IA generativa
+saved_meaning = app.read_answer
+app.read_answer = lambda agent, entity, text, flow=None, lang="es": (
+    {"tipo": "responde", "opcion": "ventas", "accion": None, "score": 0.9, "por": "quiero comprar"} if "comprar" in text else None)
+st = {}
+say(st, "menu")
+r = say(st, "me interesa comprar algo")
+assert r["messages"] == ["Área: ventas"] and r["via"] == "significado", r
+app.read_answer = saved_meaning
+brain.side_question, brain.understand, brain.answer = saved_side, saved_read, saved_answer
+# read_answer de verdad con vectores de juguete: decide solo si está claro, y contestar gana sobre cambiar de tema
+import numpy as _np  # noqa: E402
+_V = {"ventas": [1, 0, 0], "soporte": [0, 1, 0], "quiero comprar": [0.95, 0.05, 0], "abrimos de 9 a 18": [0, 0, 1],
+      "horario": [0, 0, 1], "gracias": [0, 0.6, 0.8], "algo raro": [0.7, 0.7, 0]}
+saved_encode, saved_vectors = app._encode, dict(app._vectors)
+app._encode = lambda texts: [_np.array(_V.get(t, [0, 0, -1]), dtype=float) / _np.linalg.norm(_V.get(t, [0, 0, -1])) for t in texts]
+app._vectors.clear()
+RA = dict(BOT, intents=[{"name": "horario", "examples": ["horario"]}])
+ENT = {"name": "area", "values": ["ventas", "soporte"], "phrasings": {"ventas": ["quiero comprar"]}}
+assert app.read_answer(RA, ENT, "quiero comprar")["opcion"] == "ventas"
+assert app.read_answer(RA, ENT, "algo raro") is None                                  # ventas y soporte empatados: no decide
+assert app.read_answer(RA, ENT, "gracias")["tipo"] == "nada"                           # agradecer no contesta ni interrumpe
+app._encode = saved_encode
+app._vectors.clear(); app._vectors.update(saved_vectors)
 # «also»: la pregunta acepta también otra entidad; el slot queda vacío y el flujo sigue leyendo `entities`
 ALSO = dict(BOT, flows=[{"name": "oferta", "trigger": "menu", "steps": [
     {"type": "ask", "slot": "gusto", "text": "¿Muzza?", "also": ["cantidad"]},
@@ -363,10 +428,10 @@ ALSO = dict(BOT, flows=[{"name": "oferta", "trigger": "menu", "steps": [
     {"type": "message", "text": "Gusto {{ gusto }}"}]}])
 st = {}
 say(st, "menu", ALSO)
-saved_pick = brain.pick_value
-brain.pick_value = lambda *a, **k: "muzza"      # una IA que «entiende» cualquier cosa como sí: con contrapropuesta no se la consulta
-r = say(st, "mejor 3", ALSO)                     # (así se confirmó una cita de verdad: «jueves» leído como «sí»)
-brain.pick_value = saved_pick
+saved_read = brain.understand
+brain.understand = lambda *a, **k: {"tipo": "responde", "opcion": "muzza", "accion": None}   # una IA que lo lee como sí:
+r = say(st, "mejor 3", ALSO)            # con contrapropuesta no se la consulta (así se confirmó una cita: «jueves» leído como «sí»)
+brain.understand = saved_read
 assert r["messages"] == ["Van 3"] and st["slots"]["gusto"] is None, r
 st = {}
 say(st, "menu", ALSO)
@@ -558,5 +623,30 @@ voice.transcribe = deaf
 assert app.api_v1("POST", ["bots", "mesa", "audio"], {"sessionId": "s3", "audio": "eA=="}) == (400, {"error": "no está instalado el modelo de voz"})
 assert app.api_v1("POST", ["bots", "mesa", "audio"], {"sessionId": "s3", "audio": ""})[0] == 400
 voice.transcribe, voice.speak = saved_voice
+# 11. paso «Enviar un archivo»: la respuesta trae el adjunto; messages siguen siendo textos
+from parla import files  # noqa: E402
+pdf = files.save("ffff6666", "Lista de precios.pdf", "data:application/pdf;base64," + base64.b64encode(b"%PDF-1.4 hola").decode())
+assert len(pdf["id"]) == 22 and pdf["mime"] == "application/pdf" and pdf["size"] == 13 and pdf["url"] == "/files/ffff6666/" + pdf["id"], pdf
+FILEBOT = dict(BOT, id="ffff6666", name="Precios", flows=[{"name": "inicio", "trigger": "__start__", "steps": [
+    {"type": "set", "slot": "nombre", "mode": "text", "text": "Ana"},
+    {"type": "file", "file": pdf["id"], "text": "Acá va, {{ nombre }}"},
+    {"type": "file", "file": "lista de PRECIOS.pdf"},                          # por nombre y sin texto: el texto es el nombre
+    {"type": "message", "text": "¿Algo más?"}]}])
+app.all_agents = lambda: [FILEBOT]
+body = app.api_v1("POST", ["bots", "precios", "events"], {"type": "start", "sessionId": "f1"})[1]
+assert body["messages"] == ["Acá va, Ana", "Lista de precios.pdf", "¿Algo más?"], body
+assert body["replies"][0]["file"] == pdf and body["replies"][1]["file"] == pdf and "file" not in body["replies"][2], body["replies"]
+hist = app.api_v1("GET", ["bots", "precios", "sessions", "f1"], {})[1]["history"]
+assert hist[1]["file"] == pdf and hist[1]["text"] == "Acá va, Ana" and "file" not in hist[3], hist
+assert files.read("ffff6666", pdf["id"])[0] == b"%PDF-1.4 hola" and files.read("ffff6666", "../" + pdf["id"]) is None
+files.delete("ffff6666", pdf["id"])
+assert files.listing("ffff6666") == [] and files.read("ffff6666", pdf["id"]) is None
+assert app.api_v1("POST", ["bots", "precios", "events"], {"type": "start", "sessionId": "f2"})[1]["messages"][0].startswith("⚠ Hay un problema en el flujo «inicio», paso «Enviar un archivo»: no existe el archivo")
+for name, data in (("virus.html", "PGI+"), ("foto.svg", "PHN2Zz4="), ("vacio.pdf", ""), ("roto.pdf", "no es base64!")):
+    try:
+        files.save("ffff6666", name, data)
+        raise AssertionError(name)
+    except ValueError:
+        pass
 app.all_agents, app.load, app.model, app.parse = saved
 print("ok")

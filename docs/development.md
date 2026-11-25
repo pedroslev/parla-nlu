@@ -6,7 +6,7 @@ Pocas y a propósito: el servidor HTTP es el de la biblioteca estándar (`http.s
 
 | Paquete | Para qué |
 |---|---|
-| `fastembed` (+ `numpy`, `onnxruntime`) | Vectores de las frases con `paraphrase-multilingual-MiniLM-L12-v2`. |
+| `fastembed` (+ `numpy`, `onnxruntime`) | Vectores de las frases con `google/embeddinggemma-300m` (1,2 GB, se guarda en `data/models/embeddings`). |
 | `python-crfsuite` | Entidades aprendidas (CRF). |
 | `cel-python` | Expresiones CEL en `{{ }}`, `set`, `if` y `saves`. |
 | `pypdf` | PDFs de la base de conocimiento. |

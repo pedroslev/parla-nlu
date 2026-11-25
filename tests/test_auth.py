@@ -169,9 +169,37 @@ try:
     # el chat público del widget sigue abierto, con o sin sesión
     assert call("POST", V + other["id"] + "/events", {"type": "start", "environment": "draft"})[0] == 200
     assert call("POST", V + other["id"] + "/events", {"type": "start", "environment": "draft"}, cookie=dev)[0] == 200
+    # archivos del paso «Enviar un archivo»: suben dueño/editor, se sirven sin sesión solo con su id aleatorio
+    import base64
+    pdf = {"name": "Lista de precios (2026).pdf", "data": "data:application/pdf;base64," + base64.b64encode(b"%PDF-1.4 x").decode()}
+    assert call("POST", O + "/files", pdf, cookie=dev)[0] == 404                       # no es un bot suyo
+    assert call("POST", O + "/files", pdf, cookie=ale)[0] == 403 and call("POST", O + "/files", pdf, cookie=ato)[0] == 403
+    assert call("POST", O + "/files", pdf)[0] == 401
+    assert call("POST", O + "/files", dict(pdf, name="x.html"), cookie=ana)[0] == 400
+    up = call("POST", O + "/files", pdf, cookie=ana)[1]
+    fid = up["id"]
+    assert up["files"] == [{k: up[k] for k in ("id", "name", "mime", "size", "url")}] and call("GET", O + "/files", cookie=ale)[1]["files"] == up["files"]
+
+    def raw(path):
+        conn = http.client.HTTPConnection("127.0.0.1", PORT, timeout=30)
+        conn.request("GET", path)
+        r = conn.getresponse()
+        out = r.status, r.read(), dict(r.getheaders())
+        conn.close()
+        return out
+    status, body, headers = raw(up["url"])
+    assert status == 200 and body == b"%PDF-1.4 x" and headers["Content-Type"] == "application/pdf", (status, headers)
+    assert headers["X-Content-Type-Options"] == "nosniff" and "filename*=UTF-8''Lista%20de%20precios%20%282026%29.pdf" in headers["Content-Disposition"]
+    assert headers["Content-Disposition"].startswith("inline;")
+    for bad in ("/files/%s/%s" % (agent_id, fid), "/files/%s/%s.json" % (other["id"], fid), "/files/%s/..%%2F..%%2F%s" % (other["id"], fid[:16]),
+                "/files/%s/../%s.json" % (other["id"], other["id"]), "/files/%s/%s" % (other["id"], "A" * 22)):
+        assert raw(bad)[0] == 404, bad                                             # otro agente, metadatos, saltos de carpeta, ids inventados
+    assert call("DELETE", O + "/files/" + fid, cookie=ana)[1] == {"files": []} and raw(up["url"])[0] == 404
     # lo que crea (o importa) dev queda en su lista
     mine = call("POST", "/api/agents", {"name": "tmp test_auth de dev"}, cookie=dev)[1]
     made.append(mine["id"])
+    assert call("POST", "/api/agents/%s/files" % mine["id"], pdf, cookie=dev)[0] == 200
+    assert os.path.isdir(os.path.join(DATA, "agents", mine["id"] + ".files"))
     imp = call("POST", "/api/agents", {"import": dict(agent, name="tmp test_auth importado", intents=[{"name": "hola", "examples": ["hola"]}])}, cookie=dev)[1]
     made.append(imp["id"])
     assert [a["id"] for a in call("GET", "/api/agents", cookie=dev)[1]] == sorted([agent_id, mine["id"], imp["id"]])
@@ -184,6 +212,7 @@ try:
     assert call("GET", V + other["id"], token=dkey)[0] == 404 and call("GET", O, token=dkey)[0] == 404
     # borrar un agente de la lista no rompe al usuario; null vuelve a «todos»
     assert call("DELETE", "/api/agents/" + mine["id"], cookie=dev)[0] == 200
+    assert not os.path.exists(os.path.join(DATA, "agents", mine["id"] + ".files"))     # borrar el agente borra sus archivos
     assert call("GET", "/api/agents", cookie=dev)[0] == 200 and call("GET", "/api/users", cookie=ana)[0] == 200
     assert call("PUT", "/api/users/dev", {"bots": [agent_id, "ffffffff"]}, cookie=ana)[0] == 400
     assert call("PUT", "/api/users/dev", {"bots": None}, cookie=ana)[1]["bots"] is None

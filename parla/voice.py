@@ -84,7 +84,8 @@ def transcribe(audio_bytes, mime="audio/webm", language="es", hint=None):
             raise ValueError("El audio está vacío o es demasiado corto.")
         if seconds > MAX_SECONDS:
             raise ValueError("El audio es muy largo (máximo %d segundos)." % MAX_SECONDS)
-        segments, info = model.transcribe(samples, language=lang, vad_filter=True, initial_prompt=(hint or None))
+        # hotwords y no initial_prompt: con la lista como prompt Whisper imita la lista («sí, sí», «no, no,», «el martes,»)
+        segments, info = model.transcribe(samples, language=lang, vad_filter=True, hotwords=(hint or None))
         text = " ".join(s.text.strip() for s in segments).strip()
     return {"text": text, "language": info.language, "ms": int((time.time() - t0) * 1000)}
 

@@ -25,7 +25,7 @@ costado, publicás una versión y lo conectás a tu web, a tu sistema o a un IVR
 ## Qué trae
 
 ### Comprensión
-- Intenciones por similitud: embeddings multilingües (`paraphrase-multilingual-MiniLM-L12-v2` vía fastembed) y
+- Intenciones por similitud: embeddings multilingües (`google/embeddinggemma-300m` vía fastembed) y
   vecino más cercano. Sumar una frase no requiere reentrenar un modelo pesado.
 - Entidades de varios tipos: por ejemplos marcados en las frases (`[pedro](nombre)`, aprendidas con un CRF de
   python-crfsuite), listas de opciones con sinónimos, formatos (número, email, teléfono, DNI, regex propia) y

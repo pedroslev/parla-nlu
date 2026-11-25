@@ -29,7 +29,8 @@
   const h = (tag, props, ...kids) => { const el = document.createElement(tag); for (const [k, v] of Object.entries(props || {})) if (v != null && v !== false) k.startsWith('on') ? (el[k] = v) : el.setAttribute(k, v === true ? '' : v); el.append(...kids.filter((k) => k != null)); return el; };
   const svg = (paths) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.innerHTML = paths.map((p) => '<path d="' + p + '"/>').join(''); return s; };
   const I = { chat: ['M4 5h16v11H9l-5 4z'], x: ['M6 6l12 12', 'M18 6L6 18'], redo: ['M20 12a8 8 0 1 1-2.3-5.6', 'M20 4v4h-4'], send: ['M4 12l16-8-6 16-2-7z'],
-    mic: ['M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z', 'M5 11a7 7 0 0 0 14 0', 'M12 18v3'], stop: ['M7 7h10v10H7z'] };
+    mic: ['M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z', 'M5 11a7 7 0 0 0 14 0', 'M12 18v3'], stop: ['M7 7h10v10H7z'],
+    clip: ['M20 11.5l-8.4 8.4a5 5 0 0 1-7.1-7.1l8.4-8.4a3.3 3.3 0 0 1 4.7 4.7l-8.4 8.4a1.7 1.7 0 0 1-2.4-2.4l7.7-7.7'] };
 
   root.append(h('style', {}, `
     :host { all: initial; --c: ${color}; --ci: ${ink}; --bg: #fff; --ink: #172033; --muted: #5d6880; --line: #d5dbe6; --soft: #f1f3f7;
@@ -63,6 +64,10 @@
     .m.user { align-self: flex-end; background: var(--c); color: var(--ci); border-bottom-right-radius: 4px; }
     .m.err { align-self: stretch; max-width: none; background: none; border: 1px dashed var(--line); color: var(--muted); font-size: 14px; text-align: center; }
     .m .who { display: block; font-size: 11px; font-weight: 600; color: var(--muted); }
+    .m .file { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px;
+      background: var(--bg); color: var(--ink); text-decoration: none; white-space: normal; }
+    .m .file:hover { border-color: var(--c); } .m .file svg { flex: none; } .m .file small { display: block; color: var(--muted); font-size: 12px; }
+    .m img.att { display: block; max-width: 100%; max-height: 220px; border-radius: 10px; margin-top: 6px; }
     .typing { align-self: flex-start; background: var(--soft); border-radius: 14px; padding: 12px 14px; display: flex; gap: 4px; }
     .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: b 1s infinite; }
     .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
@@ -97,8 +102,14 @@
 
   // ---------- pantalla ----------
   const scroll = () => { log.scrollTop = log.scrollHeight; };
-  function add(kind, text, who) {
-    log.append(h('div', { class: 'm ' + kind }, who ? h('span', { class: 'who' }, who) : null, String(text)));
+  function attach(f) {                      // un archivo del paso «Enviar un archivo»: imagen a la vista, el resto como tarjeta
+    if (!/^\/files\//.test(f.url || '')) return null;
+    const url = base + f.url, size = f.size < 1048576 ? Math.max(1, Math.round(f.size / 1024)) + ' KB' : (f.size / 1048576).toFixed(1) + ' MB';
+    return /^image\//.test(f.mime || '') ? h('a', { href: url, target: '_blank', rel: 'noopener' }, h('img', { class: 'att', src: url, alt: f.name }))
+      : h('a', { class: 'file', href: url, target: '_blank', rel: 'noopener' }, svg(I.clip), h('span', {}, String(f.name), h('small', {}, size + ' · Abrir')));
+  }
+  function add(kind, text, who, file) {
+    log.append(h('div', { class: 'm ' + kind }, who ? h('span', { class: 'who' }, who) : null, file && text === file.name ? null : String(text), file ? attach(file) : null));
     scroll();
   }
   function showButtons(list) {
@@ -146,7 +157,7 @@
   }
   let after = null, poller = null, ready = null;
   function turn(res) {
-    (res.messages || []).forEach((m) => add('bot', typeof m === 'string' ? m : m.text));
+    (res.messages || []).forEach((m, i) => add('bot', typeof m === 'string' ? m : m.text, null, res.replies?.[i]?.file));
     showButtons(res.buttons);
     if (res.audio) try { new Audio('data:audio/wav;base64,' + res.audio).play().catch(() => {}); } catch {}
     if (Number.isInteger(res.next)) after = res.next;
@@ -163,7 +174,7 @@
     try {
       const r = await call('GET', '/sessions/' + encodeURIComponent(sid) + '/messages?after=' + (after ?? 0));
       const list = r.messages || [];
-      if (!baseline) list.filter((m) => m.from === 'human' || m.from === 'bot').forEach((m) => add('bot', m.text, m.from === 'human' ? (m.by || 'Persona') : null));
+      if (!baseline) list.filter((m) => m.from === 'human' || m.from === 'bot').forEach((m) => add('bot', m.text, m.from === 'human' ? (m.by || 'Persona') : null, m.file));
       if (!baseline && list.at(-1)?.buttons) showButtons(list.at(-1).buttons);
       after = Number.isInteger(r.next) ? r.next : (after ?? 0) + list.length;
       if (r.handoff === false) handoff(false);
@@ -177,7 +188,7 @@
       const r = await call('GET', '/sessions/' + encodeURIComponent(sid) + '/messages?after=0');
       const list = (r.messages || []).filter((m) => ['user', 'bot', 'human'].includes(m.from));
       if (list.length && !r.ended) {
-        list.forEach((m) => add(m.from === 'user' ? 'user' : 'bot', m.text, m.from === 'human' ? (m.by || 'Persona') : null));
+        list.forEach((m) => add(m.from === 'user' ? 'user' : 'bot', m.text, m.from === 'human' ? (m.by || 'Persona') : null, m.file));
         showButtons(list.at(-1).buttons);
         after = Number.isInteger(r.next) ? r.next : (r.messages || []).length;
         return handoff(!!r.handoff);
