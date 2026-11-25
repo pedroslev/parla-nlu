@@ -185,7 +185,7 @@ En **Publicar → Claves** cargás tokens y contraseñas de servicios externos p
 ## Funciones: no son un sandbox
 
 Las funciones corren código Python (`python -I`) o JavaScript (`node`) en un proceso aparte, con tiempo máximo de
-5 s, límite de CPU, de memoria (512 MB donde el sistema lo permite: Linux sí, macOS no; en Windows solo el
+5 s, límite de CPU, de memoria (512 MB: en Python límite del espacio de direcciones donde el sistema lo permite —Linux sí, macOS no—; en JavaScript el límite del heap de V8; en Windows solo el
 tiempo), una carpeta temporal vacía y variables de entorno limpias (`PATH` y poco más). Eso evita que una función
 colgada tire el bot, **pero no es un aislamiento de seguridad**: el código corre con el usuario del sistema que
 corre Parla, puede leer y escribir sus archivos (incluidos `users.json` y las claves de todos los bots), usar la

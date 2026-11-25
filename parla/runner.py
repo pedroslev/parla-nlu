@@ -58,16 +58,21 @@ def enabled():
     return os.environ.get("PARLA_FUNCTIONS", "1") not in ("0", "false", "no", "off")
 
 
-def _limits():
+def _limits(memory=True):
     try:
         import resource
         resource.setrlimit(resource.RLIMIT_CPU, (TIMEOUT + 1, TIMEOUT + 1))
-        try:
-            resource.setrlimit(resource.RLIMIT_AS, (MEMORY, MEMORY))
-        except (ValueError, OSError):
-            pass        # macOS no deja limitar la memoria así; el tiempo máximo sigue valiendo
+        if memory:
+            try:
+                resource.setrlimit(resource.RLIMIT_AS, (MEMORY, MEMORY))
+            except (ValueError, OSError):
+                pass    # macOS no deja limitar la memoria así; el tiempo máximo sigue valiendo
     except ImportError:
         pass            # Windows: queda el tiempo máximo
+
+
+def _limits_node():
+    _limits(memory=False)   # V8 reserva mucho espacio de direcciones al arrancar: con RLIMIT_AS muere en Linux
 
 
 def run_function(function, inputs):
@@ -87,13 +92,13 @@ def run_function(function, inputs):
         node = shutil.which("node")
         if not node:
             return done({"ok": False, "error": "Para funciones en JavaScript hace falta tener Node.js instalado.", "logs": ""})
-        command = [node, "-e", JAVASCRIPT, mark]
+        command = [node, "--max-old-space-size=%d" % (MEMORY // 2**20), "-e", JAVASCRIPT, mark]
     payload = json.dumps({"code": function.get("code") or "", "inputs": inputs}, default=str)
     env = {"PATH": os.environ.get("PATH", ""), "LANG": "C.UTF-8", "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
     with tempfile.TemporaryDirectory(prefix="parla-fn-") as folder:
         try:
             proc = subprocess.run(command, input=payload, capture_output=True, text=True, timeout=TIMEOUT, cwd=folder,
-                                  env=env, preexec_fn=_limits if os.name == "posix" else None)
+                                  env=env, preexec_fn=(_limits if language == "python" else _limits_node) if os.name == "posix" else None)
         except subprocess.TimeoutExpired:
             return done({"ok": False, "error": "La función tardó más de %d segundos y se cortó." % TIMEOUT, "logs": ""})
         except OSError as error:

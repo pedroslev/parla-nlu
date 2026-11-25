@@ -183,7 +183,7 @@ In **Publicar → Claves** (Publish → Keys) you store tokens and passwords for
 ## Functions: not a sandbox
 
 Functions run Python (`python -I`) or JavaScript (`node`) code in a separate process, with a 5 s timeout, a CPU
-limit, a memory limit (512 MB where the system allows it: Linux yes, macOS no; on Windows only the timeout), an
+limit, a memory limit (512 MB: address-space limit for Python where the system allows it — Linux yes, macOS no; V8 heap limit for JavaScript; on Windows only the timeout), an
 empty temporary folder and a clean environment (`PATH` and little else). That keeps a hung function from taking
 down the bot, **but it is not security isolation**: the code runs as the system user that runs Parla, and it can
 read and write that user's files (including `users.json` and every bot's keys), use the network and launch
