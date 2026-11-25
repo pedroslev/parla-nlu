@@ -12,6 +12,10 @@ una edición paga que se guarde funciones.
 
 ## Recién salido
 
+- **Interfaz en inglés**: toda la interfaz, los mensajes del servidor y el widget web en inglés o en español, a
+  elección de cada usuario (menú ⋯ o pantalla de entrada); los bots con inglés como idioma principal traen en
+  inglés los textos de los flujos del sistema. Para sumar un idioma, ver
+  [CONTRIBUTING_es.md](../CONTRIBUTING_es.md#traducciones).
 - **Canal de WhatsApp** (WhatsApp Business Cloud API) y **canal de Telegram**, con botones, archivos y respuestas
   desde la Bandeja. Ver [channels_es.md](channels_es.md).
 - **Importador de proyectos Rasa**: los proyectos de Rasa 3.x, clásicos y CALM, pasan a agentes de Parla, con un
@@ -28,10 +32,6 @@ una edición paga que se guarde funciones.
   [security_es.md](security_es.md#registro-de-auditoría).
 - **Enmascarado de datos personales (PII)**: tapar emails, teléfonos, documentos, tarjetas y cuentas bancarias en
   las conversaciones guardadas. Ver [concepts_es.md](concepts_es.md#retención-y-datos-personales).
-
-## Ahora (en curso)
-
-- **Interfaz en inglés** (internacionalización de la interfaz).
 
 ## Después
 

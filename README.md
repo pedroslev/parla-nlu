@@ -30,8 +30,8 @@ message (entities), what to remember (slots) and what to do in each case (flows)
 a side chat panel, publish a version and connect it to your website, your system or an IVR through a simple HTTP
 API.
 
-The interface is in Spanish (an English UI is [on the roadmap](docs/ROADMAP.md)), and Parla is aimed at bots for
-Spanish-speaking users.
+The interface is available in English and Spanish (pick it in the ⋯ menu or on the sign-in screen), and Parla's
+language understanding is built Spanish-first, with Portuguese and English too.
 
 **Who is it for?**
 

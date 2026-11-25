@@ -12,6 +12,9 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Shipped recently
 
+- **English UI**: the whole interface, server messages and the web widget in English or Spanish, chosen per user
+  (⋯ menu or sign-in screen); bots whose main language is English get English system-flow defaults. See
+  [CONTRIBUTING.md](../CONTRIBUTING.md#translations) to add a language.
 - **WhatsApp channel** (WhatsApp Business Cloud API) and **Telegram channel**, with buttons, files and Inbox
   replies. See [channels.md](channels.md).
 - **Rasa project importer**: classic and CALM Rasa 3.x projects become Parla agents, with a warning for anything
@@ -28,10 +31,6 @@ Want to help or need something sooner? Open an issue or comment on an existing o
   [security.md](security.md#audit-log).
 - **PII redaction**: mask emails, phone numbers, IDs, cards and bank accounts in saved conversations. See
   [concepts.md](concepts.md#retention-and-personal-data).
-
-## Now (in progress)
-
-- **English UI** (interface internationalization).
 
 ## Next
 

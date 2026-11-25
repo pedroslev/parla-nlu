@@ -9,6 +9,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- English UI: every screen of the web interface in English or Spanish (`web/static/i18n.js`, `t()` with the Spanish
+  text as key), chosen in the ⋯ menu, the home screen or the sign-in screen (`?lang=en` also works) and remembered
+  per browser. Server errors and warnings shown in the UI follow the UI language (`Accept-Language`,
+  `parla/i18n.py`); logs stay in Spanish. The web widget takes its labels from the bot's main language
+  (`data-lang`). Bots whose main language is English get English defaults for the system flows.
+  `tests/test_i18n.py` fails on any UI string without an English translation.
 - OpenAI-compatible model endpoints for the AI features (`ai.provider: "openai"`): vLLM, llama.cpp, LM Studio,
   LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter. API key from the agent's vault (`ai.api_key_secret`), JSON mode
   with a prompt-only fallback, Spanish error messages with the key masked, «Probar conexión» and a privacy warning

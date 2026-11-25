@@ -29,6 +29,8 @@ una interfaz web sin escribir código: qué cosas tiene que entender (intencione
 (entidades), qué recordar (slots) y qué hacer en cada caso (flujos). Entrenás en segundos, lo probás en un chat al
 costado, publicás una versión y lo conectás a tu web, a tu sistema o a un IVR por una API HTTP simple.
 
+La interfaz está en español y en inglés (se elige en el menú ⋯ o en la pantalla de entrada).
+
 **¿Para quién es?**
 
 - Equipos chicos y pymes que quieren un bot de atención (turnos, pedidos, preguntas frecuentes) sin depender de
