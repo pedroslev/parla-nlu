@@ -1,0 +1,246 @@
+{
+  "parla": 1,
+  "agent": {
+    "name": "Pizzería",
+    "threshold": 0.55,
+    "fallback": "No entendí, ¿me lo decís de otra forma?",
+    "intents": [
+      {
+        "name": "Saludar",
+        "examples": [
+          "buenas",
+          "boenas",
+          "hola",
+          "buenas",
+          "buenas noches",
+          "buen día",
+          "qué tal",
+          "hola, quiero hacer un pedido"
+        ]
+      },
+      {
+        "name": "Pedir pizza",
+        "examples": [
+          "mandame [2](cantidad) [napo](gusto)",
+          "dame una de [muzza](gusto)",
+          "quiero pedir una pizza",
+          "quiero [2](cantidad) pizzas de [muzzarella](gusto)",
+          "me mandás una [napolitana](gusto)",
+          "quería encargar pizzas",
+          "haceme [3](cantidad) de [fugazzeta](gusto)",
+          "tienen delivery de pizza",
+          "para pedir una pizza a domicilio"
+        ]
+      },
+      {
+        "name": "despedirse",
+        "examples": [
+          "nos vemos",
+          "hasta luego",
+          "chau"
+        ]
+      },
+      {
+        "name": "agradecer",
+        "examples": [
+          "muchas gracias"
+        ]
+      },
+      {
+        "name": "identificarse",
+        "examples": [
+          "me llamo [pedro](nombre)",
+          "soy [magui](nombre)"
+        ]
+      }
+    ],
+    "entities": [
+      {
+        "name": "gusto",
+        "kind": "list",
+        "regex": "",
+        "values": [
+          "muzzarella",
+          "napolitana",
+          "fugazzeta",
+          "calabresa",
+          "jamón y morrones"
+        ],
+        "color": 0,
+        "synonyms": {
+          "muzzarella": [
+            "muzza",
+            "muza",
+            "mozzarella",
+            "mozza"
+          ],
+          "napolitana": [
+            "napo"
+          ],
+          "fugazzeta": [
+            "fuga",
+            "fugazza"
+          ],
+          "calabresa": [
+            "cala",
+            "longaniza"
+          ],
+          "jamón y morrones": [
+            "jamon y morrones",
+            "jamón",
+            "jamon"
+          ]
+        }
+      },
+      {
+        "name": "cantidad",
+        "kind": "number",
+        "regex": "\\b\\d+(?:[.,]\\d+)?\\b",
+        "values": [],
+        "color": 3
+      },
+      {
+        "name": "nombre",
+        "kind": "examples",
+        "regex": "",
+        "values": [],
+        "color": 0,
+        "examples": []
+      }
+    ],
+    "slots": [
+      {
+        "name": "apellido",
+        "entity": ""
+      },
+      {
+        "name": "direccion",
+        "entity": ""
+      },
+      {
+        "name": "gusto",
+        "entity": "gusto"
+      },
+      {
+        "name": "cantidad",
+        "entity": "cantidad"
+      },
+      {
+        "name": "nombre",
+        "entity": "nombre"
+      }
+    ],
+    "flows": [
+      {
+        "name": "Tomar pedido",
+        "trigger": "Saludar",
+        "steps": [
+          {
+            "type": "message",
+            "text": "¡Hola! Soy el bot de la pizzería. Te tomo el pedido en un minuto."
+          },
+          {
+            "type": "ask",
+            "slot": "nombre",
+            "text": "¿Cuál es tu nombre?"
+          },
+          {
+            "type": "ask",
+            "slot": "apellido",
+            "text": "Gracias, {{ nombre }}. ¿Y tu apellido?"
+          },
+          {
+            "type": "ask",
+            "slot": "direccion",
+            "text": "¿A qué dirección te lo enviamos?"
+          },
+          {
+            "type": "ask",
+            "slot": "gusto",
+            "text": "¿De qué gusto querés la pizza? Tenemos muzzarella, napolitana, fugazzeta, calabresa y jamón y morrones."
+          },
+          {
+            "type": "ask",
+            "slot": "cantidad",
+            "text": "¿Cuántas pizzas de {{ gusto }} querés? Escribilo en números."
+          },
+          {
+            "type": "message",
+            "text": "Listo, {{ nombre }} {{ apellido }}: {{ cantidad }} de {{ gusto }} para enviar a {{ direccion }}. ¡Ya las estamos preparando!"
+          },
+          {
+            "type": "set",
+            "slot": "gusto",
+            "mode": "clear"
+          },
+          {
+            "type": "set",
+            "slot": "cantidad",
+            "mode": "clear"
+          }
+        ]
+      },
+      {
+        "name": "Pedido directo",
+        "trigger": "Pedir pizza",
+        "steps": [
+          {
+            "type": "goto",
+            "flow": "Tomar pedido"
+          }
+        ]
+      }
+    ],
+    "classifications": [],
+    "functions": [],
+    "system": {
+      "cancel": {
+        "enabled": true,
+        "examples": [
+          "cancelar",
+          "dejá",
+          "olvidalo",
+          "no quiero seguir"
+        ],
+        "text": "Listo, lo dejamos acá. ¿Te ayudo con otra cosa?"
+      },
+      "repeat": {
+        "enabled": true,
+        "examples": [
+          "repetí",
+          "¿cómo?",
+          "no te escuché"
+        ]
+      },
+      "clarify": {
+        "enabled": true,
+        "margin": 0.04,
+        "text": "¿Quisiste decir…?"
+      },
+      "anything_else": {
+        "enabled": false,
+        "text": "¿Te ayudo con algo más?"
+      },
+      "resume": {
+        "enabled": true,
+        "text": "Sigamos con lo de antes."
+      },
+      "correction": {
+        "enabled": true,
+        "text": "Listo, lo cambié."
+      },
+      "handoff": {
+        "enabled": true,
+        "examples": [
+          "quiero hablar con una persona",
+          "pasame con alguien"
+        ],
+        "text": "Te paso con una persona, ya te escriben."
+      },
+      "csat": {
+        "enabled": false,
+        "text": "¿Cómo te atendí? Del 1 al 5."
+      }
+    }
+  }
+}

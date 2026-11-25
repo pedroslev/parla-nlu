@@ -1,0 +1,67 @@
+{
+  "parla": 1,
+  "agent": {
+    "name": "Turnos Clínica",
+    "threshold": 0.55,
+    "fallback": ["No te entendí bien. ¿Me lo decís de otra forma?",
+                 "Perdón, no lo entendí. Puedo darte un turno, cancelarlo o contestarte dudas de la clínica."],
+    "knowledge": [{"id": "kfaqcl", "title": "Preguntas frecuentes", "source": "texto", "url": "", "text":
+      "P: ¿Qué horarios tiene la clínica?\nR: Atendemos de lunes a viernes de 8 a 20 h y los sábados de 8 a 13 h.\n\nP: ¿Dónde queda la clínica?\nR: En Av. Rivadavia 4500, CABA, a una cuadra del subte A (estación Castro Barros).\n\nP: ¿Qué obras sociales y prepagas aceptan?\nR: OSDE, Swiss Medical, Galeno y Medifé. También atendemos de forma particular.\n\nP: ¿Tengo que llevar algo al turno?\nR: El DNI, la credencial de la obra social y, si tenés, estudios anteriores."}],
+    "knowledge_threshold": 0.55,
+    "intents": [
+      {"name": "Pedir turno", "examples": ["quiero sacar un turno", "necesito un turno", "quiero una cita con el médico",
+        "me das un turno para [mañana](fecha)", "turno con [cardiología](especialidad)", "quiero reservar un turno",
+        "necesito ver a un [dermatólogo](especialidad)", "sacar turno", "turnos"]},
+      {"name": "Cancelar turno", "examples": ["quiero cancelar mi turno", "no voy a poder ir al turno", "anulá mi turno",
+        "dar de baja el turno", "cancelar turno"]},
+      {"name": "Saludar", "examples": ["hola", "buenas", "buen día", "buenas tardes"]}
+    ],
+    "entities": [
+      {"name": "especialidad", "kind": "list", "regex": "", "color": 1,
+       "values": ["clínica médica", "cardiología", "dermatología", "pediatría"],
+       "synonyms": {"clínica médica": ["clinico", "clínico", "médico de cabecera", "clinica"],
+                    "cardiología": ["cardiologo", "cardiólogo", "corazón"],
+                    "dermatología": ["dermatologo", "dermatólogo", "piel"],
+                    "pediatría": ["pediatra", "pediatria"]}},
+      {"name": "fecha", "kind": "date", "regex": "", "values": []},
+      {"name": "dni", "kind": "dni", "regex": "\\b\\d{1,2}\\.?\\d{3}\\.?\\d{3}\\b", "values": []}
+    ],
+    "slots": [
+      {"name": "especialidad", "entity": "especialidad"},
+      {"name": "fecha", "entity": "fecha", "description": "Día y hora del turno"},
+      {"name": "dni", "entity": "dni"}
+    ],
+    "classifications": [{"name": "Turno dado", "color": 1}, {"name": "Turno cancelado", "color": 4}],
+    "functions": [],
+    "flows": [
+      {"name": "Bienvenida", "trigger": "__start__", "steps": [
+        {"type": "message", "text": "¡Hola! Soy el asistente de la clínica. ¿En qué te ayudo?",
+         "buttons": [{"label": "Sacar un turno", "value": "quiero sacar un turno"},
+                     {"label": "Cancelar un turno", "value": "quiero cancelar mi turno"},
+                     {"label": "Hablar con alguien", "value": "quiero hablar con una persona"}]}]},
+      {"name": "Saludo", "trigger": "Saludar", "steps": [
+        {"type": "message", "text": "¡Hola! Puedo darte un turno, cancelarlo o contarte horarios y obras sociales."}]},
+      {"name": "Dar turno", "trigger": "Pedir turno", "steps": [
+        {"type": "ask", "slot": "especialidad", "text": "¿Con qué especialidad?",
+         "buttons": [{"label": "Clínica médica"}, {"label": "Cardiología"}, {"label": "Dermatología"}, {"label": "Pediatría"}]},
+        {"type": "ask", "slot": "fecha", "text": "¿Qué día y a qué hora te queda bien? (por ejemplo: «el jueves a las 10»)"},
+        {"type": "ask", "slot": "dni", "text": "¿Me pasás tu DNI para reservarlo?"},
+        {"type": "message", "text": "Listo: turno de {{ especialidad }} el {{ fecha }} a nombre del DNI {{ dni }}. Te esperamos."},
+        {"type": "classify", "classification": "Turno dado"},
+        {"type": "set", "slot": "especialidad", "mode": "clear"},
+        {"type": "set", "slot": "fecha", "mode": "clear"}]},
+      {"name": "Cancelar", "trigger": "Cancelar turno", "steps": [
+        {"type": "ask", "slot": "dni", "text": "¿Cuál es tu DNI?"},
+        {"type": "classify", "classification": "Turno cancelado"},
+        {"type": "handoff", "reason": "cancelar turno",
+         "text": "Te paso con una persona de recepción para confirmar la cancelación del turno del DNI {{ dni }}."}]}
+    ],
+    "system": {
+      "cancel": {"enabled": true}, "repeat": {"enabled": true}, "clarify": {"enabled": true},
+      "resume": {"enabled": true}, "correction": {"enabled": true},
+      "handoff": {"enabled": true, "text": "Te paso con una persona de recepción, ya te escriben."},
+      "anything_else": {"enabled": true, "text": "¿Te ayudo con algo más?"},
+      "csat": {"enabled": false}
+    }
+  }
+}

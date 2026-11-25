@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.env
+
+# datos locales: agentes, conversaciones, usuarios, claves y modelos
+data/
+agents/
+models/
+users.json
+*.secrets.json
+
+.impeccable/

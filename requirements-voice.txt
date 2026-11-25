@@ -1,0 +1,4 @@
+# Voz opcional (dictado y respuestas habladas). Además hace falta ffmpeg en el sistema.
+-r requirements.txt
+faster-whisper==1.2.1
+piper-tts==1.8.0
