@@ -44,6 +44,10 @@ y `_sum`, así que «llamadas por resultado» es `rate(<nombre>_count{outcome="e
 | `parla_knowledge_search_duration_seconds` | histogram | `outcome` | Búsquedas en la base de conocimiento. |
 | `parla_handoffs_total` | counter | `agent`, `channel` | Conversaciones que el bot pasó a una persona. |
 | `parla_csat_score` | histogram | `agent` | Respuestas a la encuesta CSAT, buckets de 1 a 5 (promedio: `_sum / _count`). |
+| `parla_connections` | gauge | `kind` | Conexiones abiertas: `http` (keep-alive), `ws`, `sse`. |
+| `parla_queue_depth` | gauge | `queue` | `executor` (pedidos esperando un hilo), `inflight`, `sessions` (charlas con un turno en curso o en fila), `bus_subscribers`, `db_write`, `embed`. |
+| `parla_embed_batches_total`, `parla_embed_items_total` | counter | | Llamadas de embeddings a ONNX y textos: textos / llamadas = tamaño medio del lote. |
+| `parla_db_commits_total`, `parla_db_statements_total` | counter | | Group commits de SQLite y sus escrituras: sentencias / commits = tamaño medio del grupo. |
 | `parla_active_sessions` | gauge | `agent` | Conversaciones sin terminar con movimiento en los últimos 30 minutos (se calcula en cada scrape). |
 | `parla_test_runs_total` | counter | `agent`, `outcome` | Corridas de las pruebas (`passed`, `failed`): interfaz, API, MCP y el control antes de publicar. |
 | `parla_outbound_messages_total` | counter | `channel`, `outcome` | Mensajes y llamadas salientes (API, campañas, recordatorios): `sent`, `retry` (falló y se va a reintentar), `failed`, `opted_out` (rechazado porque la persona se dio de baja, o una baja nueva). |

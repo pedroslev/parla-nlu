@@ -48,6 +48,11 @@ auditoría van en un archivo SQLite ahí mismo (`parla.db`). Eso define cómo se
 | `PARLA_OPENAI_BASE_URL`, `PARLA_DEEPGRAM_BASE_URL`, `PARLA_ELEVENLABS_BASE_URL`, `PARLA_GOOGLE_SPEECH_BASE_URL`, `PARLA_GOOGLE_TTS_BASE_URL` | | Otra dirección para los proveedores de voz en la nube. |
 | `PARLA_WHATSAPP_API`, `PARLA_TELEGRAM_API` | | Otra URL base para la API de WhatsApp Cloud (por defecto `https://graph.facebook.com/v21.0`) y la Bot API de Telegram. |
 | `PARLA_URL`, `PARLA_TOKEN`, `PARLA_MCP_ALLOWED_HOSTS` | | Solo para `mcp_server.py`: dónde está Parla, su API key y hosts extra para `--http`. |
+| `PARLA_THREADS` | | Hilos que corren los pedidos (turnos, API de administración). Sin poner: `64`. Ver [Rendimiento y ajustes](#rendimiento-y-ajustes). |
+| `PARLA_EMBED_WORKERS`, `PARLA_EMBED_THREADS` | | Llamadas de embeddings en paralelo (por defecto: núcleos / 2) e hilos de ONNX por llamada (por defecto `2`). |
+| `PARLA_EMBED_BATCH`, `PARLA_EMBED_WAIT_MS` | | Textos por llamada (por defecto `16`) y cuánto esperar para llenar un lote (por defecto `0`: solo lo que ya está en la cola). |
+| `PARLA_VOICE_WORKERS` | | Juegos de modelos locales Whisper/Piper que trabajan a la vez (por defecto `min(2, núcleos / 4)`; cada uno usa su RAM). |
+| `PARLA_IDLE_TIMEOUT`, `PARLA_WS_MAX_MESSAGE` | | Segundos sin datos antes de cerrar una conexión (por defecto `30`) y el mensaje de WebSocket más grande (por defecto `1000000` bytes). |
 
 El puerto es el argumento de `app.py` (la imagen usa `8000`). La dirección de Ollama no es una variable: se
 configura por agente en la interfaz (**IA → dirección**).
@@ -188,7 +193,11 @@ server {
     server_name bots.midominio.com;
     # ssl_certificate / ssl_certificate_key ...
     client_max_body_size 25m;          # audios y PDFs van en base64
-    proxy_read_timeout 120s;           # la IA local y la voz tardan segundos
+    proxy_read_timeout 3600s;          # la IA y la voz tardan segundos; WebSocket/SSE quedan abiertos (Parla manda ping cada 15-30 s)
+    proxy_buffering off;               # SSE y las respuestas de la IA en vivo, token a token
+    proxy_http_version 1.1;            # keep-alive y WebSocket
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;   # map $http_upgrade $connection_upgrade { default upgrade; "" ""; }
 
     location /api/v1/ { proxy_pass http://127.0.0.1:8000; }
     location = /static/widget.js { proxy_pass http://127.0.0.1:8000; }
@@ -246,6 +255,25 @@ docker build -t parla:baked --build-arg BAKE_EMBED_DIR=/opt/embeddings .
 
 La imagen pasa de ~400 MB a ~1,6 GB. Si cambia `MODEL` en `parla/server.py`, actualizá el nombre en el
 `Dockerfile`. Whisper y piper no se pre-bajan en la imagen.
+
+## Rendimiento y ajustes
+
+Un solo proceso atiende todo en un loop de eventos (asyncio; usa `uvloop` si está instalado): HTTP/1.1 keep-alive,
+WebSocket y SSE comparten el puerto 8000, así que las probes y las rutas del ingress no cambian. Medido en una M4 de
+10 núcleos con `tests/perf/load.py` (charlas de 5 turnos, textos únicos): ~280 turnos/s con 10 charlas a la vez,
+~360-420 de 50 a 1.000 a la vez sin errores, y 5.000 conexiones WebSocket/SSE quietas en ~150 MB además del modelo.
+
+- **El techo es el modelo de embeddings**: cada turno que el bot tiene que clasificar corre `embeddinggemma-300m` en la
+  CPU (~500 textos/s en esa máquina con todos los núcleos). Más allá, más concurrencia solo suma espera. Lo sube más
+  CPU (o más réplicas, cada una con sus datos); más workers en el mismo proceso no (medido).
+- `PARLA_EMBED_WORKERS` × `PARLA_EMBED_THREADS` ≈ los núcleos del pod. Con un límite de 4 CPU: `2` × `2`.
+- `PARLA_THREADS` limita los pedidos en curso; un proveedor de IA lento ocupa un hilo por respuesta: subilo si muchas
+  charlas esperan a la IA a la vez.
+- Detrás de un proxy, WebSocket necesita que pase `Upgrade`/`Connection`, y SSE el buffering apagado y un timeout de
+  lectura largo (el bloque de nginx de arriba; para ingress-nginx, las anotaciones de [kubernetes_es.md](kubernetes_es.md)).
+  Si el proxy no puede, el widget y la interfaz vuelven solos al polling.
+- Las escrituras a SQLite pasan por un solo hilo que hace commit en grupo; lo que la API confirmó ya está en el WAL
+  (`synchronous=NORMAL`: sobrevive a que se caiga el proceso; un corte de luz puede perder las últimas transacciones).
 
 ## Recursos
 

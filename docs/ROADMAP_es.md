@@ -12,6 +12,10 @@ una edición paga que se guarde funciones.
 
 ## Recién salido
 
+- **Núcleo por eventos, WebSocket/SSE, streaming de la IA**: un servidor asyncio con keep-alive y una fila por
+  conversación, embeddings en micro-lotes y un solo escritor de SQLite (~5-13x lo de antes, sin errores con 1.000
+  charlas a la vez, 5.000 conexiones quietas); WebSocket y SSE para el widget, la Bandeja y Campañas; respuestas de
+  la IA token a token con los guardrails aplicados al final.
 - **Mensajes salientes y campañas**: el bot escribe primero con una API de salida, campañas desde un CSV
   (plantillas aprobadas de WhatsApp con la ventana de 24 horas resuelta sola, Telegram, llamadas salientes por
   Twilio o jambonz) con fecha de inicio, ritmo, horario de silencio, reintentos, estados de entrega y conversiones,

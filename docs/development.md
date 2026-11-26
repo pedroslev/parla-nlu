@@ -65,10 +65,12 @@ All are optional. Nothing loads `.env` automatically: export them in your shell.
 | `parla/__init__.py` | `ROOT`, `DATA` (`PARLA_DATA`) and `__version__`. |
 | `parla/server.py` | NLU (`classify`, `extract`, `parse`, `read_answer`), training (`train`, `self_check`), versions (`publish`, `deploy`, `target`, `diff`), templates (`cel`, `render`), the engine (`handle`, `run`, `begin`), conversations on disk (`converse`), `api_v1`, `audio_event`, the Bandeja (Inbox) (`human`) and the HTTP `Handler`. |
 | `parla/auth.py` | Users, roles, cookies, keys; `handle` (routes `/api/auth`, `/api/users`) and `guard` (before every `/api/`). |
-| `parla/db.py` | The SQLite database `parla.db` (WAL, one connection and a lock per process): tables `sessions`, `logins` and `audit`; `q`, `audit`, `audit_list`. |
+| `parla/aserver.py` | The asyncio HTTP/1.1 server: keep-alive, per-conversation queues, WebSocket (`/ws`) and SSE (`/stream`). Runs each request through `server.Handler` in a thread pool. |
+| `parla/bus.py` | In-process pub/sub (`publish` from any thread, `subscribe` from the loop): topics `session:`, `inbox:`, `campaign:`. |
+| `parla/db.py` | The SQLite database `parla.db` (WAL): per-thread read connections and one writer thread with group commit; tables `sessions`, `logins`, `audit`, campaigns; `q`, `connect`, `audit`, `audit_list`. |
 | `parla/pii.py` | Masking personal data in what is stored (`pii_redaction`): `categories`, the rules and the Luhn / mod-97 checks. |
 | `parla/brain.py` | AI on top of the engine: `rescue_intent`, `fill_slot`, `understand`, `side_question`, `answer`, `fallback`, `agent_turn`. No function raises. |
-| `parla/llm.py` | Ollama / OpenAI-compatible client: `chat`, `status`, `pull`. |
+| `parla/llm.py` | Ollama / OpenAI-compatible / Anthropic / Gemini client: `chat` (with `stream=` for live tokens), `settle`, `status`, `pull`. |
 | `parla/knowledge.py` | `extract` (text, HTML, URL, PDF), `chunks`, `search`. |
 | `parla/dates.py` | `extract`: rule-based natural language dates. |
 | `parla/files.py` | Files for the `file` step: `save`, `listing`, `find`, `read`, `delete`. |
@@ -90,6 +92,27 @@ On disk (`PARLA_DATA`): `agents/<id>.json` (the draft), `<id>.model.json` and `<
 audit log) and `models/` (voice and audio cache). On startup, `migrate_sessions` imports any old
 `agents/<id>.sessions/` folder into `parla.db` and renames it to `<id>.sessions.migrated`; `cleanup` (at startup
 and every hour) applies the retention.
+
+## Server architecture
+
+```
+socket ─► aserver (event loop) ─► per-conversation queue ─► thread pool: server.Handler (auth, limits, route)
+                                                                     ├─► embeddings: micro-batch queue ─► N ONNX callers
+                                                                     ├─► SQLite: reads on a per-thread connection,
+                                                                     │   writes ─► writer thread (group commit)
+                                                                     └─► bus.publish ─► WebSocket / SSE subscribers
+```
+
+- **Loop**: one asyncio loop owns every connection. Hot paths stay in the loop (`/static/*.js` from memory, WS/SSE
+  framing); everything else runs the existing `Handler` code unchanged in `PARLA_THREADS` threads.
+- **Queues**: turns of the same bot + `sessionId` wait in a FIFO `asyncio.Lock` that is deleted when empty, so one
+  conversation is serial and different ones are parallel. Embedding requests from all conversations are batched
+  (`_jobs` in `server.py`); SQLite writes go to one writer that commits whatever is queued in one transaction.
+  `q()` returns after the COMMIT; a crash before it loses only unacknowledged writes (`tests/test_aserver.py`).
+- **Bus**: `save_session` publishes the stored record; WS/SSE send what's after the client's cursor. During a turn
+  `converse` sets `llm.STREAM.sink` only if someone listens, so streaming costs nothing otherwise.
+- **Measuring**: `tests/perf/load.py` (not in `run_all`; CI runs a 10 s smoke). The embedding model is the
+  ceiling; see [deployment.md](deployment.md#performance-and-tuning).
 
 ## How the engine works
 

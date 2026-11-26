@@ -56,3 +56,7 @@ jobs:
       - run: python tests/run_all.py
       - name: Conversation tests of the example bot
         run: python -m parla.bottests examples/pizzeria.json
+      # Perf smoke (tests/perf/load.py): 20 concurrent conversations for 10 s on a temporary server. The floor is far
+      # below a laptop (~270 turns/s on an M4) so a slow runner passes; a regression to the old server or any error fails.
+      - name: Perf smoke
+        run: python tests/perf/load.py --conc 20 --seconds 10 --floor 15

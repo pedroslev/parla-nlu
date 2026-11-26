@@ -219,6 +219,48 @@ Inbox.
  "next": 9, "handoff": true, "ended": false}
 ```
 
+### Push: WebSocket and SSE
+
+Same port, same authentication as the polling routes (cookie, `Authorization: Bearer`, or the public widget rules
+when anonymous: widget on, site in **Allowed sites**, channel `web`). Polling keeps working.
+
+**WebSocket** `GET /api/v1/bots/{bot}/ws` (RFC 6455, text frames with JSON, up to 1 MB per message, ping every 30 s).
+Send the same bodies as `POST /events`, plus an optional `id` that comes back in the reply:
+
+```text
+→ {"id": 1, "type": "start", "sessionId": "cliente-42"}
+← {"type": "reply", "id": 1, "status": 200, "body": {...same as POST /events...}}
+→ {"id": 2, "type": "message", "sessionId": "cliente-42", "text": "¿abren el domingo?"}
+← {"type": "delta", "stream": 7, "text": "Sí, abrimos"}           (AI replies while they are written)
+← {"type": "delta", "stream": 7, "text": " de 12 a 23."}
+← {"type": "reply", "id": 2, "status": 200, "body": {...}}
+← {"type": "messages", "sessionId": "cliente-42", "messages": [{"from": "human", ...}], "next": 12, "handoff": true, "ended": false}
+→ {"type": "follow", "sessionId": "cliente-42", "after": 12}       (listen without sending, e.g. after a reload)
+```
+
+`messages` carries what the socket didn't cause itself (Inbox replies, take/release events), same shape as
+`GET .../messages`. `overflow` means events were dropped for a slow client: send `follow` again. A cross-site
+`Origin` that isn't an allowed widget site gets `403` on the handshake.
+
+**SSE** (`text/event-stream`, a comment every 15 s keeps proxies open):
+
+| Route | Events |
+|---|---|
+| `GET /api/v1/bots/{bot}/sessions/{sessionId}/stream?after=N` | `messages` (same body as `GET .../messages`), `delta`, `replace` |
+| `GET /api/agents/{id}/inbox/stream` | `inbox` (same body as `GET /api/agents/{id}/inbox`, sent when it changes) |
+| `GET /api/agents/{id}/campaigns/stream` | `campaigns` (the campaign list, sent on each send or status change) |
+
+```text
+event: messages
+data: {"sessionId": "cliente-42", "messages": [...], "next": 9, "handoff": false, "ended": false}
+```
+
+**AI streaming and guardrails.** Knowledge answers, the generative fallback and the `agent` step stream tokens as
+`delta` events (for JSON outputs, only the user-facing text field). Guardrails that need the whole text (the leak
+regex, "the fallback must ask back", the knowledge support check) run at the end: if the final text differs from what
+was streamed, a `replace` event with the same `stream` id carries the final text (`""` = remove it). The `reply` /
+`messages` event always has the final text, so clients without streaming see exactly what they saw before.
+
 ### `DELETE /api/v1/bots/{bot}/sessions/{sessionId}`
 
 ```json

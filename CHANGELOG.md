@@ -9,6 +9,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Event-driven core ([docs/development.md](docs/development.md#server-architecture)): an asyncio HTTP/1.1 server
+  (keep-alive, same limits and guards, `uvloop` if installed) replaces the thread-per-connection server; turns of one
+  conversation run in order and different conversations in parallel; embeddings are micro-batched across
+  conversations (`PARLA_EMBED_WORKERS`, `PARLA_EMBED_THREADS`, `PARLA_EMBED_BATCH`, `PARLA_EMBED_WAIT_MS`); SQLite
+  reads use a connection per thread and writes go through one writer thread with group commit. On a 10-core M4:
+  10 concurrent conversations 50 -> ~270 turns/s, 50 concurrent 27 -> ~360, 1,000 concurrent with 0 errors.
+- WebSocket `GET /api/v1/bots/{bot}/ws` and SSE `.../sessions/{sid}/stream`, `/api/agents/{id}/inbox/stream` and
+  `/api/agents/{id}/campaigns/stream` ([docs/api.md](docs/api.md#push-websocket-and-sse)), fed by an in-process
+  event bus. The widget, the Inbox and Campaigns use them and fall back to polling.
+- AI streaming: knowledge answers, the generative fallback and the `agent` step send `delta` events from Ollama,
+  OpenAI-compatible servers, Anthropic (`messages.stream`) and Gemini (`streamGenerateContent`); guardrails run on
+  the full text and send `replace` when they change it.
+- Metrics `parla_connections`, `parla_queue_depth`, `parla_embed_*_total`, `parla_db_*_total`; `tests/perf/load.py`
+  and a perf smoke in CI.
+
 - Helm chart (`deploy/helm/parla`): single replica with Recreate, hardened pod, every `PARLA_*` setting as values with
   secrets via `existingSecret` (OIDC secret as a file), Ingress publishing only `/api/v1/`, `/files/` and
   `/static/widget.js` unless `exposeAdmin`, optional ServiceMonitor, NetworkPolicy (egress limited to DNS + HTTPS to
@@ -136,6 +151,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Login sessions are stored as SHA-256 hashes; `parla.db` is created with permissions 600.
 
 ### Changed
+
+- Local voice: a pool of `PARLA_VOICE_WORKERS` model sets instead of one global lock; training locks per agent;
+  `users.json` is read without a lock (cached by mtime); the outbound queue wakes on new work instead of every second.
 
 - Conversations, login sessions and the audit log are stored in a SQLite database (`DATA/parla.db`, WAL) instead
   of `agents/<id>.sessions/*.json`. Existing folders are imported on startup and renamed to

@@ -12,6 +12,10 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Shipped recently
 
+- **Event-driven core, WebSocket/SSE, LLM streaming**: an asyncio server with keep-alive and per-conversation
+  queues, micro-batched embeddings and a single SQLite writer (~5-13x the old throughput, 0 errors at 1,000
+  concurrent conversations, 5,000 idle connections); WebSocket and SSE push for the widget, Inbox and Campaigns; AI
+  replies streamed token by token with guardrails applied at the end.
 - **Outbound messages and campaigns**: the bot writes first through an outbound API, CSV campaigns (WhatsApp
   approved templates with the 24-hour window handled automatically, Telegram, outbound calls through Twilio or
   jambonz) with schedule, rate, quiet hours, retries, delivery statuses and conversions, reminders from a flow

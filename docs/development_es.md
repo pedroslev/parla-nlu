@@ -66,10 +66,12 @@ Todas son opcionales. Nada carga `.env` solo: exportalas en tu shell.
 | `parla/__init__.py` | `ROOT`, `DATA` (`PARLA_DATA`) y `__version__`. |
 | `parla/server.py` | NLU (`classify`, `extract`, `parse`, `read_answer`), entrenamiento (`train`, `self_check`), versiones (`publish`, `deploy`, `target`, `diff`), plantillas (`cel`, `render`), el motor (`handle`, `run`, `begin`), conversaciones en disco (`converse`), `api_v1`, `audio_event`, la Bandeja (`human`) y el `Handler` HTTP. |
 | `parla/auth.py` | Usuarios, roles, cookies, claves; `handle` (rutas `/api/auth`, `/api/users`) y `guard` (antes de cada `/api/`). |
-| `parla/db.py` | La base SQLite `parla.db` (WAL, una conexión y un lock por proceso): tablas `sessions`, `logins` y `audit`; `q`, `audit`, `audit_list`. |
+| `parla/aserver.py` | El servidor HTTP/1.1 con asyncio: keep-alive, una fila por conversación, WebSocket (`/ws`) y SSE (`/stream`). Corre cada pedido por `server.Handler` en un pool de hilos. |
+| `parla/bus.py` | Pub/sub en el proceso (`publish` desde cualquier hilo, `subscribe` desde el loop): temas `session:`, `inbox:`, `campaign:`. |
+| `parla/db.py` | La base SQLite `parla.db` (WAL): una conexión de lectura por hilo y un hilo escritor con group commit; tablas `sessions`, `logins`, `audit`, campañas; `q`, `connect`, `audit`, `audit_list`. |
 | `parla/pii.py` | Tapar datos personales en lo que se guarda (`pii_redaction`): `categories`, las reglas y los controles de Luhn y módulo 97. |
 | `parla/brain.py` | IA encima del motor: `rescue_intent`, `fill_slot`, `understand`, `side_question`, `answer`, `fallback`, `agent_turn`. Ninguna función lanza. |
-| `parla/llm.py` | Cliente de Ollama / compatible OpenAI: `chat`, `status`, `pull`. |
+| `parla/llm.py` | Cliente de Ollama / compatible OpenAI / Anthropic / Gemini: `chat` (con `stream=` para tokens en vivo), `settle`, `status`, `pull`. |
 | `parla/knowledge.py` | `extract` (texto, HTML, URL, PDF), `chunks`, `search`. |
 | `parla/dates.py` | `extract`: fechas en lenguaje natural por reglas. |
 | `parla/files.py` | Archivos del paso `file`: `save`, `listing`, `find`, `read`, `delete`. |
@@ -91,6 +93,27 @@ En disco (`PARLA_DATA`): `agents/<id>.json` (el borrador), `<id>.model.json` y `
 auditoría) y `models/` (voz y caché de audio). Al arrancar, `migrate_sessions` importa a `parla.db` cualquier
 carpeta vieja `agents/<id>.sessions/` y la renombra a `<id>.sessions.migrated`; `cleanup` (al arrancar y cada
 hora) aplica la retención.
+
+## Arquitectura del servidor
+
+```
+socket ─► aserver (loop de eventos) ─► fila por conversación ─► pool de hilos: server.Handler (auth, límites, ruta)
+                                                                     ├─► embeddings: cola de micro-batch ─► N llamadas a ONNX
+                                                                     ├─► SQLite: lecturas en una conexión por hilo,
+                                                                     │   escrituras ─► hilo escritor (group commit)
+                                                                     └─► bus.publish ─► suscriptores WebSocket / SSE
+```
+
+- **Loop**: un loop de asyncio maneja todas las conexiones. Lo caliente queda en el loop (`/static/*.js` desde
+  memoria, frames de WS/SSE); el resto corre el código de siempre del `Handler`, sin cambios, en `PARLA_THREADS` hilos.
+- **Colas**: los turnos del mismo bot + `sessionId` esperan en un `asyncio.Lock` FIFO que se borra cuando queda vacío:
+  una charla va en serie y charlas distintas en paralelo. Los embeddings de todas las charlas se juntan en lotes
+  (`_jobs` en `server.py`); las escrituras a SQLite van a un escritor que commitea todo lo encolado en una transacción.
+  `q()` vuelve después del COMMIT; una caída antes pierde solo escrituras no confirmadas (`tests/test_aserver.py`).
+- **Bus**: `save_session` publica el registro guardado; WS/SSE mandan lo que está después del cursor del cliente.
+  Durante un turno `converse` pone `llm.STREAM.sink` solo si alguien escucha: si no, el streaming no cuesta nada.
+- **Medir**: `tests/perf/load.py` (no está en `run_all`; CI corre un smoke de 10 s). El techo es el modelo de
+  embeddings; ver [deployment_es.md](deployment_es.md#rendimiento-y-ajustes).
 
 ## Cómo funciona el motor
 

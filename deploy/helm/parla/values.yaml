@@ -72,6 +72,10 @@ oidc:
 # Anything else (PARLA_<PROVIDER>_BASE_URL, PARLA_USERS, OTEL_*…): plain env entries and envFrom sources.
 extraEnv: []
 #  - {name: PARLA_ANTHROPIC_BASE_URL, value: "https://llm-proxy.internal"}
+#  Tuning (docs/deployment.md#performance-and-tuning): set the embedding workers to the pod's CPU limit / 2
+#  - {name: PARLA_EMBED_WORKERS, value: "2"}
+#  - {name: PARLA_THREADS, value: "64"}
+#  - {name: PARLA_VOICE_WORKERS, value: "1"}
 extraEnvFrom: []
 #  - secretRef: {name: parla-extra}
 
@@ -131,7 +135,9 @@ ingress:
   className: ""         # nginx, traefik…
   annotations: {}
   #  nginx.ingress.kubernetes.io/proxy-body-size: 25m       # audio and PDFs travel as base64
-  #  nginx.ingress.kubernetes.io/proxy-read-timeout: "120"  # local AI and voice take seconds
+  #  nginx.ingress.kubernetes.io/proxy-read-timeout: "3600" # AI and voice take seconds; WebSocket/SSE stay open (Parla pings every 15-30 s)
+  #  nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+  #  nginx.ingress.kubernetes.io/proxy-buffering: "off"     # SSE and streamed AI replies arrive token by token
   #  cert-manager.io/cluster-issuer: letsencrypt
   hosts: [bots.example.com]
   tls: []

@@ -44,6 +44,10 @@ so "calls by outcome" is `rate(<name>_count{outcome="error"}[5m])`. `outcome` is
 | `parla_knowledge_search_duration_seconds` | histogram | `outcome` | Knowledge base searches. |
 | `parla_handoffs_total` | counter | `agent`, `channel` | Conversations the bot handed to a person. |
 | `parla_csat_score` | histogram | `agent` | CSAT answers, buckets 1 to 5 (average: `_sum / _count`). |
+| `parla_connections` | gauge | `kind` | Open connections: `http` (keep-alive), `ws`, `sse`. |
+| `parla_queue_depth` | gauge | `queue` | `executor` (requests waiting for a thread), `inflight`, `sessions` (conversations with a turn running or queued), `bus_subscribers`, `db_write`, `embed`. |
+| `parla_embed_batches_total`, `parla_embed_items_total` | counter | | ONNX embedding calls and texts: items / batches = mean batch size. |
+| `parla_db_commits_total`, `parla_db_statements_total` | counter | | SQLite group commits and the writes in them: statements / commits = mean group size. |
 | `parla_active_sessions` | gauge | `agent` | Conversations not ended with activity in the last 30 minutes (computed on each scrape). |
 | `parla_test_runs_total` | counter | `agent`, `outcome` | Test suite runs (`passed`, `failed`): UI, API, MCP and the publish gate. |
 | `parla_outbound_messages_total` | counter | `channel`, `outcome` | Outbound messages and calls (API, campaigns, reminders): `sent`, `retry` (failed, will be retried), `failed`, `opted_out` (refused because the person opted out, or a new opt-out). |
