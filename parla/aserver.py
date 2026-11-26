@@ -26,7 +26,7 @@ import struct
 import sys
 import urllib.parse
 
-from . import auth, bus, i18n
+from . import auth, bus, cluster, db, i18n
 
 MAX_HEADER = 65536
 PRELOAD = 1_000_000          # cuerpos hasta 1 MB se leen en el loop; más grandes, el Handler los lee a pedido (después de auth)
@@ -118,7 +118,15 @@ async def serial(key):
     entry[1] += 1
     try:
         async with entry[0]:
-            yield
+            if not db.PG:
+                yield
+                return
+            name = "turn:%s/%s" % key        # con Postgres, también en fila con las otras réplicas
+            held = await run(cluster.acquire, name)
+            try:
+                yield
+            finally:
+                await run(cluster.release, held, name)
     finally:
         entry[1] -= 1
         if not entry[1]:

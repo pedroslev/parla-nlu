@@ -1,0 +1,22 @@
+# High availability (docs/kubernetes.md#high-availability): deploy/k8s with 3 replicas on Postgres.
+# Before applying: a Postgres you run (managed service or CloudNativePG), a ReadWriteMany storage class, and
+#   kubectl -n <ns> create secret generic parla-ha \
+#     --from-literal=PARLA_DATABASE_URL='postgresql://parla:<password>@<host>:5432/parla?sslmode=require' \
+#     --from-literal=PARLA_SECRET_KEY="$(openssl rand -hex 32)"
+# kubectl apply -n <ns> -k deploy/k8s-ha
+resources:
+  - ../k8s
+  - pdb.yaml
+patches:
+  - target: {kind: PersistentVolumeClaim, name: parla-data}
+    patch: |-
+      - {op: replace, path: /spec/accessModes, value: ["ReadWriteMany"]}
+      # - {op: add, path: /spec/storageClassName, value: <your RWX class: efs, filestore, azurefile, nfs…>}
+  - target: {kind: Deployment, name: parla}
+    patch: |-
+      - {op: replace, path: /spec/replicas, value: 3}
+      - {op: replace, path: /spec/strategy, value: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}}
+      - {op: add, path: /spec/template/spec/containers/0/envFrom/-, value: {secretRef: {name: parla-ha}}}
+      - {op: replace, path: /spec/template/spec/containers/0/readinessProbe/httpGet/path, value: /readyz}
+      - {op: add, path: /spec/template/spec/containers/0/volumeMounts/-, value: {name: models, mountPath: /data/models}}
+      - {op: add, path: /spec/template/spec/volumes/-, value: {name: models, emptyDir: {sizeLimit: 4Gi}}}

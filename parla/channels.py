@@ -27,7 +27,7 @@ import urllib.request
 import uuid
 from collections import OrderedDict
 
-from . import auth, costs, files, llm, outbound, telemetry, vault, voice
+from . import auth, cluster, costs, db, files, llm, outbound, telemetry, vault, voice
 
 CHANNELS = ("whatsapp", "telegram")
 SECRETS = {"whatsapp": ("WHATSAPP_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN"),
@@ -84,7 +84,7 @@ def _secret(agent_id, name):
 
 STATUS = {}      # (agente, canal) -> {"last_in", "last_out", "error", "error_at"}. ponytail: en memoria, se pierde al reiniciar
 _seen, _seen_lock = OrderedDict(), threading.Lock()
-# ponytail: un lock por conversación en memoria (hasta ~1000): con varias réplicas de Parla hace falta uno compartido
+# un lock por conversación en memoria (hasta ~1000); con Postgres, además un advisory lock (cluster.py)
 _locks, _locks_guard = {}, threading.Lock()
 
 
@@ -93,7 +93,10 @@ def _note(agent_id, channel, **fields):
 
 
 def _first_time(key):
-    """Meta y Telegram reintentan: cada id de mensaje se atiende una sola vez (los últimos 5000)."""
+    """Meta y Telegram reintentan: cada id de mensaje se atiende una sola vez (los últimos 5000; con Postgres, en
+    todas las réplicas y por un día)."""
+    if db.PG:
+        return cluster.first("seen:" + key, 86400)
     with _seen_lock:
         if key in _seen:
             return False
@@ -108,7 +111,8 @@ def _session_lock(key):
         if key not in _locks and len(_locks) >= 1000:
             for old in [k for k, lock in _locks.items() if not lock.locked()][:500]:
                 del _locks[old]
-        return _locks.setdefault(key, threading.Lock())
+        local = _locks.setdefault(key, threading.Lock())
+    return cluster.both(local, "chat:" + key) if db.PG else local
 
 
 def _log(agent_id, channel, message):

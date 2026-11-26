@@ -7,6 +7,9 @@ FROM python:3.12-slim
 
 ARG INSTALL_VOICE=0
 ARG INSTALL_PROVIDERS=0
+# psycopg (Postgres backend, PARLA_DATABASE_URL): ~10 MB, in the default image so the published one runs with
+# several replicas without a rebuild. INSTALL_POSTGRES=0 to leave it out.
+ARG INSTALL_POSTGRES=1
 # Empty: the embedding model is downloaded to the data volume the first time you train.
 ARG BAKE_EMBED_DIR=
 
@@ -22,14 +25,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.txt requirements-voice.txt requirements-providers.txt ./
+COPY requirements.txt requirements-voice.txt requirements-providers.txt requirements-postgres.txt ./
 RUN if [ "$INSTALL_VOICE" = 1 ]; then \
         apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/* && \
         pip install -r requirements-voice.txt; \
     else \
         pip install -r requirements.txt; \
     fi && \
-    if [ "$INSTALL_PROVIDERS" = 1 ]; then pip install -r requirements-providers.txt; fi
+    if [ "$INSTALL_PROVIDERS" = 1 ]; then pip install -r requirements-providers.txt; fi && \
+    if [ "$INSTALL_POSTGRES" = 1 ]; then pip install -r requirements-postgres.txt; fi
 
 # Before copying the code, so 1.2 GB isn't downloaded again on every change. The name must match MODEL
 # in parla/server.py.

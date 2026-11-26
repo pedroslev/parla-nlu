@@ -1,6 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "type": "object",
+  "if": {"properties": {"replicaCount": {"minimum": 2}}, "required": ["replicaCount"]},
+  "then": {
+    "properties": {"database": {"anyOf": [{"properties": {"url": {"minLength": 1}}, "required": ["url"]},
+                                          {"properties": {"existingSecret": {"minLength": 1}}, "required": ["existingSecret"]}]}},
+    "required": ["database"]
+  },
   "properties": {
     "image": {
       "type": "object",
@@ -12,7 +18,27 @@
         "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]}
       }
     },
-    "replicaCount": {"type": "integer", "enum": [0, 1], "description": "Parla runs as a single replica (SQLite + in-memory state)"},
+    "replicaCount": {"type": "integer", "minimum": 0, "description": "More than 1 only with Postgres (database.url or database.existingSecret)"},
+    "database": {
+      "type": "object",
+      "properties": {
+        "url": {"type": "string", "pattern": "^((postgres|postgresql)://.+)?$"},
+        "existingSecret": {"type": "string"},
+        "secretKey": {"type": "string", "minLength": 1},
+        "pool": {"type": ["integer", "null"], "minimum": 1}
+      }
+    },
+    "secretKey": {"type": "object", "properties": {"value": {"type": "string"}, "existingSecret": {"type": "string"}, "secretKey": {"type": "string", "minLength": 1}}},
+    "autoscaling": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "minReplicas": {"type": "integer", "minimum": 1},
+        "maxReplicas": {"type": "integer", "minimum": 1},
+        "targetCPUUtilizationPercentage": {"type": "integer", "minimum": 1, "maximum": 100}
+      }
+    },
+    "podDisruptionBudget": {"type": "object", "properties": {"maxUnavailable": {"type": ["integer", "string"]}}},
     "config": {
       "type": "object",
       "properties": {

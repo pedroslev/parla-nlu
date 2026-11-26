@@ -19,6 +19,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import re
 import secrets as tokens
 import time
@@ -26,7 +27,7 @@ import unicodedata
 import urllib.parse
 from xml.sax.saxutils import escape, quoteattr
 
-from . import auth, channels, costs, outbound, telemetry, vault, voice
+from . import auth, channels, cluster, costs, db, outbound, telemetry, vault, voice
 from . import handoff as handoff_mod
 from .channels import ChannelError
 
@@ -53,17 +54,37 @@ SORRY = {"es": "Perdón, tuve un problema. Probá llamar de nuevo.", "en": "Sorr
          "pt": "Desculpe, tive um problema. Tente ligar de novo."}
 
 # ponytail: clave de los audios y silencios en memoria: se pierden al reiniciar y no sirven con varias réplicas
-_KEY = tokens.token_bytes(32)
-_silent = {}                    # sesión -> respuestas vacías seguidas
+# la firma de las direcciones de audio: con PARLA_SECRET_KEY, la misma en todas las réplicas (y tras reiniciar)
+_KEY = hashlib.sha256(b"parla-audio\0" + os.environ["PARLA_SECRET_KEY"].encode()).digest() if os.environ.get("PARLA_SECRET_KEY") \
+    else tokens.token_bytes(32)
+_silent = {}                    # sesión -> respuestas vacías seguidas (con Postgres: kv «silent:<sesión>»)
 # modo «stream» (voicestream.py): lo primero que dice el WebSocket y lo que sigue cuando se cierra (transferir o
-# cortar), por sesión. ponytail: en memoria, la llamada tiene que volver a la misma réplica (sticky por CallSid)
+# cortar), por sesión. Con Postgres van en kv: el WebSocket o el /after pueden llegar a otra réplica
 _greet, _after = {}, {}
 
 
 def stash(store, sid, p):
+    if db.PG:
+        return cluster.put("%s:%s" % ("greet" if store is _greet else "after", sid), p, 3600)
     store[sid] = p
     while len(store) > 1000:          # llamadas que nunca conectaron el stream: no crece sin fin
         store.pop(next(iter(store)))
+
+
+def unstash(store, sid):
+    if db.PG:
+        return cluster.take("%s:%s" % ("greet" if store is _greet else "after", sid))
+    return store.pop(sid, None)
+
+
+def _silence(sid, add=False):
+    """Respuestas vacías seguidas: add=True suma una y devuelve cuántas van; add=False las pone en cero."""
+    if db.PG:
+        return cluster.hit("silent:" + sid, 3600) if add else cluster.forget("silent:" + sid)
+    if add:
+        _silent[sid] = _silent.get(sid, 0) + 1
+        return _silent[sid]
+    _silent.pop(sid, None)
 
 
 def _lang(language):
@@ -213,17 +234,17 @@ def plan(agent, conf, sid, kind, text=None, caller=None, pending=None):
     app = auth._app()
     record = app.load_session(agent["id"], sid)
     if kind == "silence":
-        _silent[sid] = _silent.get(sid, 0) + 1
+        silent = _silence(sid, True)
         state = (record or {}).get("state") or {}
         lang = state.get("lang") or "es"
         if not record or (state.get("handoff") or {}).get("active"):
             say, handoff, finished = [], bool(record), False      # una persona la tomó desde la Bandeja: transferir
-        elif _silent[sid] >= MAX_SILENCE:
+        elif silent >= MAX_SILENCE:
             return _close(app, agent, sid, {"say": [BYE[_lang(lang)]], "then": "hangup", "lang": lang})
         else:
             say, handoff, finished = lines(state.get("last_bot") or [], lang), False, False
     else:
-        _silent.pop(sid, None)
+        _silence(sid)
         data = {"type": kind, "sessionId": sid, "channel": "phone", "environment": "production"}
         if kind == "start":
             data["data"] = {k: v for k, v in (("caller", caller), ("language", conf.get("language"))) if v}
@@ -268,7 +289,7 @@ def plan(agent, conf, sid, kind, text=None, caller=None, pending=None):
 
 def _close(app, agent, sid, out):
     app.end_session(agent["id"], sid)
-    _silent.pop(sid, None)
+    _silence(sid)
     return out
 
 
@@ -435,10 +456,10 @@ def webhook(headers, rfile, method, ref, provider, action, path, length):
             with channels._session_lock(agent_id + "/" + sid):
                 if (app.load_session(agent_id, sid) or {}).get("ended") is False:
                     app.end_session(agent_id, sid)
-                _silent.pop(sid, None)
+                _silence(sid)
         return 200, b"{}" if provider == "jambonz" else b"", "application/json" if provider == "jambonz" else "text/plain"
     if action == "after":            # se cerró el stream (voicestream.py): transferir, cortar o volver a escuchar
-        p = _after.pop(sid, None)
+        p = unstash(_after, sid)
         if p is None:
             p = {"say": [], "then": "hangup", "lang": "es"}
             with channels._session_lock(agent_id + "/" + sid):

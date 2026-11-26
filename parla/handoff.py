@@ -27,7 +27,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import auth, channels, costs, db, llm, outbound, pii, telemetry, vault
+from . import auth, channels, cluster, costs, db, llm, outbound, pii, telemetry, vault
 
 EVENTS = ("handoff.requested", "handoff.released", "conversation.started", "conversation.ended",
           "message.user", "message.bot", "csat.received", "campaign.finished")
@@ -41,7 +41,7 @@ SUMMARY_WAIT = 10               # segundos que el webhook handoff.requested espe
 SIP_VALUE_MAX = 128             # caracteres por encabezado (ya codificado)
 SIP_TOTAL_MAX = 1000            # Twilio: los encabezados del URI tienen que sumar menos de 1024
 clock = time.time               # las pruebas lo cambian por un reloj propio
-_lock = threading.Lock()        # ponytail: un solo hilo entrega todo (concurrencia 1 por webhook y en total): un webhook
+_lock = threading.Lock()        # ponytail: un solo hilo por réplica entrega todo (concurrencia 1 por webhook y en total): un webhook
 _wake = threading.Event()       # lento (TIMEOUT) demora a los demás; un hilo por webhook si hay muchos
 
 
@@ -304,11 +304,11 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 _opener = urllib.request.build_opener(_NoRedirect)
 
 
-def deliver(row, now=None):
-    """Manda una fila y la deja como quedó: delivered, queued (reintento) o dead."""
+def deliver(row, now=None, claimed=False):
+    """Manda una fila y la deja como quedó: delivered, queued (reintento) o dead. claimed: ya la reservó _claim."""
     now = now or clock()
     rid, agent_id, url, event, raw, attempts = row
-    db.q("UPDATE webhook_deliveries SET status = 'sending', attempts = attempts + 1, updated = ? WHERE id = ?", (_now_text(now), rid))
+    claimed or db.q("UPDATE webhook_deliveries SET status = 'sending', attempts = attempts + 1, updated = ? WHERE id = ?", (_now_text(now), rid))
     hook = next((w for w in webhooks(_app().settings_of(agent_id)) if w["url"] == url), None)
     code, error, started_at = None, None, time.monotonic()
     secret = vault.values(agent_id).get(hook["secret_name"]) if hook and hook["secret_name"] else None
@@ -349,12 +349,23 @@ def _due(now, limit=50):
                 "AND e.session_id IS d.session_id AND e.status IN ('queued', 'sending') AND e.id < d.id) ORDER BY id LIMIT ?", (now, limit))
 
 
+def _claim(now, limit=50):
+    """Con Postgres: como _due, pero reserva las filas («sending») con FOR UPDATE SKIP LOCKED: cada entrega la hace
+    una sola réplica, y el NOT EXISTS sigue cuidando el orden por conversación (la anterior está «queued» o «sending»)."""
+    rows = db.q("UPDATE webhook_deliveries SET status = 'sending', attempts = attempts + 1, updated = ? WHERE id IN ("
+                "SELECT id FROM webhook_deliveries d WHERE status = 'queued' AND next_at <= ? "
+                "AND NOT EXISTS (SELECT 1 FROM webhook_deliveries e WHERE e.agent_id = d.agent_id AND e.url = d.url "
+                "AND e.session_id IS d.session_id AND e.status IN ('queued', 'sending') AND e.id < d.id) ORDER BY id LIMIT ? "
+                "FOR UPDATE SKIP LOCKED) RETURNING id, agent_id, url, event, body, attempts - 1", (_now_text(now), now, limit))
+    return sorted(rows, key=lambda r: r[0])
+
+
 def tick(now=None):
     now = now or clock()
     with _lock:
-        rows = _due(now)
+        rows = _claim(now) if db.PG else _due(now)
         for row in rows:
-            deliver(row, now)
+            deliver(row, now, claimed=db.PG)
         return len(rows)
 
 
@@ -413,9 +424,14 @@ def expire(now=None):
     return done
 
 
-def recover():
-    """Al arrancar: lo que quedó «sending» no se sabe si llegó; se manda de nuevo (el que recibe deduplica por id)."""
-    db.q("UPDATE webhook_deliveries SET status = 'queued', updated = ? WHERE status = 'sending'", (_now_text(),))
+STALE = 300         # con Postgres: «sending» hace más de 5 minutos (TIMEOUT es 10 s) = la réplica que entregaba se murió
+
+
+def recover(stale=0):
+    """Al arrancar: lo que quedó «sending» no se sabe si llegó; se manda de nuevo (el que recibe deduplica por id).
+    Con Postgres lo hace la líder cada minuto, solo con lo trabado hace más de STALE."""
+    db.q("UPDATE webhook_deliveries SET status = 'queued', updated = ? WHERE status = 'sending'" + (" AND updated <= ?" if stale else ""),
+         (_now_text(),) + ((_now_text(clock() - stale),) if stale else ()))
 
 
 def cleanup(days=30):
@@ -428,9 +444,11 @@ def _loop():
     while True:
         try:
             tick()
-            if clock() - last >= 30:
+            if clock() - last >= 30 and cluster.is_leader():        # con varias réplicas, solo la líder
                 last = clock()
                 expire()
+                if db.PG:
+                    recover(STALE)
         except Exception:  # noqa: BLE001 - que la cola no se muera por una fila rara
             import traceback
             traceback.print_exc(file=sys.stderr)
@@ -439,5 +457,6 @@ def _loop():
 
 
 def start():
-    recover()
+    if not db.PG:
+        recover()
     threading.Thread(target=_loop, daemon=True, name="parla-webhooks").start()

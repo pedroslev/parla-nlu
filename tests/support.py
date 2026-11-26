@@ -19,7 +19,17 @@ def temp_data():
     atexit.register(shutil.rmtree, path, True)
     os.environ["PARLA_DATA"] = path
     os.environ["PARLA_USERS"] = os.path.join(path, "users.json")
+    if os.environ.get("PARLA_DATABASE_URL") and not os.environ.get("PARLA_DATABASE_SCHEMA"):
+        schema = "test_" + os.path.basename(path).replace("-", "_").lower()      # una base nueva por proceso de prueba
+        os.environ["PARLA_DATABASE_SCHEMA"] = schema
+        atexit.register(_drop_schema, schema)
     return path
+
+
+def _drop_schema(schema):
+    import psycopg
+    with psycopg.connect(os.environ["PARLA_DATABASE_URL"], autocommit=True) as conn:
+        conn.execute('DROP SCHEMA IF EXISTS "%s" CASCADE' % schema)
 
 
 def free_port():

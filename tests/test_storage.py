@@ -92,7 +92,7 @@ for _ in range(2):                                                       # la se
         proc.terminate(), proc.wait()
 assert not os.path.exists(os.path.join(OLD, "agents", "abcd0001.sessions"))
 assert sorted(os.listdir(os.path.join(OLD, "agents", "abcd0001.sessions.migrated"))) == ["roto.json", "s-legacy.json"]   # nada se borra
-assert os.stat(os.path.join(OLD, "parla.db")).st_mode & 0o777 == 0o600
+assert os.environ.get("PARLA_DATABASE_URL") or os.stat(os.path.join(OLD, "parla.db")).st_mode & 0o777 == 0o600
 
 # ---------- servidor: todo sobrevive un reinicio; auditoría; PII guardado vs en vivo ----------
 DATA = os.path.join(TMP, "srv")
@@ -134,6 +134,10 @@ try:
     assert call(port, "GET", "/api/auth/me", cookie=ana)[1]["user"] is None                           # cerrar sesión la borra
 finally:
     proc.terminate(), proc.wait()
-dump = b"".join(open(f, "rb").read() for f in (os.path.join(DATA, "parla.db"), os.path.join(DATA, "parla.db-wal")) if os.path.exists(f))
+if os.environ.get("PARLA_DATABASE_URL"):        # Postgres: todas las tablas como texto
+    from parla import db  # noqa: E402
+    dump = "".join(str(db.q("SELECT * FROM %s" % t)) for t in db.TABLES).encode()
+else:
+    dump = b"".join(open(f, "rb").read() for f in (os.path.join(DATA, "parla.db"), os.path.join(DATA, "parla.db-wal")) if os.path.exists(f))
 assert b"valor-super-secreto" not in dump and b"secreta123" not in dump and ana.split("=")[1].encode() not in dump   # ni secretos, ni claves, ni tokens
 print("ok")

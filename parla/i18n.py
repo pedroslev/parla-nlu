@@ -68,6 +68,8 @@ EN = {
     "no se pudo entrenar ahora (%s); se entrena al abrirlo": "couldn't train now (%s); it will train when you open it",
     # versiones, entornos y flujos
     "no existe la versión %s": "version %s doesn't exist",
+    "no pude tomar el lock %s: %s": "couldn't take the lock %s: %s",
+    "Postgres: no hay conexiones libres en el pool (PARLA_DB_POOL=%d)": "Postgres: no free connections in the pool (PARLA_DB_POOL=%d)",
     "el entorno tiene que ser production o staging": "the environment must be production or staging",
     "«environment» tiene que ser production, staging o draft": "“environment” must be production, staging or draft",
     "no hay ninguna versión publicada en Pruebas (staging)": "there's no version published to Staging",
@@ -469,6 +471,8 @@ PT = {
     "no se pudo entrenar ahora (%s); se entrena al abrirlo": "não foi possível treinar agora (%s); ele será treinado ao abrir",
     # versiones, entornos y flujos
     "no existe la versión %s": "a versão %s não existe",
+    "no pude tomar el lock %s: %s": "não consegui obter o lock %s: %s",
+    "Postgres: no hay conexiones libres en el pool (PARLA_DB_POOL=%d)": "Postgres: não há conexões livres no pool (PARLA_DB_POOL=%d)",
     "el entorno tiene que ser production o staging": "o ambiente precisa ser production ou staging",
     "«environment» tiene que ser production, staging o draft": "“environment” precisa ser production, staging ou draft",
     "no hay ninguna versión publicada en Pruebas (staging)": "não há nenhuma versão publicada em Homologação (staging)",

@@ -1,0 +1,5 @@
+# Optional Postgres backend (PARLA_DATABASE_URL=postgresql://…: several replicas, high availability). psycopg 3 with
+# its own libpq (binary wheel). Install: .venv/bin/pip install -r requirements-postgres.txt  (or scripts/setup.sh --postgres)
+# The Docker image includes it (INSTALL_POSTGRES=1 by default, ~10 MB).
+-r requirements.txt
+psycopg[binary]==3.3.9

@@ -4,10 +4,11 @@ set -euo pipefail
 
 usage() {
   cat <<'TXT'
-Usage: scripts/setup.sh [--voice] [--providers] [--ollama] [--lang en|es|pt] [--help]
+Usage: scripts/setup.sh [--voice] [--providers] [--postgres] [--ollama] [--lang en|es|pt] [--help]
 
   --voice    also install voice (faster-whisper + piper-tts; needs ffmpeg)
   --providers  also install the optional SDKs for bring-your-own-key providers (anthropic, for Claude)
+  --postgres also install psycopg, for the Postgres backend (PARLA_DATABASE_URL, several replicas)
   --ollama   download the local AI model qwen2.5:0.5b (if Ollama is installed)
   --lang xx  default interface language: en, es or pt (asked if omitted and interactive; saved as PARLA_LANG in .env)
   --help     show this help
@@ -16,12 +17,13 @@ PYTHON variable: the interpreter to use (default: the first of python3.13, pytho
 TXT
 }
 
-VOICE=0; PROVIDERS=0; OLLAMA=0; UILANG=""
+VOICE=0; PROVIDERS=0; POSTGRES=0; OLLAMA=0; UILANG=""
 while [ $# -gt 0 ]; do
   arg="$1"; shift
   case "$arg" in
     --voice) VOICE=1 ;;
     --providers) PROVIDERS=1 ;;
+    --postgres) POSTGRES=1 ;;
     --ollama) OLLAMA=1 ;;
     --lang) UILANG="${1:-}"; shift || true ;;
     --lang=*) UILANG="${arg#--lang=}" ;;
@@ -62,6 +64,11 @@ fi
 if [ "$PROVIDERS" = 1 ]; then
   echo "Installing provider SDKs…"
   .venv/bin/pip install -q -r requirements-providers.txt
+fi
+
+if [ "$POSTGRES" = 1 ]; then
+  echo "Installing the Postgres driver…"
+  .venv/bin/pip install -q -r requirements-postgres.txt
 fi
 
 if [ "$OLLAMA" = 1 ]; then

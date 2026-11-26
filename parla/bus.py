@@ -3,7 +3,9 @@
 Temas: "session:<agente>:<sessionId>" (cada vez que se guarda la conversación, deltas y replace de la IA),
 "inbox:<agente>" (cambió algo de una charla con persona) y "campaign:<agente>" (avance de campañas).
 Un suscriptor lento no frena a nadie: si su cola se llena, se descarta y se le avisa con {"type": "overflow"}
-(el cliente vuelve a pedir el estado completo). ponytail: un solo proceso; con PARLA_WORKERS haría falta un broker.
+(el cliente vuelve a pedir el estado completo). Con Postgres (varias réplicas) cluster.py pone `remote`: cada evento
+(salvo los deltas de la IA, que quedan en la réplica que corre el turno) sale también por LISTEN/NOTIFY y las otras
+réplicas lo entregan a sus suscriptores con local().
 """
 import asyncio
 import contextlib
@@ -13,6 +15,7 @@ QUEUE_MAX = 256
 _subs = {}                  # tema -> {(loop, cola)}
 _lock = threading.Lock()
 STATS = {"published": 0, "dropped": 0}
+remote = None               # cluster.py: fn(tema, evento) que lo manda a las otras réplicas
 
 
 def has(topic):
@@ -34,7 +37,14 @@ def _put(queue, event):
 
 
 def publish(topic, event):
-    """Sin suscriptores no cuesta nada. Seguro desde cualquier hilo."""
+    """Sin suscriptores no cuesta nada (con una réplica). Seguro desde cualquier hilo."""
+    if remote and event.get("type") not in ("delta", "replace"):
+        remote(topic, event)
+    local(topic, event)
+
+
+def local(topic, event):
+    """A los suscriptores de esta réplica."""
     subs = _subs.get(topic)
     if not subs:
         return

@@ -3,9 +3,16 @@ kind: Deployment
 metadata:
   name: {{ include "parla.fullname" . }}
   labels: {{- include "parla.labels" . | nindent 4 }}
+{{- $ha := include "parla.ha" . }}
 spec:
-  replicas: {{ .Values.replicaCount }}   # 1 at most: see replicaCount in values.yaml
-  strategy: {type: Recreate}             # never two pods on the same data
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}   # > 1 only with Postgres: see replicaCount in values.yaml
+  {{- end }}
+  {{- if $ha }}
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
+  {{- else }}
+  strategy: {type: Recreate}             # SQLite: never two pods on the same data
+  {{- end }}
   selector:
     matchLabels: {{- include "parla.selectorLabels" . | nindent 6 }}
   template:
@@ -37,6 +44,9 @@ spec:
           volumeMounts:
             - {name: data, mountPath: /data}
             - {name: tmp, mountPath: /tmp}
+            {{- if $ha }}
+            - {name: models, mountPath: /data/models}
+            {{- end }}
           resources: {{- toYaml .Values.resources | nindent 12 }}
       {{- end }}
       containers:
@@ -53,6 +63,9 @@ spec:
           volumeMounts:
             - {name: data, mountPath: /data}
             - {name: tmp, mountPath: /tmp}
+            {{- if $ha }}
+            - {name: models, mountPath: /data/models}   # embeddings and voice models: per pod, not on the shared volume
+            {{- end }}
             {{- if and (include "parla.oidcEnabled" .) (or .Values.oidc.clientSecret .Values.oidc.existingSecret) }}
             - {name: oidc, mountPath: /run/secrets/parla-oidc, readOnly: true}
             {{- end }}
@@ -72,6 +85,10 @@ spec:
           {{- end }}
         - name: tmp
           emptyDir: {sizeLimit: 1Gi}
+        {{- if $ha }}
+        - name: models
+          emptyDir: {sizeLimit: 4Gi}
+        {{- end }}
         {{- if and (include "parla.oidcEnabled" .) (or .Values.oidc.clientSecret .Values.oidc.existingSecret) }}
         - name: oidc
           secret: {secretName: {{ include "parla.oidcSecret" . }}, defaultMode: 0440}   # group-readable: fsGroup

@@ -23,7 +23,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler
 
-from . import DATA, ROOT, write_json, auth, bus, costs, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, handoff, insights, knowledge, llm, mcp_client, outbound, phone, rasa_import, runner, telemetry, vault, voice
+from . import DATA, ROOT, write_json, auth, bus, cluster, costs, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, handoff, insights, knowledge, llm, mcp_client, outbound, phone, rasa_import, runner, telemetry, vault, voice
 
 import celpy
 import pycrfsuite
@@ -436,7 +436,7 @@ def nlu_data(agent):
 def train(agent_id, fingerprint=None):
     """Toma una foto de las frases y entidades, entrena el CRF y deja listos los vectores.
     El bot sigue atendiendo con la versión anterior hasta que termina: entrenar no lo apaga."""
-    with training(agent_id):          # dos chats a la vez sin modelo no entrenan dos veces ni pisan el .crfsuite
+    with training(agent_id), cluster.lock("train:" + agent_id):   # dos chats (o réplicas) a la vez no pisan el .crfsuite
         return _train(agent_id, fingerprint)
 
 
@@ -462,7 +462,7 @@ def _train(agent_id, fingerprint):
     check = self_check(data)
     steps.append({"name": "Autoevaluación", "ms": clock(t), "detail": check["summary"]})
     write_json(path(agent_id, ".model.json"), data)
-    MODELS[agent_id] = model_entry(data, tagger)
+    MODELS[agent_id] = dict(model_entry(data, tagger), stamp=_model_stamp(agent_id))
     phrases = training_phrases(data)
     log = {"duration_ms": clock(started), "steps": steps, "crf": crf, "self_check": check,
            "entities": entity_report(data), "warnings": training_warnings(agent, data)}
@@ -586,6 +586,11 @@ def load_version(agent_id, number):
 
 def publish(agent_id, note="", environment=None):
     """Congela el borrador actual como una versión nueva, la entrena y (si se pide) la pone en un entorno."""
+    with cluster.lock("publish:" + agent_id):        # dos réplicas publicando a la vez no sacan el mismo número
+        return _publish(agent_id, note, environment)
+
+
+def _publish(agent_id, note, environment):
     agent = load(agent_id)
     number = (versions(agent_id) or [0])[-1] + 1
     snapshot = definition(agent)
@@ -682,7 +687,17 @@ def diff(old, new):
     return {"changes": total, "settings": settings, **out}
 
 
+def _model_stamp(agent_id):
+    try:
+        st = os.stat(path(agent_id, ".model.json"))
+        return st.st_mtime_ns, st.st_size, st.st_ino
+    except OSError:
+        return None
+
+
 def model(agent_id):
+    if db.PG and agent_id in MODELS and MODELS[agent_id].get("stamp") != _model_stamp(agent_id):
+        MODELS.pop(agent_id, None)          # otra réplica lo entrenó (carpeta de datos compartida): se carga de nuevo
     if agent_id not in MODELS:
         with training(agent_id):
             if agent_id in MODELS:
@@ -696,7 +711,7 @@ def model(agent_id):
                 if os.path.exists(path(agent_id, ".crfsuite")):
                     tagger = pycrfsuite.Tagger()
                     tagger.open(path(agent_id, ".crfsuite"))
-                MODELS[agent_id] = model_entry(data, tagger)
+                MODELS[agent_id] = dict(model_entry(data, tagger), stamp=_model_stamp(agent_id))
     return MODELS[agent_id]
 
 
@@ -2432,6 +2447,9 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and static and os.path.exists(os.path.join(HERE, "static", static.group(1))):
             with open(os.path.join(HERE, "static", static.group(1)), "rb") as f:
                 return self.reply(f.read(), ctype="text/javascript; charset=utf-8")
+        if method == "GET" and urllib.parse.urlsplit(self.path).path == "/readyz":     # Kubernetes: ¿atiende y llega a la base?
+            ok = db.ping()
+            return self.reply({"ok": ok, "database": "postgres" if db.PG else "sqlite", "leader": cluster.is_leader()}, 200 if ok else 503)
         if method == "GET" and urllib.parse.urlsplit(self.path).path == "/metrics":    # Prometheus (telemetry.py)
             status = telemetry.allowed(self.headers.get("Authorization"), self.client_address[0], self.headers.get("Host"))
             if status != 200:
@@ -2446,6 +2464,8 @@ class Handler(BaseHTTPRequestHandler):
             for name, value in (("parla_embed_batches_total", EMBED_STATS["batches"]), ("parla_embed_items_total", EMBED_STATS["items"]),
                                 ("parla_db_commits_total", db._stats["commits"]), ("parla_db_statements_total", db._stats["statements"])):
                 telemetry.gauge(name, [({}, value)])
+            for name, rows in cluster.gauges():
+                telemetry.gauge(name, rows)
             return self.reply(telemetry.render().encode(), ctype="text/plain; version=0.0.4; charset=utf-8")
         raw = self.headers.get("Content-Length") or "0"
         if not (raw.isascii() and raw.isdigit()):
@@ -2998,19 +3018,23 @@ def _hourly():
     while True:
         time.sleep(3600)
         try:
-            cleanup()
+            if cluster.is_leader():         # con varias réplicas, una sola (la líder)
+                cleanup()
         except Exception:  # noqa: BLE001 - que la limpieza no se muera: lo intenta de nuevo en una hora
             import traceback
             traceback.print_exc(file=sys.stderr)
 
 
 def main():
-    migrate()
-    os.makedirs(AGENTS, exist_ok=True)
-    migrate_sessions()
-    if not os.listdir(AGENTS):
-        create(DEMO)
-    cleanup()
+    cluster.start()             # con PARLA_DATABASE_URL: líder, bus entre réplicas (sin Postgres no hace nada)
+    with cluster.lock("startup"):   # réplicas arrancando a la vez: una sola mueve archivos o crea el agente de ejemplo
+        migrate()
+        os.makedirs(AGENTS, exist_ok=True)
+        migrate_sessions()
+        if not os.listdir(AGENTS):
+            create(DEMO)
+    if cluster.is_leader():
+        cleanup()
     threading.Thread(target=_hourly, daemon=True).start()
     outbound.start()            # la cola de campañas y recordatorios (sigue lo que quedó en parla.db)
     handoff.start()             # la cola de webhooks y el tiempo máximo de los handoffs externos

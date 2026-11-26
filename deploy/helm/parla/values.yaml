@@ -14,12 +14,37 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-# Always 1 (0 only to stop it, e.g. to restore a backup). Parla is a single process: conversations, login sessions
-# and the audit log are in SQLite (parla.db) on the volume, agents are files without cross-process locking, and
-# loaded models, rate-limit counters and SSO login state are in memory. Two pods on the same data overwrite each
-# other. That's also why the strategy is Recreate (the old pod stops before the new one starts: a few seconds of
-# downtime per upgrade). High availability comes with the Postgres backend (see docs/ROADMAP.md).
+# 1 with SQLite (the default; 0 only to stop it, e.g. to restore a backup): conversations, logins and the audit log
+# are in parla.db on the volume, so two pods would overwrite each other and the strategy is Recreate.
+# More than 1 (high availability, docs/kubernetes.md#high-availability) needs Postgres (database.url or
+# database.existingSecret), secretKey and a ReadWriteMany data volume (persistence.accessModes or existingClaim):
+# then the strategy is RollingUpdate, a PodDisruptionBudget is created and /readyz checks the database.
 replicaCount: 1
+
+# Postgres backend (PARLA_DATABASE_URL). Empty = SQLite. A managed service or CloudNativePG (docs/kubernetes.md).
+database:
+  url: ""               # postgresql://user:password@host:5432/parla?sslmode=require: creates a Secret; better: existingSecret
+  existingSecret: ""    # Secret with the URL under secretKey (CloudNativePG: <cluster>-app, key "uri")
+  secretKey: PARLA_DATABASE_URL
+  pool: null            # PARLA_DB_POOL: query connections per pod (default 20; plus up to 32 for per-conversation locks)
+
+# PARLA_SECRET_KEY: one random value shared by every replica (signs audio URLs for phone calls). Required with
+# replicaCount > 1. openssl rand -hex 32
+secretKey:
+  value: ""             # creates a Secret; better: existingSecret
+  existingSecret: ""
+  secretKey: PARLA_SECRET_KEY
+
+# HorizontalPodAutoscaler (needs Postgres, like replicaCount > 1). replicaCount is ignored while it's on.
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+# With more than one replica (or autoscaling): at most this many pods down at once during node drains.
+podDisruptionBudget:
+  maxUnavailable: 1
 
 # Settings that become PARLA_* environment variables (docs/deployment.md#environment-variables).
 config:
@@ -114,8 +139,9 @@ tolerations: []
 affinity: {}
 
 # GET / serves the static page: it doesn't touch models or disk.
+# /readyz: 200 when Parla answers and reaches its database (SQLite or Postgres), 503 otherwise.
 readinessProbe:
-  httpGet: {path: /, port: http}
+  httpGet: {path: /readyz, port: http}
   periodSeconds: 10
   timeoutSeconds: 3
 livenessProbe:

@@ -20,7 +20,7 @@ import threading
 import time
 import urllib.parse
 
-from . import DATA, agents_dir, db, oidc, write_json
+from . import DATA, agents_dir, cluster, db, oidc, write_json
 ROLES = ("owner", "editor", "analyst", "agent")
 SESSION_HOURS = 12
 LOCK = threading.Lock()
@@ -234,7 +234,8 @@ def _handle(handler, method, url, data):
         for old in [k for k, times in FAILURES.items() if times[-1] <= now - 60]:     # que no crezca sin fin
             FAILURES.pop(old, None)
         recent = [t for t in FAILURES.get(key, []) if t > now - 60]
-        if len(recent) >= 5:
+        shared = "login:%s|%s" % key          # con Postgres, el contador es de todas las réplicas (kv, cluster.py)
+        if (cluster.count(shared) if db.PG else len(recent)) >= 5:
             FAILURES[key] = recent
             return 429, {"error": "Demasiados intentos. Esperá un minuto y probá de nuevo."}, {}
         if oidc.only() and not oidc.break_glass(handler):      # PARLA_OIDC_ONLY: contraseña solo para el dueño, desde acá
@@ -244,8 +245,12 @@ def _handle(handler, method, url, data):
         ok = hmac.compare_digest(_scrypt(password, user["salt"] if user else "00" * 16), user["hash"] if user else "")   # mismo tiempo exista o no
         if not user or not ok:
             FAILURES[key] = recent + [now]
+            if db.PG:
+                cluster.hit(shared, 60)
             return 401, {"error": "Usuario o contraseña incorrectos."}, {}
         FAILURES.pop(key, None)
+        if db.PG:
+            cluster.forget(shared)
         if oidc.only() and user["role"] != "owner":
             return 403, {"error": "El inicio de sesión con contraseña está apagado: entrá con tu proveedor de identidad (SSO)."}, {}
         return 200, {"enabled": True, "user": {"name": user["name"], "role": user["role"], "bots": _scope(user)}}, _login(handler, user["name"])

@@ -45,6 +45,24 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- define "parla.oidcSecret" -}}
 {{- default (printf "%s-oidc" (include "parla.fullname" .)) .Values.oidc.existingSecret }}
 {{- end }}
+{{- define "parla.databaseSecret" -}}
+{{- default (printf "%s-database" (include "parla.fullname" .)) .Values.database.existingSecret }}
+{{- end }}
+{{- define "parla.secretKeySecret" -}}
+{{- default (printf "%s-secret-key" (include "parla.fullname" .)) .Values.secretKey.existingSecret }}
+{{- end }}
+{{- define "parla.postgres" -}}
+{{- if or .Values.database.url .Values.database.existingSecret }}true{{ end }}
+{{- end }}
+{{/* High availability: more than one pod (replicaCount > 1 or autoscaling). Checked here so every template agrees. */}}
+{{- define "parla.ha" -}}
+{{- if or (gt (int .Values.replicaCount) 1) .Values.autoscaling.enabled }}
+{{- if not (include "parla.postgres" .) }}{{ fail "replicaCount > 1 and autoscaling need Postgres: set database.url or database.existingSecret (docs/kubernetes.md#high-availability)" }}{{ end }}
+{{- if not (or .Values.secretKey.value .Values.secretKey.existingSecret) }}{{ fail "replicaCount > 1 and autoscaling need secretKey.value or secretKey.existingSecret (PARLA_SECRET_KEY, the same in every replica)" }}{{ end }}
+{{- if and .Values.persistence.enabled (not .Values.persistence.existingClaim) (not (has "ReadWriteMany" .Values.persistence.accessModes)) }}{{ fail "replicaCount > 1 and autoscaling share the data volume: persistence.accessModes must include ReadWriteMany (or use persistence.existingClaim)" }}{{ end }}
+true
+{{- end }}
+{{- end }}
 {{- define "parla.oidcEnabled" -}}
 {{- if and .Values.oidc.issuer .Values.oidc.clientId }}true{{ end }}
 {{- end }}
@@ -124,6 +142,17 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- if not .Values.oidc.logout }}
 - {name: PARLA_OIDC_LOGOUT, value: "0"}
 {{- end }}
+{{- end }}
+{{- if include "parla.postgres" . }}
+- name: PARLA_DATABASE_URL
+  valueFrom: {secretKeyRef: {name: {{ include "parla.databaseSecret" . }}, key: {{ .Values.database.secretKey }}}}
+{{- if not (kindIs "invalid" .Values.database.pool) }}
+- {name: PARLA_DB_POOL, value: {{ .Values.database.pool | toString | quote }}}
+{{- end }}
+{{- end }}
+{{- if or .Values.secretKey.value .Values.secretKey.existingSecret }}
+- name: PARLA_SECRET_KEY
+  valueFrom: {secretKeyRef: {name: {{ include "parla.secretKeySecret" . }}, key: {{ .Values.secretKey.secretKey }}}}
 {{- end }}
 {{- with .Values.extraEnv }}
 {{ toYaml . }}

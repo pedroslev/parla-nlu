@@ -190,11 +190,12 @@ time.sleep(0.3)
 assert t.is_alive()                    # q() no volvió: nadie recibió un OK por esa escritura
 os._exit(0)                            # "se cae" entre encolar y commitear
 """ % ROOT
-subprocess.run([sys.executable, "-c", script], check=True, env=dict(os.environ, PARLA_DATA=DATA))
-import sqlite3  # noqa: E402
-conn = sqlite3.connect(os.path.join(DATA, "parla.db"))
-assert conn.execute("SELECT count(*) FROM audit WHERE action = 'committed'").fetchone()[0] == 1
-assert conn.execute("SELECT count(*) FROM audit WHERE action = 'lost'").fetchone()[0] == 0
+if not os.environ.get("PARLA_DATABASE_URL"):     # con Postgres no hay escritor propio: cada q() es su transacción
+    subprocess.run([sys.executable, "-c", script], check=True, env=dict(os.environ, PARLA_DATA=DATA))
+    import sqlite3  # noqa: E402
+    conn = sqlite3.connect(os.path.join(DATA, "parla.db"))
+    assert conn.execute("SELECT count(*) FROM audit WHERE action = 'committed'").fetchone()[0] == 1
+    assert conn.execute("SELECT count(*) FROM audit WHERE action = 'lost'").fetchone()[0] == 0
 
 # --- streaming de la IA: deltas desde Ollama (NDJSON), OpenAI-compatible (SSE, campo de un JSON) y Gemini (SSE)
 from parla import llm  # noqa: E402

@@ -731,7 +731,7 @@ async def _phone(reader, writer, headers, target, ref, provider):
     state = {"call": None}
 
     def make(sid, out):
-        greet = phone._greet.pop(sid, None)
+        greet = phone.unstash(phone._greet, sid)
         lang = (greet or {}).get("lang") or conf.get("language") or "es"
 
         async def turn(kind, text):

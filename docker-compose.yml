@@ -1,6 +1,9 @@
 # docker compose up -d                       -> http://127.0.0.1:8000
 # docker compose --profile ai up -d          -> + Ollama; in the agent, IA → dirección (AI → address) http://ollama:11434
 # Voice: PARLA_VOICE=1 docker compose up -d --build
+# Postgres instead of SQLite (docs/deployment.md#postgres-and-high-availability):
+#   PARLA_DATABASE_URL=postgresql://parla:parla@postgres:5432/parla PARLA_SECRET_KEY=$(openssl rand -hex 32) \
+#   docker compose --profile postgres up -d     (python -m parla.migrate sqlite-to-postgres copies an existing parla.db)
 # Observability (docs/observability.md): + Jaeger (traces, http://127.0.0.1:16686) and Prometheus (http://127.0.0.1:9090)
 #   PARLA_METRICS=1 PARLA_METRICS_TOKEN=<long random> PARLA_OTEL_ENDPOINT=http://jaeger:4318 docker compose --profile observability up -d
 name: parla
@@ -24,6 +27,8 @@ services:
       PARLA_METRICS_TOKEN: ${PARLA_METRICS_TOKEN:-}
       PARLA_OTEL_ENDPOINT: ${PARLA_OTEL_ENDPOINT:-}     # OTLP/HTTP base URL, e.g. http://jaeger:4318 (empty = no traces)
       PARLA_LOG_FORMAT: ${PARLA_LOG_FORMAT:-}           # json = one JSON line per request with trace_id
+      PARLA_DATABASE_URL: ${PARLA_DATABASE_URL:-}       # empty = SQLite in the volume; postgresql://… with --profile postgres
+      PARLA_SECRET_KEY: ${PARLA_SECRET_KEY:-}           # same value in every replica (signed audio URLs)
       # Behind an HTTPS proxy / with webhooks (docs/deployment.md, docs/channels.md):
       # PARLA_PUBLIC_URL: https://bots.example.com
       # PARLA_HOSTS: bots.example.com
@@ -37,17 +42,35 @@ services:
       # PARLA_OIDC_ROLE_CLAIM: groups
       # PARLA_OIDC_ROLE_MAP: parla-owners:owner,parla-editors:editor
     # secrets: [parla_oidc]
+    depends_on:
+      postgres: {condition: service_healthy, required: false}
     volumes:
       - parla-data:/data
     read_only: true
     tmpfs:
       - /tmp
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz', timeout=3)"]
       interval: 30s
       timeout: 5s
       start_period: 10s
       retries: 3
+
+  postgres:
+    image: postgres:17
+    profiles: ["postgres"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: parla
+      POSTGRES_PASSWORD: ${PARLA_POSTGRES_PASSWORD:-parla}   # only reachable on the compose network
+      POSTGRES_DB: parla
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "parla"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   ollama:
     image: ollama/ollama:0.12.3
@@ -88,3 +111,4 @@ volumes:
   parla-data:
   ollama-models:
   prometheus-data:
+  postgres-data:

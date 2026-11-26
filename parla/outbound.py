@@ -24,7 +24,7 @@ from collections import deque
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from . import auth, bus, channels, costs, db, pii, telemetry, vault
+from . import auth, bus, channels, cluster, costs, db, pii, telemetry, vault
 
 WINDOW = 24 * 3600              # la ventana de atención de WhatsApp
 MAX_ATTEMPTS = 3
@@ -44,7 +44,7 @@ TO_COLUMNS = {"to", "phone", "telefono", "teléfono", "numero", "número", "celu
 CAMPAIGN = re.compile(r"[0-9a-f]{12}")
 
 clock = time.time               # las pruebas lo cambian por un reloj propio
-_lock = threading.RLock()       # ponytail: un lock para toda la cola; con varias réplicas haría falta reservar filas en la base
+_lock = threading.RLock()       # un lock para la cola de esta réplica; entre réplicas, _claim reserva filas en la base
 _next = {}                      # campaña -> cuándo puede salir el próximo envío (límite de velocidad)
 _api = {}                       # agente -> instantes de los últimos envíos por la API
 _wake = threading.Event()       # algo nuevo en la cola (encolar, arrancar una campaña): la vuelta no espera
@@ -433,13 +433,15 @@ def _finish(row, agent_id, channel, status, error=None, sent=None, spec=None):
     telemetry.count("parla_outbound_messages_total", channel=telemetry.channel(channel), outcome=outcome)
 
 
-def deliver_row(row, now=None):
-    """Manda una fila de la cola (campaña o recordatorio) y la deja como quedó: enviada, reintento, falló o baja."""
+def deliver_row(row, now=None, claimed=False):
+    """Manda una fila de la cola (campaña o recordatorio) y la deja como quedó: enviada, reintento, falló o baja.
+    claimed: ya la reservó _claim (quedó «sending»)."""
     now = now or clock()
     rid, agent_id, kind, channel, address, spec, campaign, attempts = row
     spec = json.loads(spec)
     conf = (_campaign(campaign) or {}).get("config", {}) if campaign else {}
-    db.q("UPDATE campaign_recipients SET status = 'sending', attempts = attempts + 1, updated = ? WHERE id = ?", (_now_text(now), rid))
+    if not claimed:
+        db.q("UPDATE campaign_recipients SET status = 'sending', attempts = attempts + 1, updated = ? WHERE id = ?", (_now_text(now), rid))
     try:
         agent = _app().load(agent_id)
         sent = send(agent, channel, address, spec.get("data"), spec.get("flow") or conf.get("flow"), spec.get("template") or conf.get("template"),
@@ -466,6 +468,16 @@ def deliver_row(row, now=None):
 def _due(where, args, now, limit):
     return db.q("SELECT id, agent_id, kind, channel, address, spec, campaign_id, attempts FROM campaign_recipients "
                 "WHERE status = 'queued' AND next_at <= ? AND %s ORDER BY next_at, id LIMIT ?" % where, (now,) + tuple(args) + (limit,))
+
+
+def _claim(where, args, now, limit):
+    """Con Postgres: reserva lo que vence (queda «sending») con FOR UPDATE SKIP LOCKED: cada fila la manda una sola
+    réplica. Mismas columnas que _due."""
+    rows = db.q("UPDATE campaign_recipients SET status = 'sending', attempts = attempts + 1, updated = ? WHERE id IN ("
+                "SELECT id FROM campaign_recipients WHERE status = 'queued' AND next_at <= ? AND %s ORDER BY next_at, id LIMIT ? "
+                "FOR UPDATE SKIP LOCKED) RETURNING id, agent_id, kind, channel, address, spec, campaign_id, attempts - 1" % where,
+                (_now_text(now), now) + tuple(args) + (limit,))
+    return sorted(rows, key=lambda r: r[0])
 
 
 def _seconds(rate):
@@ -512,10 +524,11 @@ def tick(now=None):
     """Una vuelta de la cola: las campañas en marcha (con su límite y su horario) y los recordatorios que vencieron."""
     now = now or clock()
     with _lock:
-        for (cid,) in db.q("SELECT id FROM campaigns WHERE status = 'running' ORDER BY created"):
-            _tick_campaign(cid, now)
-        for row in _due("campaign_id IS NULL", (), now, 50):
-            deliver_row(row, now)
+        if cluster.is_leader():         # con varias réplicas, el ritmo de las campañas lo lleva una sola (la líder)
+            for (cid,) in db.q("SELECT id FROM campaigns WHERE status = 'running' ORDER BY created"):
+                _tick_campaign(cid, now)
+        for row in _claim("campaign_id IS NULL", (), now, 50) if db.PG else _due("campaign_id IS NULL", (), now, 50):
+            deliver_row(row, now, claimed=db.PG)        # recordatorios y envíos de la API: cualquier réplica
 
 
 def _tick_campaign(cid, now):
@@ -526,11 +539,11 @@ def _tick_campaign(cid, now):
     while sent < 200:
         if _next.get(cid, 0) > now or (_campaign(cid) or {}).get("status") != "running":    # pausa o cancelación a mitad
             return
-        rows = _due("campaign_id = ?", (cid,), now, 1)
+        rows = _claim("campaign_id = ?", (cid,), now, 1) if db.PG else _due("campaign_id = ?", (cid,), now, 1)
         if not rows:
             break
         _next[cid] = max(_next.get(cid, 0), now - 1) + interval     # hasta 1 segundo de ráfaga, nunca más rápido que el límite
-        deliver_row(rows[0], now)
+        deliver_row(rows[0], now, claimed=db.PG)
         sent += 1
     if not db.q("SELECT 1 FROM campaign_recipients WHERE campaign_id = ? AND status IN ('queued', 'sending') LIMIT 1", (cid,)):
         db.q("UPDATE campaigns SET status = 'done', updated = ? WHERE id = ? AND status = 'running'", (_now_text(now), cid))
@@ -539,10 +552,14 @@ def _tick_campaign(cid, now):
                            campaign={"id": cid, "name": campaign["name"], "channel": campaign["channel"], "stats": stats(campaign)})
 
 
-def recover():
-    """Al arrancar: lo que quedó «enviando» cuando se cortó no se sabe si salió. Mejor no mandarlo dos veces."""
+STALE = 600         # con Postgres: «enviando» hace más de 10 minutos = la réplica que lo mandaba se murió
+
+
+def recover(stale=0):
+    """Al arrancar: lo que quedó «enviando» cuando se cortó no se sabe si salió. Mejor no mandarlo dos veces. Con
+    Postgres lo hace la líder cada minuto, solo con lo trabado hace más de STALE (otra réplica puede estar enviando)."""
     db.q("UPDATE campaign_recipients SET status = 'failed', error = 'se cortó por un reinicio: no se sabe si salió', updated = ? "
-         "WHERE status = 'sending'", (_now_text(),))
+         "WHERE status = 'sending'" + (" AND updated <= ?" if stale else ""), (_now_text(),) + ((_now_text(clock() - stale),) if stale else ()))
 
 
 def _sleep():
@@ -558,8 +575,12 @@ def _sleep():
 
 
 def _loop():
+    last = 0
     while True:
         try:
+            if db.PG and cluster.is_leader() and clock() - last >= 60:
+                last = clock()
+                recover(STALE)
             tick()
             wait = _sleep()
         except Exception:  # noqa: BLE001 - que la cola no se muera por una fila rara: sigue en un segundo
@@ -571,7 +592,8 @@ def _loop():
 
 
 def start():
-    recover()
+    if not db.PG:
+        recover()
     threading.Thread(target=_loop, daemon=True, name="parla-outbound").start()
 
 
@@ -922,7 +944,7 @@ def api_send(agent, data, now=None):
         recent = _api.setdefault(agent["id"], deque())
         while recent and recent[0] <= now - 60:
             recent.popleft()
-        if len(recent) >= limit:
+        if (cluster.hit("api:%s:%d" % (agent["id"], now // 60), 120) - 1 if db.PG else len(recent)) >= limit:   # Postgres: por minuto, todas las réplicas
             return 429, {"error": "demasiados envíos por minuto con la API (máximo %d): para muchos, armá una campaña" % limit}
         recent.append(now)
     if data.get("data") is not None and not isinstance(data.get("data"), dict):
