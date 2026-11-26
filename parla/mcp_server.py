@@ -201,8 +201,8 @@ def validate(data, files=None):
         ai = {}
     ai = ai or {}
     ai_on = ai.get("enabled") is True
-    if ai.get("provider") not in (None, "ollama", "openai"):
-        errors.append("ai: «provider» tiene que ser ollama u openai (cualquier servidor compatible con OpenAI)")
+    if ai.get("provider") not in (None, "ollama", "openai", "openai_compatible", "anthropic", "gemini"):
+        errors.append("ai: «provider» tiene que ser ollama, openai, openai_compatible (con «url»), anthropic o gemini")
     if ai.get("url") is not None and not (isinstance(ai["url"], str) and re.match(r"https?://", ai["url"])):
         errors.append("ai: «url» tiene que empezar con http:// o https://")
     if "api_key" in ai:
@@ -210,8 +210,27 @@ def validate(data, files=None):
                       "nombre en «api_key_secret»")
     if ai.get("api_key_secret") not in (None, "") and not (isinstance(ai["api_key_secret"], str) and re.fullmatch(r"[A-Za-z_]\w*", ai["api_key_secret"])):
         errors.append("ai: «api_key_secret» es el NOMBRE de una clave (letras, números y _), no su valor")
-    if ai.get("url") and ai.get("provider") == "openai" and not ai.get("api_key_secret") and "localhost" not in ai["url"] and "127.0.0.1" not in ai["url"]:
+    if ai.get("provider") in ("anthropic", "gemini") and ai.get("url"):
+        warnings.append("ai: con anthropic o gemini «url» no se usa (la dirección es fija)")
+    if ai.get("url") and ai.get("provider") in ("openai", "openai_compatible") and not ai.get("api_key_secret") and "localhost" not in ai["url"] and "127.0.0.1" not in ai["url"]:
         warnings.append("ai: un proveedor de afuera suele pedir API key: cargala en «Claves» y poné su nombre en «api_key_secret»")
+    # voz: ASR y TTS con su proveedor (local por defecto)
+    vconf = agent.get("voice")
+    if vconf is not None and not isinstance(vconf, dict):
+        errors.append("«voice» tiene que ser un objeto {asr: {provider, model, api_key_secret}, tts: {provider, voice, model, api_key_secret}}")
+        vconf = {}
+    for kind, part in (vconf or {}).items():
+        if kind not in ("asr", "tts") or not isinstance(part, dict):
+            errors.append("voice: solo lleva «asr» y «tts», cada uno un objeto {provider, ...}")
+            continue
+        if part.get("provider") not in (None, "local", "openai", "deepgram", "elevenlabs", "google"):
+            errors.append("voice.%s: «provider» tiene que ser local, openai, deepgram, elevenlabs o google" % kind)
+        if "api_key" in part:
+            errors.append("voice.%s: la API key nunca va en el JSON: la persona la carga en «Claves» y acá va su nombre en «api_key_secret»" % kind)
+        if part.get("api_key_secret") not in (None, "") and not (isinstance(part["api_key_secret"], str) and re.fullmatch(r"[A-Za-z_]\w*", part["api_key_secret"])):
+            errors.append("voice.%s: «api_key_secret» es el NOMBRE de una clave (letras, números y _), no su valor" % kind)
+        if kind == "asr" and "voice" in part:
+            warnings.append("voice.asr: «voice» no se usa (va en voice.tts)")
     temp = ai.get("temperature", 0.2)
     if not isinstance(temp, (int, float)) or isinstance(temp, bool) or not 0 <= temp <= 2:
         errors.append("ai: «temperature» tiene que ser un número de 0 a 2")
@@ -302,7 +321,7 @@ def validate(data, files=None):
             if tel.get("provider") not in (None, "twilio", "jambonz"):
                 errors.append("channels: «phone.provider» tiene que ser twilio o jambonz")
             if tel.get("tts") not in (None, "provider", "parla"):
-                errors.append("channels: «phone.tts» tiene que ser provider (la voz de Twilio/jambonz) o parla (piper, local)")
+                errors.append("channels: «phone.tts» tiene que ser provider (la voz de Twilio/jambonz) o parla (la voz del agente en «voice.tts»)")
             if tel.get("handoff_to") not in (None, "") and not re.fullmatch(r"\+?[0-9]{3,20}|sips?:\S+", str(tel["handoff_to"])):
                 errors.append("channels: «phone.handoff_to» tiene que ser un número (+5491112345678) o sip:usuario@dominio")
             wa = chans.get("whatsapp") if isinstance(chans.get("whatsapp"), dict) else {}
@@ -823,12 +842,23 @@ def validate(data, files=None):
     return agent, errors, warnings
 
 
+KEY_NAMES = {"openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY", "gemini": "GEMINI_API_KEY", "deepgram": "DEEPGRAM_API_KEY",
+             "elevenlabs": "ELEVENLABS_API_KEY", "google": "GOOGLE_API_KEY"}   # la clave que se usa si no dicen «api_key_secret»
+
+
 def secret_refs(agent):
     """Nombres de claves que usa el agente ({{ secret.X }} en http, entradas secret.X de funciones)."""
     refs = set(SECRET_REF.findall(json.dumps([agent.get("flows"), agent.get("functions")], ensure_ascii=False)))
-    name = (agent.get("ai") or {}).get("api_key_secret") if isinstance(agent.get("ai"), dict) else None
+    ai = agent.get("ai") if isinstance(agent.get("ai"), dict) else {}
+    name = ai.get("api_key_secret") or (KEY_NAMES.get(ai.get("provider")) if ai.get("provider") != "openai" or not ai.get("url")
+                                        or "api.openai.com" in str(ai.get("url")) else None)
+    names = {name}
+    vconf = agent.get("voice") if isinstance(agent.get("voice"), dict) else {}
+    for part in vconf.values():
+        if isinstance(part, dict) and part.get("provider") in KEY_NAMES:
+            names.add(part.get("api_key_secret") or KEY_NAMES[part["provider"]])
     mcp = {m["headers_secret"].upper() for m in agent.get("mcp_servers") or [] if isinstance(m, dict) and isinstance(m.get("headers_secret"), str) and m["headers_secret"]}
-    return refs | mcp | ({name.upper()} if isinstance(name, str) and name else set())
+    return refs | mcp | {n.upper() for n in names if isinstance(n, str) and n}
 
 
 def secret_warnings(agent_id, agent):
@@ -1266,13 +1296,25 @@ Dejá prendidas cancel, repeat, clarify, correction, resume y handoff (son lo qu
 propias para cancelar o pedir un humano: ya están.
 
 ## IA: ai {enabled, provider, url, model, api_key_secret, azure, temperature, generative_fallback, rescue_intents, use_knowledge, persona}
-- Modelos chicos locales (Ollama "qwen2.5:0.5b" por defecto). O provider "openai": cualquier servidor compatible
-  (vLLM, llama.cpp, LM Studio, OpenAI, Azure OpenAI, Groq, OpenRouter); url = base con /v1 (ej.
-  "https://api.openai.com/v1"). api_key_secret = NOMBRE de una clave de «Claves» (la carga la persona; nunca pongas
-  la key en el JSON). Con un proveedor de afuera, el texto de las conversaciones sale a ese proveedor. Apagada
-  por defecto. rescue_intents: si la detección duda, la IA elige la intención; generative_fallback: repregunta
+- Modelos chicos locales (Ollama "qwen2.5:0.5b" por defecto). provider "openai" (sin url = api.openai.com, modelo
+  "gpt-6-luna"; con url = cualquier servidor compatible: vLLM, llama.cpp, LM Studio, Azure OpenAI, Groq, OpenRouter;
+  url = base con /v1), "openai_compatible" (lo mismo, siempre con url), "anthropic" (Claude por el SDK oficial,
+  model "claude-opus-5-5" / "claude-sonnet-5-5" / "claude-haiku-5-5"; hace falta pip install -r
+  requirements-providers.txt) o "gemini" (model "gemini-3.8-flash"). anthropic y gemini no llevan url.
+  api_key_secret = NOMBRE de una clave de «Claves» (la carga la persona; nunca pongas la key en el JSON); si falta:
+  OPENAI_API_KEY, ANTHROPIC_API_KEY o GEMINI_API_KEY. Con un proveedor de afuera, el texto de las conversaciones
+  sale a ese proveedor. Apagada por defecto. rescue_intents: si la detección duda, la IA elige la intención; generative_fallback: repregunta
   natural cuando no entiende; use_knowledge: redacta respuestas de la base. persona: cómo habla el bot.
 - La necesitan los pasos agent y los slots fill "ai". Sin IA, el resto del bot anda igual.
+
+## Voz: voice {asr: {provider, model, api_key_secret}, tts: {provider, voice, model, api_key_secret}}
+- Transcripción (asr) y voz (tts) del chat de prueba, el widget con micrófono y el teléfono con tts "parla".
+  provider "local" por defecto (faster-whisper y piper: nada sale de la compu). asr: "openai" (gpt-4o-mini-transcribe),
+  "deepgram" (nova-3), "elevenlabs" (scribe_v3), "google" (Speech-to-Text). tts: "openai" (voice "coral"),
+  "deepgram" (voice = modelo Aura, ej. "aura-2-celeste-es"), "elevenlabs" (voice = voice_id), "google" (voice =
+  nombre, ej. "es-US-Neural2-A"). api_key_secret por defecto: OPENAI_API_KEY, DEEPGRAM_API_KEY, ELEVENLABS_API_KEY,
+  GOOGLE_API_KEY. Con un proveedor de afuera, el audio o el texto sale a ese proveedor. Para teléfono con poca demora:
+  asr lo hace Twilio/jambonz; tts "parla" + deepgram o elevenlabs (flash).
 
 ## Servidores MCP (Parla como cliente): mcp_servers [{name, url, headers_secret?}]
 - Servidores MCP por Streamable HTTP (stdio no) cuyas herramientas usa el paso agent ("tools" type "mcp").

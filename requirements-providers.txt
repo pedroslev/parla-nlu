@@ -1,0 +1,5 @@
+# Proveedores con API key propia (opcional): Claude con el SDK oficial de Anthropic. OpenAI, Gemini, Deepgram,
+# ElevenLabs y Google Cloud van por HTTP con la biblioteca estándar y no necesitan nada.
+# Instalar: .venv/bin/pip install -r requirements-providers.txt  (o scripts/setup.sh --providers)
+-r requirements.txt
+anthropic==1.17.0

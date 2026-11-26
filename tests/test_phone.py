@@ -21,7 +21,7 @@ import numpy as np  # noqa: E402
 app._encode = lambda texts: [(lambda v: v / np.linalg.norm(v))(np.random.default_rng(
     int(hashlib.md5(t.encode()).hexdigest()[:8], 16)).normal(size=64)) for t in texts]
 os.makedirs(app.AGENTS, exist_ok=True)
-voice.speak = lambda text, language="es", keep=True: b"RIFF-fake-" + text.encode()     # sin piper
+voice.speak = lambda text, language="es", keep=True, **kw: b"RIFF-fake-" + text.encode()     # sin piper
 agent = app.create({**app.BLANK, "name": "Pizzería", "threshold": 0.9,
     "intents": [{"name": "saludar", "examples": ["hola"]}, {"name": "dni", "examples": ["mi documento"]},
                 {"name": "chau", "examples": ["chau"]}, {"name": "archivo", "examples": ["precios"]}],

@@ -10,8 +10,9 @@ Cada llamada es una conversación «call-<CallSid>» del canal «phone»: el pro
 cada respuesta (voz ya transcripta por el proveedor, o teclas) y otro cuando corta. Parla contesta qué decir y qué
 hacer después: escuchar (Gather / gather), transferir (Dial / dial) o cortar (Hangup / hangup).
 Rutas públicas bajo /api/v1/bots/{bot}/phone/…: no pasan por la sesión ni el chequeo de Host; las autentica la firma
-del proveedor (X-Twilio-Signature, o Jambonz-Signature / HTTP basic). El audio de Parla (tts «parla») se sirve en
-/phone/audio/<token>.wav con un token firmado que vence a los 10 minutos.
+del proveedor (X-Twilio-Signature, o Jambonz-Signature / HTTP basic). El audio de Parla (tts «parla»: la voz del agente
+en «voice.tts», piper local u otro proveedor con API key) se sirve en /phone/audio/<token>.wav con un token firmado que
+vence a los 10 minutos. tts «provider» es la voz propia de Twilio/jambonz.
 """
 import base64
 import hashlib
@@ -152,7 +153,7 @@ def audio(ref, token):
     if not found:
         return 403, b"", "text/plain"
     try:
-        return 200, voice.speak(*found), "audio/wav"
+        return 200, voice.speak(*found, tts=voice.settings(agent)["tts"]), "audio/wav"
     except Exception as error:  # noqa: BLE001 - sin piper: que se vea en Canales
         channels._log(agent["id"], "phone", error)
         return 503, b"", "text/plain"

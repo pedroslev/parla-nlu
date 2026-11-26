@@ -653,8 +653,8 @@ app.api_v1("POST", ["bots", "mesa", "events"], {"sessionId": "s2", "text": "hora
 app.api_v1("POST", ["bots", "mesa", "events"], {"sessionId": "s2", "text": "5"})
 assert app.load_session("eeee5555", "s2")["csat"] == 5
 saved_voice = voice.transcribe, voice.speak
-voice.transcribe = lambda audio, mime, language, hint=None: {"text": "menu", "language": language, "ms": 1}
-voice.speak = lambda text, language="es": b"RIFF" + text.encode()
+voice.transcribe = lambda audio, mime, language, hint=None, asr=None: {"text": "menu", "language": language, "ms": 1}
+voice.speak = lambda text, language="es", **kw: b"RIFF" + text.encode()
 status, body = app.api_v1("POST", ["bots", "mesa", "audio"], {"sessionId": "s3", "audio": base64.b64encode(b"x").decode(), "speak": True})
 assert status == 200 and body["heard"] == "menu" and body["messages"] == ["¿Con qué área?"] and body["buttons"], body
 assert base64.b64decode(body["audio"]) == "RIFF¿Con qué área?".encode()
@@ -700,7 +700,7 @@ _texts = app.spoken_texts({"fallback": ["No entendí."], "languages": ["es"], "f
 assert "¿Presencial o virtual?" in _texts and "No entendí." in _texts and "No reconocí ese dato, probemos de nuevo." in _texts, _texts
 _spoken = []
 _saved_speak = voice.speak
-voice.speak = lambda text, lang="es", keep=True: _spoken.append(text) or b"RIFF"
+voice.speak = lambda text, lang="es", keep=True, **kw: _spoken.append(text) or b"RIFF"
 _saved_cache = voice.TTS_CACHE
 voice.TTS_CACHE = voice.Path(app.AGENTS) / "tts-cache-test"
 assert voice.prewarm(_texts) == 4 and "Hola {{ nombre }}." not in _spoken and "¿Te ayudo?" in _spoken, _spoken

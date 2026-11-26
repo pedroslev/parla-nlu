@@ -44,7 +44,7 @@ jobs:
           cache-dependency-path: requirements.txt
       # Core only: without requirements-voice.txt and ffmpeg, test_voice prints «saltado» and passes.
       # There is no Ollama on the runner either: test_ai skips its model part and still tests dates and fallbacks.
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt -r requirements-providers.txt
       - name: Embedding model name
         id: model
         run: echo "name=$(grep -Po '^MODEL = "\K[^"]+' parla/server.py)" >> "$GITHUB_OUTPUT"

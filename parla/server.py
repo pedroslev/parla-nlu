@@ -1451,9 +1451,10 @@ _warming_lock = threading.Lock()
 
 def store(agent):
     write_json(path(agent["id"]), agent, indent=2)
-    if any(voice.PIPER_DIR.glob("*.onnx")):       # con voz instalada: las frases fijas quedan listas para las llamadas
-        job = (spoken_texts(agent), languages(agent)[0])
-        key = hash((tuple(job[0]), job[1]))
+    tts = voice.settings(agent)["tts"]
+    if voice.ready(tts):                          # con voz (piper o un proveedor): las frases fijas quedan listas para las llamadas
+        job = (spoken_texts(agent), languages(agent)[0], tts)
+        key = hash((tuple(job[0]), job[1], json.dumps({k: v for k, v in tts.items() if k != "api_key"}, sort_keys=True)))
         with _warming_lock:                       # la interfaz guarda cada ~400 ms: un hilo por agente y solo si cambió algo
             if _voiced.get(agent["id"]) == key:
                 return agent
@@ -1858,7 +1859,8 @@ def audio_event(agent, data, public=False):
     if not audio:
         return 400, {"error": "falta «audio» con la grabación en base64"}
     try:
-        heard = voice.transcribe(audio, str(data.get("mime") or "audio/webm"), language, vocabulary(agent))
+        conf = voice.settings(agent)
+        heard = voice.transcribe(audio, str(data.get("mime") or "audio/webm"), language, vocabulary(agent), conf["asr"])
     except Exception as error:  # noqa: BLE001 - sin modelo de voz, formato raro: que lo vea quien llama
         return 400, {"error": str(error)}
     text = str((heard or {}).get("text") or "").strip()
@@ -1872,7 +1874,7 @@ def audio_event(agent, data, public=False):
     body["heard"] = text
     if data.get("speak") and body["messages"]:
         try:
-            body["audio"] = base64.b64encode(voice.speak(" ".join(body["messages"]), body.get("language") or language)).decode()
+            body["audio"] = base64.b64encode(voice.speak(" ".join(body["messages"]), body.get("language") or language, tts=conf["tts"])).decode()
         except Exception as error:  # noqa: BLE001
             return 400, {"error": str(error)}
     return 200, body
@@ -2087,8 +2089,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(llm.pull_progress())
         if url == "/api/voice/status" and method == "GET":
             return self.reply(voice.status())
-        if url == "/api/voice/speak" and method == "POST":
-            audio = voice.speak(str(data.get("text") or "")[:2000], str(data.get("language") or "es"))
+        if url in ("/api/voice/speak", "/api/voice/voices") and data.get("agent") and not auth.allowed_bot(self.user, str(data["agent"])):
+            return self.reply({"error": "no existe ese agente"}, 404)
+        if url in ("/api/voice/speak", "/api/voice/voices") and method == "POST":   # {"agent": id} usa su voz; {"voice": config} prueba sin guardar
+            owner = load(str(data["agent"])) if data.get("agent") else {}
+            tts = voice.settings(owner, data.get("voice") if isinstance(data.get("voice"), dict) else None)["tts"]
+            if url == "/api/voice/voices":
+                return self.reply({"voices": voice.voices(tts, str(data.get("language") or "es"))})
+            audio = voice.speak(str(data.get("text") or "")[:2000], str(data.get("language") or "es"), tts=tts)
             return self.reply(audio, ctype="audio/wav")
         if url in ("/api/connect", "/api/connect/remove"):
             if self.headers.get("Host") not in ours:   # DNS rebinding
@@ -2202,9 +2210,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(knowledge.extract(str(data.get("kind") or "text"), data.get("data") if data.get("kind") != "url" else data.get("url")))
         elif action == "knowledge/search" and method == "POST":      # prueba de la base desde la interfaz
             return self.reply({"results": knowledge.search(load(agent_id), str(data.get("query") or ""), int(data.get("k") or 3))})
-        elif action == "voice/transcribe" and method == "POST":      # {"audio": base64, "mime"}
+        elif action == "voice/transcribe" and method == "POST":      # {"audio": base64, "mime", "voice"?: config sin guardar}
+            owner = load(agent_id)
+            asr = voice.settings(owner, data.get("voice") if isinstance(data.get("voice"), dict) else None)["asr"]
             return self.reply(voice.transcribe(audio_of(data), str(data.get("mime") or "audio/webm"),
-                                               str(data.get("language") or "es"), vocabulary(load(agent_id))))
+                                               str(data.get("language") or "es"), vocabulary(owner), asr))
         elif action == "files" and method == "GET":                  # archivos para el paso «Enviar un archivo»
             return self.reply({"files": files.listing(agent_id)})
         elif action == "files" and method == "POST":                 # {"name": "precios.pdf", "data": base64}
