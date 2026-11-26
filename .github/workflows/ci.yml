@@ -48,7 +48,7 @@ jobs:
       - name: Embedding model name
         id: model
         run: echo "name=$(grep -Po '^MODEL = "\K[^"]+' parla/server.py)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .cache/embeddings
           # Same model for every Python version; a new MODEL in parla/server.py downloads it once again.
@@ -92,7 +92,7 @@ jobs:
       - name: Embedding model name
         id: model
         run: echo "name=$(grep -Po '^MODEL = "\K[^"]+' parla/server.py)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .cache/embeddings
           key: embed-${{ steps.model.outputs.name }}
@@ -120,7 +120,7 @@ jobs:
       - name: Embedding model name
         id: model
         run: echo "name=$(grep -Po '^MODEL = "\K[^"]+' parla/server.py)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .cache/embeddings
           key: embed-${{ steps.model.outputs.name }}
