@@ -253,7 +253,11 @@ telemetry.configure()
 err, sys.stderr = sys.stderr, io.StringIO()
 try:
     say("hola", "s6")
-    lines = [json.loads(line) for line in sys.stderr.getvalue().splitlines() if line.startswith("{")]
+    for _ in range(40):   # la línea se escribe después de mandar la respuesta: esperarla (si no, falla de vez en cuando)
+        lines = [json.loads(line) for line in sys.stderr.getvalue().splitlines() if line.startswith("{")]
+        if any(line["msg"] == "request" for line in lines):
+            break
+        time.sleep(0.05)
 finally:
     sys.stderr = err
 (log,) = [line for line in lines if line["msg"] == "request"]
