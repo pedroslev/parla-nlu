@@ -1,6 +1,8 @@
 # docker compose up -d                       -> http://127.0.0.1:8000
 # docker compose --profile ai up -d          -> + Ollama; in the agent, IA → dirección (AI → address) http://ollama:11434
 # Voice: PARLA_VOICE=1 docker compose up -d --build
+# Observability (docs/observability.md): + Jaeger (traces, http://127.0.0.1:16686) and Prometheus (http://127.0.0.1:9090)
+#   PARLA_METRICS=1 PARLA_METRICS_TOKEN=<long random> PARLA_OTEL_ENDPOINT=http://jaeger:4318 docker compose --profile observability up -d
 name: parla
 services:
   parla:
@@ -18,6 +20,9 @@ services:
       PARLA_FUNCTIONS: ${PARLA_FUNCTIONS:-0}
       PARLA_WHISPER: ${PARLA_WHISPER:-base}
       PARLA_LANG: ${PARLA_LANG:-}       # default interface language: en, es or pt (empty = browser's)
+      PARLA_METRICS: ${PARLA_METRICS:-0}                # 1 = GET /metrics (Prometheus); from another container it needs the token
+      PARLA_METRICS_TOKEN: ${PARLA_METRICS_TOKEN:-}
+      PARLA_OTEL_ENDPOINT: ${PARLA_OTEL_ENDPOINT:-}     # OTLP/HTTP base URL, e.g. http://jaeger:4318 (empty = no traces)
     volumes:
       - parla-data:/data
     read_only: true
@@ -38,6 +43,32 @@ services:
       - ollama-models:/root/.ollama
     # No published ports: only Parla talks to it, over the compose network.
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    profiles: ["observability"]
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"        # OTLP/HTTP on :4318 (only on the compose network)
+    ports:
+      - "127.0.0.1:16686:16686"             # Jaeger UI
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles: ["observability"]
+    restart: unless-stopped
+    volumes:
+      - ./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    secrets:
+      - parla_metrics_token
+    ports:
+      - "127.0.0.1:9090:9090"
+
+secrets:
+  parla_metrics_token:
+    environment: PARLA_METRICS_TOKEN
+
 volumes:
   parla-data:
   ollama-models:
+  prometheus-data:

@@ -9,6 +9,11 @@ data:
   PARLA_WHISPER: "base"
   # PARLA_LANG: "en"         # default interface language: en, es or pt (unset = the browser's)
   # PARLA_PUBLIC_URL: "https://bots.example.com"   # for the WhatsApp/Telegram webhooks (docs/channels.md)
+  # Observability (docs/observability.md). The scrape token goes in a Secret, not here:
+  #   kubectl -n parla create secret generic parla-metrics --from-literal=PARLA_METRICS_TOKEN=<long random>
+  # PARLA_METRICS: "1"
+  # PARLA_OTEL_ENDPOINT: "http://otel-collector.observability:4318"
+  # PARLA_LOG_FORMAT: "json"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -35,6 +40,8 @@ spec:
   template:
     metadata:
       labels: {app: parla}
+      # Prometheus with annotation-based discovery (the token still has to be set in its scrape config):
+      # annotations: {prometheus.io/scrape: "true", prometheus.io/port: "8000", prometheus.io/path: "/metrics"}
     spec:
       automountServiceAccountToken: false
       securityContext:
@@ -51,6 +58,7 @@ spec:
             - {name: http, containerPort: 8000}
           envFrom:
             - configMapRef: {name: parla}
+            # - secretRef: {name: parla-metrics}     # PARLA_METRICS_TOKEN for /metrics
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -81,6 +89,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: parla
+  labels: {app: parla}       # the ServiceMonitor example (servicemonitor.yaml) selects it by this
 spec:
   selector: {app: parla}
   ports:

@@ -1,0 +1,18 @@
+# Example for the Prometheus Operator (kube-prometheus-stack): not in kustomization.yaml, apply it by hand.
+# Needs PARLA_METRICS=1 and PARLA_METRICS_TOKEN in the pod (see parla.yaml) and the same token in this namespace:
+#   kubectl -n parla create secret generic parla-metrics --from-literal=PARLA_METRICS_TOKEN=<long random>
+# apiVersion: monitoring.coreos.com/v1
+# kind: ServiceMonitor
+# metadata:
+#   name: parla
+#   labels: {release: kube-prometheus-stack}     # whatever your Prometheus selects ServiceMonitors by
+# spec:
+#   selector:
+#     matchLabels: {app: parla}
+#   endpoints:
+#     - port: http
+#       path: /metrics
+#       interval: 30s
+#       authorization:
+#         type: Bearer
+#         credentials: {name: parla-metrics, key: PARLA_METRICS_TOKEN}
