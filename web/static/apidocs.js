@@ -82,6 +82,10 @@
     audio: () => ({ method: 'POST', path: '/bots/' + ref() + '/audio', body: { sessionId: sid, audio: t('<la grabación en base64>'), mime: 'audio/webm', speak: true } }),
     outbound: () => ({ method: 'POST', path: '/bots/' + ref() + '/outbound', body: { channel: 'whatsapp', to: '+5491122334455',
       template: { name: (agent.channels?.whatsapp?.templates || [])[0]?.name || 'recordatorio_turno' }, flow: agent.flows[0]?.name || null, data: sampleData() } }),
+    handoff: () => ({ method: 'POST', path: '/bots/' + ref() + '/sessions/' + encodeURIComponent(sid) + '/handoff', body: { action: 'accept', agent_name: 'Marta' } }),
+    reply: () => ({ method: 'POST', path: '/bots/' + ref() + '/sessions/' + encodeURIComponent(sid) + '/messages', body: { text: t('Hola, soy Marta. ¿En qué te ayudo?'), from_name: 'Marta' } }),
+    lookup: () => ({ method: 'GET', path: '/bots/' + ref() + '/lookup?phone=5491122334455' }),
+    costs: () => ({ method: 'GET', path: '/bots/' + ref() + '/costs?' + monthRange() + '&group=day' }),
   };
 
   // Qué hace cada dirección: lo usan la página y los archivos exportados.
@@ -97,6 +101,10 @@
     del: t('La elimina del todo, con su historial. No se puede deshacer.'),
     messages: t('Lo nuevo de la conversación desde la entrada número after del historial (0 = todo). Sirve para recibir lo que escribe una persona desde la Bandeja cuando el bot pasó la charla (handoff): preguntá cada pocos segundos mandando como after el next de la respuesta anterior.'),
     outbound: t('El bot escribe primero: un mensaje de WhatsApp (con plantilla aprobada), Telegram o una llamada a una sola persona. Para muchas, armá una campaña en «Campañas». No se manda a quien se dio de baja.'),
+    handoff: t('Para un contact center fuera de Parla: tomar la conversación derivada (accept), devolverla al bot (release, con data y flow opcionales) o cerrarla (close, con resolution). Devuelve la conversación sin history.'),
+    reply: t('Lo que escribe la persona del contact center: Parla lo entrega por el canal de la charla (widget, WhatsApp, Telegram). 409 en llamadas, conversaciones terminadas o WhatsApp fuera de las 24 h.'),
+    lookup: t('La conversación abierta más reciente de ese cliente (primero las derivadas), por phone, chat o sid. El mismo cuerpo que el webhook. 404 si no hay.'),
+    costs: t('Lo que costó cada conversación: el uso medido (tokens, minutos, caracteres, mensajes) por la tabla de precios de esta instalación. Estimado con los precios actuales; la factura del proveedor es la fuente de verdad. Analista o más.'),
     audio: t('Un mensaje de voz: Parla lo pasa a texto en esta computadora (sin servicios de afuera), lo atiende como un message y, con speak, te devuelve la respuesta también en audio. Trae lo mismo que message más heard y audio.'),
   };
 
@@ -347,7 +355,10 @@
         }, { requestBody: { required: true, ...json(ref('AudioRequest')) } }) },
         '/bots/{bot}/sessions/{sessionId}/messages': { parameters: [P.bot, P.sessionId], get: op(t('Recibir mensajes nuevos'), t('Conversación'), PURPOSE.messages, {
           200: ok(t('Lo nuevo del historial.'), ref('Messages')), 400: err(t('after no es un número.')), 404: err(t('No existe el bot o la conversación.')),
-        }, { parameters: [param('after', 'query', t('Desde qué entrada del historial (0 = todo): el next de la respuesta anterior.'), '0', { pattern: '^\\d+$' })] }) },
+        }, { parameters: [param('after', 'query', t('Desde qué entrada del historial (0 = todo): el next de la respuesta anterior.'), '0', { pattern: '^\\d+$' })] }),
+          post: op(t('Contact center: escribirle al cliente'), t('Conversación'), PURPOSE.reply, {
+            200: ok(t('La conversación, con delivered.'), ref('Session')), 409: err(t('Llamada, conversación terminada o WhatsApp fuera de las 24 h.')), 502: err(t('El proveedor lo rechazó.')),
+          }, { requestBody: { required: true, ...json(obj({ text: str(), from_name: str() }, ['text'])) } }) },
         '/bots/{bot}/sessions': { parameters: [P.bot], get: op(t('Listar conversaciones'), t('Conversaciones'), PURPOSE.list, {
           200: ok(t('Las conversaciones, la más reciente primero.'), obj({ sessions: { type: 'array', items: ref('SessionSummary') } }, ['sessions'])), ...bot404,
         }, { parameters: SESSION_FILTERS.map(([key, v, description]) => param(key, 'query', description, val(v), key === 'from' || key === 'to' ? { format: 'date' } : {})) }) },
@@ -355,6 +366,18 @@
           get: op(t('Leer la conversación'), t('Conversaciones'), PURPOSE.read, { 200: ok(t('La conversación con su historial.'), ref('SessionDetail')), 404: err(t('No existe el bot o la conversación.')) }),
           delete: op(t('Borrar una conversación'), t('Conversaciones'), PURPOSE.del, {
             200: ok(t('Borrada.'), obj({ sessionId: str(), deleted: { type: 'boolean', enum: [true] } }, ['sessionId', 'deleted'])), 404: err(t('No existe el bot o la conversación.')) }) },
+        '/bots/{bot}/sessions/{sessionId}/handoff': { parameters: [P.bot, P.sessionId], post: op(t('Contact center: tomar, devolver o cerrar'), t('Conversación'), PURPOSE.handoff, {
+          200: ok(t('La conversación, sin history.'), ref('Session')), 400: err(t('action o flow desconocido.')), 404: err(t('No existe el bot o la conversación.')), 409: err(t('La conversación ya terminó.')),
+        }, { requestBody: { required: true, ...json(obj({ action: str('', { enum: ['accept', 'release', 'close'] }), agent_name: str(), data: { type: 'object', additionalProperties: {} },
+          flow: str(), resolution: str() }, ['action'])) } }),
+          },
+        '/bots/{bot}/lookup': { parameters: [P.bot], get: op(t('Contact center: buscar la conversación de un cliente'), t('Conversación'), PURPOSE.lookup, {
+          200: ok(t('La conversación, como en el webhook.'), { type: 'object' }), 404: err(t('No hay una conversación abierta con esa persona.')),
+        }, { parameters: [param('phone', 'query', t('El teléfono, con código de país.'), '5491122334455'), param('chat', 'query', t('El chat id de Telegram.'), ''), param('sid', 'query', 'sessionId', '')] }) },
+        '/bots/{bot}/costs': { parameters: [P.bot], get: op(t('Costos'), t('Reportes'), PURPOSE.costs, { 200: ok(t('Los costos.'), { type: 'object' }), ...bot404 }, {
+          parameters: [param('from', 'query', t('Desde esa fecha, inclusive (AAAA-MM-DD).'), monthParams().from, { format: 'date' }),
+            param('to', 'query', t('Hasta esa fecha, inclusive (AAAA-MM-DD).'), monthParams().to, { format: 'date' }),
+            param('group', 'query', t('Además, groups agrupado por day, channel o provider.'), 'day'), param('campaign', 'query', t('Solo las conversaciones de esa campaña.'), '')] }) },
         '/bots/{bot}/report': { parameters: [P.bot], get: op(t('Reporte de clasificaciones'), t('Reportes'), PURPOSE.report, { 200: ok(t('El reporte.'), ref('Report')), ...bot404 }, {
           parameters: [param('from', 'query', t('Desde esa fecha, inclusive (AAAA-MM-DD).'), monthParams().from, { format: 'date' }),
             param('to', 'query', t('Hasta esa fecha, inclusive (AAAA-MM-DD).'), monthParams().to, { format: 'date' }), param('channel', 'query', t('Solo las de ese canal.'), 'api')] }) },
@@ -471,6 +494,33 @@
         t('Las respuestas traen '), inline('environment'), t(' y '), inline('version'), t(' para que sepas con cuál contestó.')),
       h('p', { class: 'help' }, t('Ahora «{name}» tiene en Producción: ', { name: agent.name }), h('strong', {}, env.production == null ? t('ninguna (contesta el borrador)') : where(env.production)),
         t(' · en Pruebas: '), h('strong', {}, env.staging == null ? t('ninguna (staging da 400)') : where(env.staging)), '.'));
+  }
+
+  function pushSection() {
+    const ws = 'ws://' + location.host + '/api/v1/bots/' + ref() + '/ws';
+    return h('section', { class: 'panel ad-panel' },
+      h('h2', {}, t('Recibir en vivo: WebSocket y SSE')),
+      h('p', { class: 'help' }, t('El mismo puerto y la misma autenticación que las rutas de arriba. Preguntar cada pocos segundos sigue andando.')),
+      h('div', { class: 'ad-ep' }, h('span', { class: 'ad-m GET' }, 'GET'), h('code', {}, '/bots/{bot}/ws')),
+      h('p', { class: 'help' }, t('WebSocket: mandás los mismos cuerpos que POST …/events, con un id opcional que vuelve en reply. Llegan delta (la IA mientras escribe), reply y messages (lo que escribe una persona de la Bandeja). follow escucha sin mandar.')),
+      codeBox(() => ws + '\n→ {"id": 1, "type": "message", "sessionId": "' + sid + '", "text": "' + text() + '"}\n← {"type": "delta", "stream": 7, "text": "…"}\n← {"type": "reply", "id": 1, "status": 200, "body": {…}}\n→ {"type": "follow", "sessionId": "' + sid + '", "after": 12}'),
+      h('div', { class: 'ad-ep' }, h('span', { class: 'ad-m GET' }, 'GET'), h('code', {}, '/bots/{bot}/sessions/{sessionId}/stream?after=N')),
+      h('p', { class: 'help' }, t('SSE (text/event-stream): eventos messages (el mismo cuerpo que GET …/messages), delta y replace (el texto final si cambió lo que se mandó en vivo). Para la Bandeja y las campañas: /api/agents/{id}/inbox/stream y /api/agents/{id}/campaigns/stream.')),
+      codeBox(() => 'curl -N ' + q(BASE() + '/bots/' + ref() + '/sessions/' + encodeURIComponent(sid) + '/stream?after=0')));
+  }
+
+  function webhookSection() {
+    return h('section', { class: 'panel ad-panel' },
+      h('h2', {}, t('Webhooks que manda Parla')),
+      h('p', { class: 'help' }, t('Se configuran en Canales → Derivación. Cada evento es un POST con el contexto de la conversación (el mismo cuerpo que lookup, más id y type), firmado. Si falla, se reintenta con espera creciente durante ~24 h; el que recibe deduplica por id.')),
+      fieldsOut([
+        ['handoff.requested', t('La charla pasó a una persona. Trae handoff.summary: el resumen de la IA si llega a tiempo, si no el fijo.')],
+        ['handoff.released', t('Volvió al bot.')], ['conversation.started / conversation.ended', t('Empezó o terminó una conversación.')],
+        ['message.user / message.bot', t('Cada mensaje de la persona y del bot.')], ['csat.received', t('Una respuesta de la encuesta de satisfacción.')],
+        ['campaign.finished', t('Terminó una campaña.')],
+      ], t('Evento')),
+      h('p', { class: 'help' }, t('Firma: el encabezado Parla-Signature trae t (segundos) y v1 = HMAC-SHA256 con tu clave de «t.cuerpo». Compará con compare_digest y rechazá un t de hace más de 5 minutos.')),
+      codeBox(() => 'Parla-Signature: t=1767225600,v1=5f2b…\n\nexpected = hmac_sha256(secret, t + "." + raw_body)\nok = compare_digest(expected, v1) and abs(now - t) < 300'));
   }
 
   window.apiDocsView = () => {
@@ -621,6 +671,34 @@
           ['flow', t('No'), t('El flujo que corre: enseguida en Telegram y en llamadas, cuando la persona responde en WhatsApp.')],
           ['data', t('No'), t('Datos que se guardan en slots y completan la plantilla.')],
         ] }),
+      endpoint('costs', { title: t('Costos'), purpose: PURPOSE.costs,
+        rows: [
+          ['from / to', t('No'), t('Solo el uso de esos días, inclusive (AAAA-MM-DD).')],
+          ['group', t('No'), t('day, channel o provider: además viene groups agrupado así.')],
+          ['channel / campaign', t('No'), t('Solo ese canal, o las conversaciones de esa campaña.')],
+        ],
+        after: fieldsOut([
+          ['total / currency', t('El total estimado y la moneda de la tabla de precios.')],
+          ['by_day / by_channel / by_kind / by_provider', t('El costo por día, canal, tipo (IA, voz, teléfono, mensajería) y proveedor con modelo y cantidad.')],
+          ['conversations', t('{count, avg, median, p95} por conversación.')],
+          ['resolved', t('{count, cost_per}: el total dividido por las conversaciones que no pasaron a una persona.')],
+          ['top / missing_prices', t('Las conversaciones más caras y lo que no tiene precio todavía.')],
+        ]) }),
+      h('h2', { style: 'font:700 22px var(--display);margin-top:8px' }, t('Contact center')),
+      endpoint('handoff', { title: t('Tomar, devolver o cerrar una conversación derivada'), purpose: PURPOSE.handoff, noTry: true,
+        rows: [
+          ['action', t('Sí'), t('"accept", "release" o "close".')],
+          ['agent_name', t('No'), t('En accept: quién la atiende.')],
+          ['data / flow', t('No'), t('En release: datos que se guardan y el flujo que sigue.')],
+          ['resolution', t('No'), t('En close: cómo terminó.')],
+        ] }),
+      endpoint('reply', { title: t('Escribirle al cliente desde el contact center'), purpose: PURPOSE.reply, noTry: true,
+        rows: [['text', t('Sí'), t('El mensaje.')], ['from_name', t('No'), t('El nombre de quien escribe.')]] }),
+      endpoint('lookup', { title: t('Buscar la conversación de un cliente'), purpose: PURPOSE.lookup, noTry: true,
+        rows: [['phone / chat / sid', t('Uno'), t('El teléfono (con código de país), el chat de Telegram o el sessionId.')]] }),
+      h('p', { class: 'help' }, t('Estas rutas aceptan una clave de dueño o editor, o una clave con scope «integration» (sirve solo para esto).')),
+      webhookSection(),
+      pushSection(),
       endpoint('audio', { title: t('Mandar un mensaje de voz'), purpose: PURPOSE.audio, noTry: true,
         rows: [
           ['audio', t('Sí'), [t('La grabación en base64 (también acepta '), inline('data:audio/webm;base64,…'), t('). Hasta 25 MB.')]],
