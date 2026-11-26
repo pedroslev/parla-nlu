@@ -9,6 +9,8 @@ campaigns(id, agent_id, name, channel, status, config, created, updated, created
 campaign_recipients(id, campaign_id, agent_id, address, spec, status, error, attempts, next_at, ...)   la cola de envíos:
     destinatarios de campañas, envíos de la API (campaign_id NULL, kind «api») y recordatorios (kind «remind»)
 optouts(agent_id, address, channel, keyword, at)    quien pidió que no le escriban más (por agente)
+webhook_deliveries(id, agent_id, url, event, event_id, session_id, body, status, attempts, next_at, code, error, ...)
+    la cola de webhooks salientes (handoff.py)
 """
 import concurrent.futures
 import contextlib
@@ -42,6 +44,12 @@ CREATE INDEX IF NOT EXISTS recipients_message ON campaign_recipients (message_id
 CREATE INDEX IF NOT EXISTS recipients_session ON campaign_recipients (agent_id, session_id);
 CREATE TABLE IF NOT EXISTS optouts (agent_id TEXT NOT NULL, address TEXT NOT NULL, channel TEXT, keyword TEXT, at TEXT NOT NULL,
     PRIMARY KEY (agent_id, address));
+CREATE TABLE IF NOT EXISTS webhook_deliveries (id INTEGER PRIMARY KEY, agent_id TEXT NOT NULL, url TEXT NOT NULL,
+    event TEXT NOT NULL, event_id TEXT NOT NULL, session_id TEXT, body TEXT NOT NULL, status TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0, next_at REAL NOT NULL DEFAULT 0, code INTEGER, error TEXT, latency_ms INTEGER,
+    created TEXT NOT NULL, updated TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS webhook_due ON webhook_deliveries (status, next_at);
+CREATE INDEX IF NOT EXISTS webhook_order ON webhook_deliveries (agent_id, url, session_id, status);
 """
 # Lecturas: una conexión por hilo, sin lock (WAL deja leer mientras otro escribe). Escrituras: un solo hilo escritor
 # con una cola y group commit (todo lo que se juntó va en una transacción). q() de escritura vuelve recién después del

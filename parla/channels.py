@@ -375,20 +375,26 @@ def webhook(headers, rfile, method, ref, channel, query, length):
 
 # ---------- Bandeja y administración ----------
 
-def human_reply(agent_id, record, text):
-    """Lo que escribe una persona desde la Bandeja también llega al WhatsApp o Telegram de quien chatea."""
+def send_now(agent_id, record, replies):
+    """Manda ya, en el WhatsApp o Telegram de la conversación, y espera: ChannelError si no salió."""
     channel = record.get("channel")
-    if channel not in CHANNELS:
+    with _session_lock(agent_id + "/" + record["sessionId"]):
+        agent = auth._app().load(agent_id)
+        if not config(agent, channel).get("enabled"):
+            raise ChannelError("el canal está apagado: el mensaje no se envió")
+        return _send(agent, channel, record["sessionId"], replies, (record.get("state") or {}).get("lang"))
+
+
+def human_reply(agent_id, record, text, replies=None):
+    """Lo que escribe una persona desde la Bandeja (o lo que dice el bot al volver) también llega al WhatsApp o
+    Telegram de quien chatea. En otro hilo: el error queda en el estado del canal."""
+    if record.get("channel") not in CHANNELS:
         return
     def deliver():
-        with _session_lock(agent_id + "/" + record["sessionId"]):
-            try:
-                agent = auth._app().load(agent_id)
-                if not config(agent, channel).get("enabled"):
-                    raise ChannelError("el canal está apagado: la respuesta de la Bandeja no se envió")
-                _send(agent, channel, record["sessionId"], [{"text": text, "buttons": []}], (record.get("state") or {}).get("lang"))
-            except Exception as error:  # noqa: BLE001
-                _log(agent_id, channel, error)
+        try:
+            send_now(agent_id, record, replies or [{"text": text, "buttons": []}])
+        except Exception as error:  # noqa: BLE001
+            _log(agent_id, record.get("channel"), error)
     threading.Thread(target=deliver, daemon=True).start()
 
 

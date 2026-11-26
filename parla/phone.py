@@ -26,6 +26,7 @@ import urllib.parse
 from xml.sax.saxutils import escape, quoteattr
 
 from . import auth, channels, outbound, telemetry, vault, voice
+from . import handoff as handoff_mod
 from .channels import ChannelError
 
 PROVIDERS = ("twilio", "jambonz")
@@ -224,8 +225,11 @@ def plan(agent, conf, sid, kind, text=None, caller=None, pending=None):
         if status != 200:
             raise ChannelError(body.get("error"))
         record = app.load_session(agent["id"], sid)
-        if pending and pending.get("campaign"):
-            record["campaign"] = pending["campaign"]
+        if (pending and pending.get("campaign")) or (kind == "start" and caller):
+            if pending and pending.get("campaign"):
+                record["campaign"] = pending["campaign"]
+            if kind == "start" and caller:
+                record["caller"] = re.sub(r"[^\d]", "", caller) or None       # para el lookup del contact center
             app.save_session(agent["id"], record)
         lang, handoff = body.get("language") or "es", body.get("handoff")
         finished = record["state"].get("finished")
@@ -235,12 +239,15 @@ def plan(agent, conf, sid, kind, text=None, caller=None, pending=None):
     out = {"say": say, "lang": lang, "then": "gather"}
     if handoff:
         to = str(conf.get("handoff_to") or "").strip()
-        if not to:
+        draft = app.settings_of(agent["id"])
+        flex = handoff_mod.conf(draft)["phone"]["twilio_workflow_sid"] if conf.get("provider", "twilio") == "twilio" else ""
+        if not to and not flex:
             channels._log(agent["id"], "phone", "falta «handoff_to»: no hay a dónde transferir la llamada")
             return _close(app, agent, sid, dict(out, say=say + [NOBODY[_lang(lang)]], then="hangup"))
-        record["history"].append({"from": "event", "text": "Transferida a %s" % to, "at": app.now()})
+        record["history"].append({"from": "event", "text": "Transferida a %s" % (to if not flex else "Twilio Flex"), "at": app.now()})
         app.save_session(agent["id"], record)
-        return dict(out, then="dial", to=to)
+        return dict(out, then="dial", to=to, headers=handoff_mod.sip_headers(draft, record), workflow=flex or None,
+                    task=handoff_mod.task_attributes(draft, record) if flex else None)
     if finished:
         return _close(app, agent, sid, dict(out, then="hangup"))
     buttons = (record["state"].get("buttons") or []) if record else []
@@ -276,9 +283,13 @@ def twiml(agent, conf, p):
         if p.get("hints"):
             attrs["hints"] = p["hints"]
         body = "<Gather %s>%s</Gather>" % (" ".join("%s=%s" % (k, quoteattr(v)) for k, v in attrs.items()), speech)
-    elif p["then"] == "dial":
+    elif p["then"] == "dial" and p.get("workflow"):     # Twilio Flex / TaskRouter: la tarea lleva el contexto
+        body = speech + "<Enqueue workflowSid=%s><Task>%s</Task></Enqueue>" % (
+            quoteattr(p["workflow"]), escape(json.dumps(p.get("task") or {}, ensure_ascii=False)))
+    elif p["then"] == "dial":       # a SIP con encabezados X-Parla-* en el URI; a un número no se le pueden poner
         to = p["to"]
-        body = speech + "<Dial>%s</Dial><Hangup/>" % ("<Sip>%s</Sip>" % escape(to) if to.startswith(("sip:", "sips:")) else escape(to))
+        body = speech + "<Dial>%s</Dial><Hangup/>" % ("<Sip>%s</Sip>" % escape(handoff_mod.sip_uri(to, p.get("headers")))
+                                                       if to.startswith(("sip:", "sips:")) else "<Number>%s</Number>" % escape(to))
     else:
         body = speech + "<Hangup/>"
     return ('<?xml version="1.0" encoding="UTF-8"?><Response>%s</Response>' % body).encode()
@@ -308,8 +319,11 @@ def verbs(agent, conf, p):
     out = [{"verb": k, **v} for k, v in prompt.items()]
     if p["then"] == "dial":
         to = p["to"]
-        out.append({"verb": "dial", "answerOnBridge": True,
-                    "target": [{"type": "sip", "sipUri": to} if to.startswith(("sip:", "sips:")) else {"type": "phone", "number": to}]})
+        dial = {"verb": "dial", "answerOnBridge": True,
+                "target": [{"type": "sip", "sipUri": to} if to.startswith(("sip:", "sips:")) else {"type": "phone", "number": to}]}
+        if p.get("headers"):        # jambonz: encabezados SIP del INVITE (también a un número, por el carrier)
+            dial["headers"] = p["headers"]
+        out.append(dial)
     return out + [{"verb": "hangup"}]
 
 

@@ -65,13 +65,16 @@ def _set_password(user, password):
     user["hash"] = _scrypt(password, user["salt"])
 
 
-def _add_key(users, user, label):
+def _add_key(users, user, label, scope=None):
+    """scope «integration»: la clave solo sirve para las rutas del contact center externo (INTEGRATION_ROUTES)."""
+    if scope not in (None, "integration"):
+        raise ValueError("«scope» tiene que ser integration (o nada)")
     key = "parla_" + secrets.token_urlsafe(32)
     entry = {"id": secrets.token_hex(4), "hash": hashlib.sha256(key.encode()).hexdigest(),
-             "label": str(label or "Clave").strip()[:60] or "Clave", "created": time.strftime("%Y-%m-%dT%H:%M:%S")}
+             "label": str(label or "Clave").strip()[:60] or "Clave", "created": time.strftime("%Y-%m-%dT%H:%M:%S"), **({"scope": scope} if scope else {})}
     user.setdefault("keys", []).append(entry)
     _save(users)
-    return {"id": entry["id"], "label": entry["label"], "created": entry["created"], "key": key}
+    return {"id": entry["id"], "label": entry["label"], "created": entry["created"], "key": key, **({"scope": scope} if scope else {})}
 
 
 def issue_key(name, label):
@@ -123,7 +126,7 @@ def _valid_bots(bots):
 
 def _public(user):
     return {"name": user["name"], "role": user["role"], "bots": _scope(user), "sso": bool(user.get("sso")),
-            "keys": [{k: key[k] for k in ("id", "label", "created")} for key in user.get("keys", [])]}
+            "keys": [{k: key[k] for k in ("id", "label", "created", "scope") if k in key} for key in user.get("keys", [])]}
 
 
 def _owners(users):
@@ -133,13 +136,14 @@ def _owners(users):
 def current(handler, users=None):
     """{"name", "role"} de quien hace el pedido (cookie o Bearer), o None."""
     users = _load() if users is None else users
-    name = None
+    name, scope = None, None
     bearer = (handler.headers.get("Authorization") or "").strip()
     if bearer.lower().startswith("bearer "):
         digest = hashlib.sha256(bearer[7:].strip().encode()).hexdigest()
         for user in users:
-            if any(hmac.compare_digest(digest, key["hash"]) for key in user.get("keys", [])):
-                name = user["name"]
+            for key in user.get("keys", []):
+                if hmac.compare_digest(digest, key["hash"]):
+                    name, scope = user["name"], key.get("scope")
     else:
         token = cookie_value(handler, "parla_session")
         found = db.q("SELECT name, expires FROM logins WHERE token = ?", (_digest(token),)) if token else None
@@ -148,7 +152,11 @@ def current(handler, users=None):
         elif found:
             db.q("DELETE FROM logins WHERE token = ?", (_digest(token),))
     user = _find(users, name) if name else None
-    return {"name": user["name"], "role": user["role"], "bots": _scope(user)} if user else None
+    if not user:
+        return None
+    # una clave «integration» achica el rol (nunca lo agranda: la de un analista sigue siendo de solo lectura)
+    role = "integration" if scope == "integration" and user["role"] != "analyst" else user["role"]
+    return {"name": user["name"], "role": role, "bots": _scope(user)}
 
 
 def cookie_value(handler, name):
@@ -297,7 +305,7 @@ def _handle(handler, method, url, data):
         _drop_sessions(user["name"])
         return 200, {"deleted": user["name"]}, {}
     if parts[1:] == ["keys"] and method == "POST":
-        return 200, _add_key(users, user, data.get("label")), {}
+        return 200, _add_key(users, user, data.get("label"), data.get("scope")), {}
     if len(parts) == 3 and parts[1] == "keys" and method == "DELETE":
         before = len(user.get("keys", []))
         user["keys"] = [k for k in user.get("keys", []) if k["id"] != parts[2]]
@@ -327,6 +335,12 @@ AGENT_ROUTES = (     # rol «agent» (atención): solo la Bandeja
     ("GET", r"/api/agents(/[0-9a-f]{8})?"),
     ("GET|POST", r"/api/agents/[0-9a-f]{8}/(inbox|sessions/[A-Za-z0-9_.@+-]+/(reply|take|release))"),
     ("GET", r"/api/v1/bots/[^/]+/sessions/[^/]+(/messages)?"),
+)
+
+
+INTEGRATION_ROUTES = (     # clave con scope «integration» (contact center externo): solo esto
+    ("POST", r"/api/v1/bots/[^/]+/sessions/[^/]+/(handoff|messages)"),
+    ("GET", r"/api/v1/bots/[^/]+/(lookup|sessions/[^/]+(/messages)?)"),
 )
 
 
@@ -387,6 +401,10 @@ def guard(handler, method, url, data):
         # correr las pruebas no cambia nada: el analista también puede
         readonly = method == "GET" or (method == "POST" and re.fullmatch(r"/api/agents/[0-9a-f]{8}/tests/run", url))
         return None if readonly else (403, {"error": "Tu usuario es de solo lectura: podés mirar, pero no cambiar nada."})
+    if role == "integration":
+        if any(re.fullmatch(m, method) and re.fullmatch(p, url) for m, p in INTEGRATION_ROUTES):
+            return None
+        return 403, {"error": "Esta clave es de integración: solo sirve para la API del contact center (handoff, messages y lookup)."}
     if any(re.fullmatch(m, method) and re.fullmatch(p, url) for m, p in AGENT_ROUTES):
         return None
     return 403, {"error": "Tu usuario es de atención: solo podés usar la Bandeja para leer y responder conversaciones."}

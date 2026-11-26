@@ -495,6 +495,9 @@ def _tick_campaign(cid, now):
         sent += 1
     if not db.q("SELECT 1 FROM campaign_recipients WHERE campaign_id = ? AND status IN ('queued', 'sending') LIMIT 1", (cid,)):
         db.q("UPDATE campaigns SET status = 'done', updated = ? WHERE id = ? AND status = 'running'", (_now_text(now), cid))
+        from . import handoff         # aquí: handoff importa outbound
+        handoff.emit_by_id(campaign["agent_id"], "campaign.finished", None,
+                           campaign={"id": cid, "name": campaign["name"], "channel": campaign["channel"], "stats": stats(campaign)})
 
 
 def recover():

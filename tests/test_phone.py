@@ -134,7 +134,7 @@ assert "¡Chau!</Say><Hangup/>" in xml and app.load_session(AID, "call-CA0002")[
 CALL3 = dict(CALL, CallSid="CA0003")
 tw("", CALL3)
 s, xml = tw("gather", dict(CALL3, SpeechResult="quiero hablar con una persona"))
-assert "<Dial>+5491100000000</Dial><Hangup/>" in xml, xml
+assert "<Dial><Number>+5491100000000</Number></Dial><Hangup/>" in xml, xml
 assert [x["sessionId"] for x in app.inbox(AID)["sessions"]] == ["call-CA0003"]
 assert any(h["text"] == "Transferida a +5491100000000" for h in app.load_session(AID, "call-CA0003")["history"])
 # fin de la llamada (status callback) -> la conversación termina

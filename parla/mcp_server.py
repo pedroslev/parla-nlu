@@ -279,6 +279,25 @@ def validate(data, files=None):
     if any(((system or {}).get(k) or {}).get("enabled") is False for k in ("cancel", "handoff")):
         warnings.append("apagaste system cancel o handoff: la persona no va a poder cortar ni pedir hablar con alguien")
 
+    # derivación y webhooks (handoff.py)
+    hand = agent.get("handoff")
+    if hand is not None and not (isinstance(hand, dict) and hand.get("mode", "inbox") in ("inbox", "external", "both")
+                                 and hand.get("on_timeout", "bot") in ("bot", "close")):
+        errors.append("«handoff» tiene que ser {mode: inbox|external|both, timeout_minutes, on_timeout: bot|close, last_messages, phone}")
+    for i, hook in enumerate(agent.get("webhooks") or []):
+        where = "webhooks[%d]" % i
+        if not isinstance(hook, dict) or not re.fullmatch(r"https?://[^\s/?#]+[^\s]*", str(hook.get("url") or "")):
+            errors.append("%s: «url» tiene que ser http(s)://…" % where)
+            continue
+        bad = [e for e in hook.get("events") or [] if e not in ("handoff.requested", "handoff.released", "conversation.started", "conversation.ended",
+                                                                 "message.user", "message.bot", "csat.received", "campaign.finished")]
+        if bad or not hook.get("events"):
+            errors.append("%s: «events» tiene que ser una lista de eventos conocidos (handoff.requested, …)%s" % (where, ": " + ", ".join(map(str, bad)) if bad else ""))
+        if not hook.get("secret_name"):
+            errors.append("%s: falta «secret_name» (la clave de la bóveda con la que se firma)" % where)
+        elif not str(hook["url"]).startswith("https://"):
+            warnings.append("%s: sin https:// el contenido viaja sin cifrar" % where)
+
     # widget web
     widget = agent.get("widget")
     if widget is not None:

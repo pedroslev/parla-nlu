@@ -21,7 +21,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler
 
-from . import DATA, ROOT, write_json, auth, bus, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, mcp_client, outbound, phone, rasa_import, runner, telemetry, vault, voice
+from . import DATA, ROOT, write_json, auth, bus, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, handoff, insights, knowledge, llm, mcp_client, outbound, phone, rasa_import, runner, telemetry, vault, voice
 
 import celpy
 import pycrfsuite
@@ -551,7 +551,7 @@ def training_warnings(agent, data):
 # con la que empezó, así una publicación no cambia los pasos a mitad de una charla.
 
 ENVIRONMENTS = {"production": "Producción", "staging": "Pruebas"}
-EDITABLE_ONLY = ("id", "trained", "environments", "deployments", "retention_days", "pii_redaction")   # no son parte de la definición del bot
+EDITABLE_ONLY = ("id", "trained", "environments", "deployments", "retention_days", "pii_redaction", "handoff", "webhooks")   # no son parte de la definición del bot
 
 
 def definition(agent):
@@ -1714,6 +1714,7 @@ def open_session(agent_id, sid, channel, environment="production"):
         record = record or {"sessionId": sid, "channel": channel, "started": now(), "history": []}
         record.update(updated=now(), ended=False, state={}, environment=environment, version=number)
         record.pop("handoff", None)
+        handoff.emit_by_id(agent_id, "conversation.started", record)
     return record
 
 
@@ -1728,9 +1729,12 @@ def session_agent(agent_id, record):
 def end_session(agent_id, sid):
     record = load_session(agent_id, sid)
     if record:
+        was_open = not record["ended"]
         record.update(ended=True, state={}, updated=now())
         record.pop("handoff", None)
         save_session(agent_id, record)
+        if was_open:
+            handoff.emit_by_id(agent_id, "conversation.ended", record, resolution=record.get("resolution"))
     return record
 
 
@@ -1851,8 +1855,23 @@ def converse(agent_id, record, text):
     sync(record)
     collect(record, agent_id)
     del record["history"][:-MAX_HISTORY]
+    hooks(agent_id, record, result, text, was_handoff)
     save_session(agent_id, record)
     return result
+
+
+def hooks(agent_id, record, result, text, was_handoff):
+    """Después de un turno: completa el handoff que empezó (modo, resumen) y encola los eventos de los webhooks."""
+    draft = settings_of(agent_id)
+    if result["handoff"] and not was_handoff:
+        handoff.started(draft, record)
+    if not handoff.webhooks(draft):
+        return
+    handoff.emit(draft, "message.user", record, text=text)
+    for said in result["messages"]:
+        handoff.emit(draft, "message.bot", record, text=said)
+    if result.get("csat"):
+        handoff.emit(draft, "csat.received", record, score=result["csat"])
 
 
 def bot_info(agent):
@@ -2026,6 +2045,15 @@ def api_v1(method, parts, data, query=None, user=None, public=False):
             return 400, {"error": "«after» tiene que ser un número"}
         return 200, {"sessionId": record["sessionId"], "messages": record["history"][after:], "next": len(record["history"]),
                      "handoff": bool((record.get("handoff") or {}).get("active")), "ended": record["ended"]}
+    if public and (rest == ["lookup"] or len(rest) == 3 and rest[0] == "sessions" and (rest[2] == "handoff" or method == "POST")):
+        return 403, {"error": "pedido rechazado"}
+    if len(rest) == 3 and rest[0] == "sessions" and rest[2] in ("handoff", "messages") and method == "POST":
+        return contact_center(agent, urllib.parse.unquote(rest[1]), rest[2], data, (user or {}).get("name"))
+    if rest == ["lookup"] and method == "GET":
+        record = lookup(agent["id"], query)
+        if record is None:
+            return 404, {"error": "no hay una conversación abierta con esa persona"}
+        return 200, handoff.context(settings_of(agent["id"]), record)
     if rest == ["sessions"] and method == "GET":
         return 200, {"sessions": [session_summary(r) for r in sessions_of(agent["id"], query)]}
     if rest == ["report"] and method == "GET":
@@ -2096,37 +2124,124 @@ def audio_event(agent, data, public=False):
     return 200, body
 
 
+def lookup(agent_id, query):
+    """La conversación más reciente sin terminar de esa persona (?phone=, ?chat= o ?sid=); primero las que esperan a
+    una persona. Para el contact center que recibe la llamada sin el sessionId de Parla."""
+    if query.get("sid"):
+        record = load_session(agent_id, str(query["sid"]))
+        return record if record and not record["ended"] else None
+    phone_number = re.sub(r"[\s().+-]", "", str(query.get("phone") or ""))
+    chat = str(query.get("chat") or "").strip()
+    if not (re.fullmatch(r"\d{6,15}", phone_number) or re.fullmatch(r"-?\d{1,20}", chat)):
+        return None
+    sids, like = (["wa-" + phone_number], "%" + phone_number + "%") if phone_number else (["tg-" + chat], None)
+    rows = db.q("SELECT record FROM sessions WHERE agent_id = ? AND json_extract(record, '$.ended') = 0 AND (session_id = ?%s) "
+                "ORDER BY handoff DESC, updated DESC LIMIT 20" % (" OR (channel = 'phone' AND json_extract(record, '$.caller') LIKE ?)" if like else ""),
+                (agent_id, sids[0]) + ((like,) if like else ()))
+    for (raw,) in rows:
+        record = json.loads(raw)
+        if record["sessionId"] in sids or re.sub(r"\D", "", str(record.get("caller") or "")) == phone_number:
+            return record
+    return None
+
+
+def contact_center(agent, sid, what, data, user_name):
+    """POST …/sessions/{sid}/handoff {action: accept|release|close} y …/sessions/{sid}/messages {text, from_name}:
+    lo que hace el contact center externo con una conversación. -> (status, cuerpo)."""
+    record = load_session(agent["id"], sid)
+    if record is None:
+        return 404, {"error": "no hay una conversación «%s» con este bot" % sid}
+    if record["ended"]:
+        return 409, {"error": "esa conversación ya terminó"}
+    if what == "messages":
+        text = str(data.get("text") or "").strip()[:4000]
+        if not text:
+            return 400, {"error": "falta «text» con lo que le querés escribir"}
+        who = str(data.get("from_name") or user_name or "Contact center").strip()[:60]
+        channel = record.get("channel")
+        if channel == "phone":
+            return 409, {"error": "es una llamada: no se le pueden mandar mensajes de texto"}
+        if channel == "whatsapp" and not outbound.in_window(record):
+            return 409, {"error": "pasaron más de 24 horas desde el último mensaje de la persona: WhatsApp solo deja escribirle con una plantilla aprobada (POST /outbound)"}
+        if channel in channels.CHANNELS:
+            try:
+                channels.send_now(agent["id"], record, [{"text": text, "buttons": []}])
+            except channels.ChannelError as error:
+                return 502, {"error": "no se pudo enviar: %s" % error}
+        record = human(agent["id"], sid, "reply", text, who, relay=False)
+        return 200, dict(session_info(agent, record), delivered=channel in channels.CHANNELS or channel == "web")
+    action = data.get("action")
+    who = str(data.get("agent_name") or user_name or "Contact center").strip()[:60]
+    if action == "accept":
+        record = human(agent["id"], sid, "accept", "", who)
+    elif action == "release":
+        extra, flow = data.get("data"), data.get("flow")
+        if extra is not None and not isinstance(extra, dict):
+            return 400, {"error": "«data» tiene que ser un objeto, por ejemplo {\"dni\": \"30123456\"}"}
+        if flow is not None and (not isinstance(flow, str) or not any(f["name"] == flow for f in session_agent(agent["id"], record)[1]["flows"])):
+            return 400, {"error": "no existe el flujo «%s»" % flow}
+        record = human(agent["id"], sid, "release", "", who, data=extra, flow=flow)
+    elif action == "close":
+        record = human(agent["id"], sid, "close", "", who, resolution=str(data.get("resolution") or "")[:200] or None)
+    else:
+        return 400, {"error": "«action» tiene que ser accept, release o close"}
+    return 200, session_info(agent, record)
+
+
 def inbox(agent_id):
     """Conversaciones que atiende (o espera) una persona, la más reciente primero."""
     return {"sessions": [dict(session_summary(r), handoff=r["handoff"]) for r in sessions_of(agent_id, {"handoff": True})]}
 
 
-def human(agent_id, sid, action, text, who):
-    """Bandeja: una persona toma la charla, le escribe o la devuelve al bot. Devuelve el registro o None."""
+def human(agent_id, sid, action, text, who, data=None, flow=None, resolution=None, relay=True):
+    """Una persona toma la charla (take / accept), le escribe (reply), la devuelve al bot (release, con data para los
+    slots y flow para seguir) o la cierra (close, con resolution). Lo usan la Bandeja, la API del contact center
+    externo y el tiempo máximo del handoff. Devuelve el registro o None."""
     record = load_session(agent_id, sid)
     if record is None:
         return None
     state, at = record["state"], now()
     active = (state.get("handoff") or {}).get("active")
-    if action in ("take", "reply") and not active:      # escribirle también la toma: si no, contestan los dos
+    if action == "close":
+        record["resolution"] = resolution
+        record["history"].append({"from": "event", "text": "La cerró %s" % who, "at": at, **({"resolution": resolution} if resolution else {})})
+        save_session(agent_id, record)
+        return end_session(agent_id, sid)
+    if action in ("take", "reply", "accept") and not active:      # escribirle también la toma: si no, contestan los dos
         start_handoff(state, "la tomó %s" % who, who)
+        state["handoff"]["mode"] = handoff.conf(settings_of(agent_id))["mode"]
+        record["history"].append({"from": "event", "text": "La tomó %s" % who, "at": at})
+    elif action == "accept":
+        state["handoff"]["by"] = who
         record["history"].append({"from": "event", "text": "La tomó %s" % who, "at": at})
     if action == "reply":
         state["handoff"]["by"] = state["handoff"].get("by") or who
         record["history"].append({"from": "human", "text": text, "at": at, "by": who})
         remember(state, "bot", text)
+    result = None
     if action == "release":
         stop(state)                                      # lo que estaba a medias ya lo resolvió la persona
         for key in ("waiting", "clarify", "buttons"):
             state.pop(key, None)
         state["handoff"] = dict(state.get("handoff") or {}, active=False, until=at)
         record["history"].append({"from": "event", "text": "Volvió al bot", "at": at})
+        if data or flow:                                 # el contact center deja datos y/o pide un flujo
+            result, ignored = begin(session_agent(agent_id, record)[1], state, data or {}, flow or "")
+            if data:
+                record["history"].append({"from": "event", "text": "Datos del contact center", "at": at,
+                                          "data": {k: v for k, v in data.items() if k not in ignored}})
+            record["history"] += bot_entries(result, at)
     record["updated"] = at
     sync(record)
+    collect(record, agent_id)
     del record["history"][:-MAX_HISTORY]
     save_session(agent_id, record)
-    if action == "reply":
+    if action == "reply" and relay:
         channels.human_reply(agent_id, record, text)     # WhatsApp o Telegram: que le llegue a la persona
+    if action == "release":
+        handoff.emit_by_id(agent_id, "handoff.released", record, released_by=who)
+        if result and result["replies"]:
+            channels.human_reply(agent_id, record, None, result["replies"])
     return record
 
 
@@ -2185,6 +2300,9 @@ AUDIT = (     # (método, ruta, acción): lo que queda en la auditoría cuando s
     ("POST", A + "/campaigns/([0-9a-f]{12})/(start|pause|resume|cancel)", "/campaign"),
     ("POST", A + "/optouts", "optout.add"), ("DELETE", A + "/optouts", "optout.remove"),
     ("POST", r"/api/v1/bots/([^/]+)/outbound", "outbound.send"),
+    ("POST", r"/api/v1/bots/([^/]+)/sessions/([^/]+)/handoff", "handoff.api"),
+    ("POST", r"/api/v1/bots/([^/]+)/sessions/([^/]+)/messages", "handoff.message"),
+    ("POST", A + "/webhooks/test", "webhook.test"), ("POST", A + r"/webhooks/deliveries/(\d+)/retry", "webhook.retry"),
 )
 
 
@@ -2235,7 +2353,8 @@ class Handler(BaseHTTPRequestHandler):
             if "parla.aserver" in sys.modules:
                 live = sys.modules["parla.aserver"].gauges()
                 telemetry.gauge("parla_connections", live["connections"])
-                telemetry.gauge("parla_queue_depth", live["queues"] + [({"queue": "db_write"}, db.pending()), ({"queue": "embed"}, _jobs.qsize())])
+                telemetry.gauge("parla_queue_depth", live["queues"] + [({"queue": "db_write"}, db.pending()), ({"queue": "embed"}, _jobs.qsize()),
+                                                       ({"queue": "webhooks"}, handoff.depth())])
             for name, value in (("parla_embed_batches_total", EMBED_STATS["batches"]), ("parla_embed_items_total", EMBED_STATS["items"]),
                                 ("parla_db_commits_total", db._stats["commits"]), ("parla_db_statements_total", db._stats["statements"])):
                 telemetry.gauge(name, [({}, value)])
@@ -2358,7 +2477,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(*reversed(api_v1(method, [p for p in url[len("/api/v1/"):].split("/") if p], data, query, self.user, self.public)))
         match = re.fullmatch(r"/api/agents(?:/([0-9a-f]{8})(?:/(chat|reset|http|train|tests/run|versions|deploy|diff|versions/\d+|versions/\d+/restore|functions/test"
                              r"|knowledge/extract|knowledge/search|voice/transcribe|mcp/tools|secrets|files|files/[A-Za-z0-9_-]{22}|insights/unrecognized|insights/analytics"
-                             r"|inbox|channels|channels/telegram|sessions/[A-Za-z0-9_.@+-]+/(?:reply|release|take)"
+                             r"|inbox|channels|channels/telegram|sessions/[A-Za-z0-9_.@+-]+/(?:reply|release|take)|webhooks/test|webhooks/deliveries(?:/\d+/retry)?"
                              r"|campaigns|campaigns/preview|campaigns/[0-9a-f]{12}(?:/(?:start|pause|resume|cancel|recipients|export))?|optouts))?)?", url)
         if not match:
             return self.reply({"error": "no existe"}, 404)
@@ -2507,11 +2626,29 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(dict(channels.info(load(agent_id)), phone=phone.info(load(agent_id))))
         elif action == "channels/telegram" and method == "POST":      # {"connect": true|false}: setWebhook / deleteWebhook
             return self.reply(channels.telegram_webhook(load(agent_id), data.get("connect", True) is not False))
+        elif action == "webhooks/deliveries" and method == "GET":    # el registro de entregas de los webhooks (handoff.py)
+            try:
+                limit = min(200, max(1, int(query.get("limit") or 50)))
+            except ValueError:
+                return self.reply({"error": "«limit» tiene que ser un número"}, 400)
+            return self.reply({"deliveries": handoff.deliveries(agent_id, limit), "pending": handoff.depth()})
+        elif action and action.startswith("webhooks/deliveries/") and method == "POST":   # «Reintentar»
+            if not handoff.retry(agent_id, int(action.split("/")[2])):
+                return self.reply({"error": "no existe esa entrega o ya llegó"}, 404)
+            return self.reply({"retried": True})
+        elif action == "webhooks/test" and method == "POST":         # «Enviar evento de prueba» a un webhook guardado
+            try:
+                return self.reply(handoff.test(load(agent_id), str(data.get("url") or "")))
+            except ValueError as error:
+                return self.reply({"error": str(error)}, 400)
         elif action and action.startswith("sessions/") and method == "POST":   # reply | take | release
             _, sid, what = action.split("/")
             text = str(data.get("text") or "").strip()[:4000]
             if what == "reply" and not text:
                 return self.reply({"error": "falta «text» con lo que le querés escribir"}, 400)
+            held = ((load_session(agent_id, sid) or {}).get("handoff") or {})
+            if what in ("take", "reply") and held.get("active") and held.get("mode") == "external":
+                return self.reply({"error": "la atiende el contact center externo: desde la Bandeja solo se puede mirar"}, 409)
             who = (getattr(self, "user", None) or {}).get("name") or "Persona"
             record = human(agent_id, sid, what, text, who)
             if record is None:
@@ -2531,6 +2668,8 @@ class Handler(BaseHTTPRequestHandler):
             keep = {k: current[k] for k in ("environments", "deployments") if k in current}
             if (current.get("channels") or {}) != (data.get("channels") or {}):
                 self.audit_action = "channel.update"     # la configuración de WhatsApp/Telegram vive en el agente
+            if (current.get("webhooks") or []) != (data.get("webhooks") or []) or (current.get("handoff") or {}) != (data.get("handoff") or {}):
+                self.audit_action = "handoff.update"     # derivación y webhooks (handoff.py)
             return self.reply(store({**BLANK, **data, **keep, "id": agent_id}))
         elif action is None and method == "DELETE":
             for ext in (".json", ".model.json", ".crfsuite", ".secrets.json"):
@@ -2586,7 +2725,12 @@ class Handler(BaseHTTPRequestHandler):
         elif action.startswith("optout.") or action == "outbound.send":     # el teléfono tapado, nunca entero
             detail = (str(data.get("channel") or "whatsapp") + " → " if action == "outbound.send" else "") + outbound.mask(
                 re.sub(r"[\s().+-]", "", str(data.get("to") or data.get("address") or "")))
-        elif action.startswith("inbox.") or action in ("agent.restore", "session.delete"):
+        elif action == "handoff.api":                                # accept | release | close, y la conversación
+            action = "handoff." + str(data.get("action"))
+            detail = urllib.parse.unquote(groups[1])
+        elif action == "webhook.test":
+            detail = str(data.get("url") or "")[:200]
+        elif action.startswith("inbox.") or action in ("agent.restore", "session.delete", "handoff.message", "webhook.retry"):
             detail = ("versión " if action == "agent.restore" else "") + urllib.parse.unquote(groups[1])     # la conversación o la versión
         else:
             detail = {"agent.publish": "versión %s" % sent.get("version"), "agent.deploy": "%s → versión %s" % (data.get("environment"), data.get("version")),
@@ -2727,6 +2871,7 @@ def cleanup():
                 record.update(ended=True, state={})      # sin tocar «updated»: la retención sigue contando desde la última charla
                 save_session(agent_id, record)
     outbound.cleanup(lambda agent_id: (lambda d: default if d is None else d)(_days(settings_of(agent_id).get("retention_days"))))
+    handoff.cleanup()           # entregas de webhooks de más de 30 días
     db.q("DELETE FROM logins WHERE expires < ?", (time.time(),))
     db.q("DELETE FROM audit WHERE at < ?", (ago(_days(os.environ.get("PARLA_AUDIT_DAYS")) or 365),))
 
@@ -2750,6 +2895,7 @@ def main():
     cleanup()
     threading.Thread(target=_hourly, daemon=True).start()
     outbound.start()            # la cola de campañas y recordatorios (sigue lo que quedó en parla.db)
+    handoff.start()             # la cola de webhooks y el tiempo máximo de los handoffs externos
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     print("Listo: http://127.0.0.1:%d  (Ctrl+C para salir)" % port, flush=True)
     from . import aserver       # asyncio: keep-alive, WebSocket/SSE, una fila por conversación (aserver.py)
