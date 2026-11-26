@@ -230,9 +230,14 @@ async function cpAct(what) {
   cpBusy = false; cpRefresh();
 }
 const cpOpenSession = (id) => { svSel = id; svQuery = ''; section = 'sessions'; render(); $('#center').scrollTop = 0; };   // svSel, svQuery: /static/sessions.js
+let cpCost = { id: null, value: null };          // el costo estimado de la campaña (Reportes → Costos, ?campaign=)
 function cpDetail() {
   const c = cpCur;
   if (!c) return cpHelp(t('Cargando…'));
+  if (cpCost.id !== c.id) {
+    cpCost = { id: c.id, value: null };
+    api('GET', '/' + agent.id + '/costs?campaign=' + encodeURIComponent(c.id)).then((r) => { if (cpCost.id === c.id) { cpCost.value = r; cpPaint(); } }, () => {});
+  }
   const s = c.stats || {}, st = c.status, r = cpRecs, total = r?.total || 0;
   const tile = (label, n, cls) => h('div', { class: 'rp-stat ' + (cls || '') }, h('small', {}, label), h('b', {}, n ?? 0));
   const btn = (label, onclick, cls) => h('button', { class: 'btn small ' + (cls || ''), disabled: cpBusy, onclick }, label);
@@ -257,7 +262,9 @@ function cpDetail() {
     h('div', { class: 'stack' }, cpBar(s), h('small', { class: 'help' }, t('{done} de {total} procesados', { done: cpDone(s), total: s.total || 0 }))),
     h('div', { class: 'rp-stats' }, tile(t('Personas'), s.total), tile(t('Enviados'), s.sent), tile(t('Entregados'), s.delivered), tile(t('Leídos'), s.read),
       tile(t('Respondieron'), s.replied, s.replied ? 'good' : ''), tile(t('Fallaron'), s.failed, s.failed ? 'warn' : ''), tile(t('Se dieron de baja'), s.opted_out),
-      tile(t('Conversiones'), s.conversions, s.conversions ? 'good' : '')),
+      tile(t('Conversiones'), s.conversions, s.conversions ? 'good' : ''),
+      cpCost.value ? h('div', { class: 'rp-stat', title: t('Estimado con los precios actuales.') }, h('small', {}, t('Costo estimado')),
+        h('b', {}, window.costText(cpCost.value.total, cpCost.value.currency))) : null),
     h('div', { class: 'row' }, canEdit() ? [
       st === 'draft' ? btn(t('Iniciar'), sure(t('Iniciar la campaña'), t.plural(s.total || 0, 'Se empieza a mandar a {n} persona, de verdad.', 'Se empieza a mandar a {n} personas, de verdad.'), t('Iniciar'), 'start')) : null,
       st === 'running' ? btn(t('Pausar'), () => cpAct('pause'), 'quiet') : null,

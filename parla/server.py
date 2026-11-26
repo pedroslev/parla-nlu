@@ -5,6 +5,8 @@
 """
 import base64
 import concurrent.futures
+import csv
+import io
 import json
 import queue
 import random
@@ -21,7 +23,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler
 
-from . import DATA, ROOT, write_json, auth, bus, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, handoff, insights, knowledge, llm, mcp_client, outbound, phone, rasa_import, runner, telemetry, vault, voice
+from . import DATA, ROOT, write_json, auth, bus, costs, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, handoff, insights, knowledge, llm, mcp_client, outbound, phone, rasa_import, runner, telemetry, vault, voice
 
 import celpy
 import pycrfsuite
@@ -1703,6 +1705,7 @@ def save_session(agent_id, record):
 
 def delete_session(agent_id, sid):
     db.q("DELETE FROM sessions WHERE agent_id = ? AND session_id = ?", (agent_id, sid))
+    costs.forget(agent_id, session=sid)
 
 
 def open_session(agent_id, sid, channel, environment="production"):
@@ -1836,8 +1839,9 @@ def converse(agent_id, record, text):
     state = record["state"]
     before = {"flow": state.get("flow"), "waiting": state.get("waiting") if state.get("flow") else None}   # para medir abandono
     was_handoff = bool((state.get("handoff") or {}).get("active"))
-    with telemetry.span("parla.turn", **{"parla.agent.id": agent_id, "parla.channel": record.get("channel"),
-                                         "parla.environment": record.get("environment"), "parla.version": number}) as sp:
+    with costs.scope(agent_id, record["sessionId"], record.get("channel")) as spent, \
+            telemetry.span("parla.turn", **{"parla.agent.id": agent_id, "parla.channel": record.get("channel"),
+                                            "parla.environment": record.get("environment"), "parla.version": number}) as sp:
         topic = "session:%s:%s" % (agent_id, record["sessionId"])
         llm.STREAM.sink = (lambda event: bus.publish(topic, event)) if bus.has(topic) else None   # tokens de la IA en vivo
         try:
@@ -1845,12 +1849,16 @@ def converse(agent_id, record, text):
         finally:
             llm.STREAM.sink = llm.STREAM.last = None
         measure(agent, record, result, text, was_handoff, sp)
+        costs.record("turn", "parla", "engine", 1)
+        used = spent.take()          # lo que costó este turno (y el audio de antes, si vino por voz)
     nlu = result["nlu"]
     record["updated"] = now()
     record["history"].append({"from": "user", "text": text, "at": record["updated"], "intent": nlu["intent"],
                               "confidence": round(nlu["confidence"], 3), "answer_to": result["answer_to"],
                               "entities": [{"entity": e["entity"], "value": e["value"]} for e in nlu["entities"]],
-                              "fallback": result["fallback"], "via": result["via"], **before})
+                              "fallback": result["fallback"], "via": result["via"], **before,
+                              **({"usage": costs.totals(used)} if used else {})})
+    record["usage"] = costs.merge(record.get("usage") or {}, used)
     record["history"] += bot_entries(result, record["updated"])
     sync(record)
     collect(record, agent_id)
@@ -1954,6 +1962,17 @@ def report(agent, query):
             "by_day": [days[d] for d in sorted(days)]}
 
 
+def cost_report(agent_id, query):
+    """«Costos» (Reportes) y GET /api/v1/bots/{bot}/costs: el uso medido por los precios de ahora (costs.py).
+    ?campaign=<id>: solo las conversaciones de esa campaña."""
+    query = dict(query)
+    if query.get("campaign"):
+        query["sessions"] = [sid for (sid,) in db.q("SELECT DISTINCT session_id FROM campaign_recipients WHERE agent_id = ? AND campaign_id = ? "
+                                                    "AND session_id IS NOT NULL", (agent_id, query["campaign"]))]
+    records = sessions_of(agent_id, {k: query[k] for k in ("from", "to", "channel", "campaign") if query.get(k)})
+    return costs.report(agent_id, query, records, insights._handed)
+
+
 def api_v1(method, parts, data, query=None, user=None, public=False):
     """API pública: /api/v1/bots[/{bot}[/events | /sessions[/{sessionId}]]]. Devuelve (status, cuerpo).
     user: quien llama, para listar solo sus bots (auth.guard ya cortó los pedidos a bots que no ve).
@@ -1995,7 +2014,8 @@ def api_v1(method, parts, data, query=None, user=None, public=False):
             defn = session_agent(agent["id"], record)[1]
             if flow and not any(f["name"] == flow for f in defn["flows"]):
                 return 400, {"error": "no existe el flujo «%s»" % flow}
-            result, ignored = begin(defn, record["state"], initial, flow or START)
+            with costs.scope(agent["id"], sid, channel):        # un flujo «Al empezar» puede usar la IA
+                result, ignored = begin(defn, record["state"], initial, flow or START)
             telemetry.count("parla_conversations_started_total", agent=agent["id"], channel=telemetry.channel(channel))
             record["updated"] = now()
             record["history"].append({"from": "event", "text": "Empezó la conversación", "at": record["updated"],
@@ -2058,13 +2078,15 @@ def api_v1(method, parts, data, query=None, user=None, public=False):
         return 200, {"sessions": [session_summary(r) for r in sessions_of(agent["id"], query)]}
     if rest == ["report"] and method == "GET":
         return 200, report(agent, query)
+    if rest == ["costs"] and method == "GET":
+        return 200, cost_report(agent["id"], query)
     if len(rest) == 2 and rest[0] == "sessions":
         sid = urllib.parse.unquote(rest[1])
         record = load_session(agent["id"], sid)
         if record is None:
             return 404, {"error": "no hay una conversación «%s» con este bot" % sid}
         if method == "GET":
-            return 200, dict(session_info(agent, record), history=record["history"])
+            return 200, dict(session_info(agent, record), history=record["history"], usage=costs.session_usage(agent["id"], sid))
         if method == "DELETE":
             delete_session(agent["id"], sid)
             return 200, {"sessionId": sid, "deleted": True}
@@ -2102,6 +2124,12 @@ def audio_event(agent, data, public=False):
         return 400, {"error": str(error)}
     if not audio:
         return 400, {"error": "falta «audio» con la grabación en base64"}
+    with costs.scope(agent["id"], sid if isinstance(sid, str) else None, "web" if public else data.get("channel")):
+        return _audio_turn(agent, data, public, audio, language)
+
+
+def _audio_turn(agent, data, public, audio, language):
+    """audio_event adentro de la cuenta de costos: la transcripción, el turno y la voz de la respuesta son de la misma charla."""
     try:
         conf = voice.settings(agent)
         heard = voice.transcribe(audio, str(data.get("mime") or "audio/webm"), language, vocabulary(agent), conf["asr"])
@@ -2302,6 +2330,7 @@ AUDIT = (     # (método, ruta, acción): lo que queda en la auditoría cuando s
     ("POST", r"/api/v1/bots/([^/]+)/outbound", "outbound.send"),
     ("POST", r"/api/v1/bots/([^/]+)/sessions/([^/]+)/handoff", "handoff.api"),
     ("POST", r"/api/v1/bots/([^/]+)/sessions/([^/]+)/messages", "handoff.message"),
+    ("PUT", r"/api/prices", "prices.update"),
     ("POST", A + "/webhooks/test", "webhook.test"), ("POST", A + r"/webhooks/deliveries/(\d+)/retry", "webhook.retry"),
 )
 
@@ -2432,6 +2461,17 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 return self.reply({"error": "«limit» tiene que ser un número"}, 400)
             return self.reply({"entries": db.audit_list(query.get("agent"), query.get("user"), query.get("since"), limit)})
+        if url == "/api/prices":            # la tabla de precios de la instalación (costs.py): verla todos, cambiarla el dueño
+            if method == "GET":
+                return self.reply(costs.table())
+            if method != "PUT":
+                return self.reply({"error": "método no permitido"}, 405)
+            if self.user and self.user["role"] != "owner":
+                return self.reply({"error": "Solo el dueño puede cambiar los precios."}, 403)
+            try:
+                return self.reply(costs.save(data))
+            except ValueError as error:
+                return self.reply({"error": str(error)}, 400)
         if url == "/api/ai/status" and method == "POST" and data.get("agent") and not auth.allowed_bot(self.user, str(data["agent"])):
             return self.reply({"error": "no existe ese agente"}, 404)
         if url == "/api/ai/status" and method == "POST":       # {"ai": config} y/o {"agent": id} (su API key sale del vault)
@@ -2476,7 +2516,7 @@ class Handler(BaseHTTPRequestHandler):
         if url.startswith("/api/v1/"):
             return self.reply(*reversed(api_v1(method, [p for p in url[len("/api/v1/"):].split("/") if p], data, query, self.user, self.public)))
         match = re.fullmatch(r"/api/agents(?:/([0-9a-f]{8})(?:/(chat|reset|http|train|tests/run|versions|deploy|diff|versions/\d+|versions/\d+/restore|functions/test"
-                             r"|knowledge/extract|knowledge/search|voice/transcribe|mcp/tools|secrets|files|files/[A-Za-z0-9_-]{22}|insights/unrecognized|insights/analytics"
+                             r"|knowledge/extract|knowledge/search|voice/transcribe|mcp/tools|secrets|files|files/[A-Za-z0-9_-]{22}|insights/unrecognized|insights/analytics|costs"
                              r"|inbox|channels|channels/telegram|sessions/[A-Za-z0-9_.@+-]+/(?:reply|release|take)|webhooks/test|webhooks/deliveries(?:/\d+/retry)?"
                              r"|campaigns|campaigns/preview|campaigns/[0-9a-f]{12}(?:/(?:start|pause|resume|cancel|recipients|export))?|optouts))?)?", url)
         if not match:
@@ -2591,6 +2631,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(insights.unrecognized(load(agent_id), sessions_of(agent_id, query)))
         elif action == "insights/analytics" and method == "GET":
             return self.reply(insights.analytics(load(agent_id), sessions_of(agent_id, query)))
+        elif action == "costs" and method == "GET":           # ?sid= una conversación; ?format=csv el detalle
+            if query.get("sid"):
+                return self.reply(costs.session_usage(agent_id, query["sid"]))
+            if query.get("format") == "csv":
+                out = io.StringIO()
+                csv.writer(out).writerows(costs.csv_rows(agent_id, query))
+                self.extra_headers = {"Content-Disposition": 'attachment; filename="costos-%s.csv"' % agent_id}
+                return self.reply(out.getvalue().encode(), ctype="text/csv; charset=utf-8")
+            return self.reply(cost_report(agent_id, query))
         elif action == "train" and method == "POST":
             return self.reply(train(agent_id, data.get("fingerprint")))
         elif action == "reset" and method == "POST":
@@ -2676,7 +2725,7 @@ class Handler(BaseHTTPRequestHandler):
                 if os.path.exists(path(agent_id, ext)):
                     os.remove(path(agent_id, ext))
             db.q("DELETE FROM sessions WHERE agent_id = ?", (agent_id,))
-            for table in ("campaign_recipients", "campaigns", "optouts"):
+            for table in ("campaign_recipients", "campaigns", "optouts", "usage"):
                 db.q("DELETE FROM %s WHERE agent_id = ?" % table, (agent_id,))
             shutil.rmtree(os.path.join(AGENTS, agent_id + ".versions"), ignore_errors=True)
             shutil.rmtree(os.path.join(AGENTS, agent_id + ".files"), ignore_errors=True)
@@ -2863,6 +2912,7 @@ def cleanup():
         days = default if days is None else days
         if days:
             db.q("DELETE FROM sessions WHERE agent_id = ? AND updated < ?", (agent_id, ago(days)))
+            costs.forget(agent_id, before=ago(days))
         if pii.categories(agent.get("pii_redaction")):
             idle = db.q("SELECT record FROM sessions WHERE agent_id = ? AND updated < ? AND handoff = 0 AND json_extract(record, '$.ended') = 0",
                         (agent_id, ago(PII_IDLE_HOURS / 24)))

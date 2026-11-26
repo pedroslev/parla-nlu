@@ -31,6 +31,12 @@ document.head.append(h('style', {}, `
   .rp-stat.good b { color: var(--ok); }
   .rp-csat { display: flex; flex-direction: column; gap: 4px; }
   .rp-csat .rp-day { grid-template-columns: 64px minmax(0, 1fr) 32px; }
+  .rp-cost .rp-day { grid-template-columns: 64px minmax(0, 1fr) auto; }
+  .rp-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .rp-table th, .rp-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+  .rp-table td.n, .rp-table th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .rp-table input { width: 110px; }
+  .rp-scroll { overflow-x: auto; }
 `));
 
 const RP_NONE = 'var(--line)';        // "Sin clasificar"
@@ -126,6 +132,80 @@ function rpAnalytics(a) {
   ];
 }
 
+// Costos: el uso medido (tokens, minutos, caracteres, mensajes) por la tabla de precios de esta instalación (parla/costs.py)
+const RP_KIND = { llm_input: 'IA: tokens de entrada', llm_output: 'IA: tokens de salida', llm_cached: 'IA: tokens leídos de caché', llm_compute: 'IA local: horas de CPU',
+  asr: 'Voz a texto (minutos)', tts: 'Texto a voz (caracteres)', phone: 'Teléfono (minutos)', phone_call: 'Llamadas salientes', whatsapp: 'Mensajes de WhatsApp',
+  telegram: 'Mensajes de Telegram', turn: 'Turnos del motor' };
+const RP_GROUP = { llm: 'IA', asr: 'Voz a texto', tts: 'Texto a voz', phone: 'Teléfono', messaging: 'Mensajería', engine: 'Motor de Parla' };
+window.rpKind = (k) => t(RP_KIND[k] || k);
+window.costText = (v, cur) => v == null ? '—' : v.toLocaleString(t.locale, { style: 'currency', currency: cur || 'USD', minimumFractionDigits: 2, maximumFractionDigits: v && Math.abs(v) < 1 ? 4 : 2 });
+const rpQty = (n) => n.toLocaleString(t.locale, { maximumFractionDigits: n < 10 ? 2 : 0 });
+let rpPrices = null, rpPriceOpen = false, rpPriceMsg = '';
+
+function rpCosts(c, q) {
+  const money = (v) => window.costText(v, c.currency);
+  const stat = (label, value, sub) => h('div', { class: 'rp-stat' }, h('small', {}, label), h('b', {}, value), sub ? h('span', { class: 'rp-sub' }, sub) : null);
+  const bars = (rows, name) => { const most = Math.max(1e-9, ...rows.map((r) => r.cost)); return h('div', { class: 'rp-bars' }, rows.map((r) => h('div', { class: 'rp-bar' },
+    h('span', { class: 'rp-name' }, name(r)), h('span', { class: 'rp-num' }, h('b', {}, money(r.cost))),
+    h('span', { class: 'rp-track' }, h('span', { style: 'width:' + (r.cost / most) * 100 + '%;background:var(--brand)' }))))); };
+  const open = (sid) => { window.sessionsFilter = { session: sid }; section = 'sessions'; render(); $('#center').scrollTop = 0; };
+  const conv = c.conversations || {}, days = [...(c.by_day || [])].reverse(), dayMost = Math.max(1e-9, ...days.map((d) => d.cost));
+  const csv = h('a', { class: 'btn quiet small', href: '/api/agents/' + encodeURIComponent(agent.id) + '/costs?format=csv&' + q, download: '', style: 'text-decoration:none' }, icon('down'), t('Exportar CSV'));
+  const prices = h('button', { class: 'btn quiet small', 'aria-expanded': String(rpPriceOpen), onclick: () => { rpPriceOpen = !rpPriceOpen; rpPriceMsg = ''; render(); } }, icon('sliders'), t('Precios'));
+  return h('div', { class: 'panel stack', style: 'gap:14px' },
+    h('div', { class: 'row' }, h('h2', { class: 'grow' }, t('Costos')), prices, csv),
+    h('p', { class: 'help', style: 'font-size:13px' }, t('Estimado con los precios actuales: cambiar un precio recalcula también lo pasado. La factura de cada proveedor es la fuente de verdad.')),
+    rpPriceOpen ? rpPriceEditor() : null,
+    c.missing_prices?.length ? h('div', { class: 'notice warn' }, icon('warn'), h('span', { class: 'grow' }, t('Falta el precio de {list}: completá el precio en «Precios» para que cuente.',
+      { list: c.missing_prices.map((m) => m.provider + (m.model ? ' ' + m.model : '') + ' (' + window.rpKind(m.kind) + ')').join(', ') }))) : null,
+    h('div', { class: 'rp-stats' },
+      stat(t('Total'), money(c.total)),
+      stat(t('Por conversación'), money(conv.avg), conv.count ? t('mediana {median} · p95 {p95}', { median: money(conv.median), p95: money(conv.p95) }) : t('sin conversaciones con uso')),
+      stat(t('Por conversación resuelta'), money(c.resolved?.cost_per), t('{n} sin pasar a una persona', { n: c.resolved?.count || 0 }))),
+    c.total ? [
+      h('h3', { style: 'font-size:14px' }, t('Por tipo')), bars(c.by_kind || [], (r) => t(RP_GROUP[r.group] || r.group)),
+      h('h3', { style: 'font-size:14px' }, t('Por canal')), bars(c.by_channel || [], (r) => r.channel === 'prueba' ? t('Chat de prueba') : r.channel),
+      h('h3', { style: 'font-size:14px' }, t('Por día')),
+      h('div', { class: 'rp-days rp-cost' }, days.map((d) => h('div', { class: 'rp-day' }, h('small', {}, rpShort(d.date)),
+        h('span', { class: 'rp-track', style: 'grid-column:auto;height:14px' }, h('span', { style: 'width:' + (d.cost / dayMost) * 100 + '%;background:var(--brand)' })),
+        h('b', {}, money(d.cost))))),
+      c.top?.length ? [h('h3', { style: 'font-size:14px' }, t('Las conversaciones más caras')),
+        h('div', { class: 'rp-bars' }, c.top.map((s) => h('button', { class: 'rp-bar', title: t('Abrir la conversación'), onclick: () => open(s.sessionId) },
+          h('span', { class: 'rp-name' }, s.sessionId, h('small', { class: 'help', style: 'font-weight:400;font-size:13px' }, s.channel)), h('span', { class: 'rp-num' }, h('b', {}, money(s.cost))))))] : null,
+    ] : null,
+    c.by_provider?.length ? h('details', {}, h('summary', {}, t('Detalle por proveedor')), h('div', { class: 'rp-scroll' }, h('table', { class: 'rp-table' },
+      h('tr', {}, h('th', {}, t('Proveedor')), h('th', {}, t('Modelo')), h('th', {}, t('Qué')), h('th', { class: 'n' }, t('Cantidad')), h('th', { class: 'n' }, t('Costo'))),
+      c.by_provider.map((g) => h('tr', {}, h('td', {}, g.provider), h('td', {}, g.model || '—'), h('td', {}, window.rpKind(g.kind)), h('td', { class: 'n' }, rpQty(g.qty)),
+        h('td', { class: 'n' }, g.priced ? money(g.cost) : h('span', { class: 'rp-error' }, t('completá el precio')))))))) : null);
+}
+
+function rpPriceEditor() {
+  const owner = window.authEnabled === false || window.me?.role === 'owner';
+  if (!rpPrices) {
+    api('GET', '/../prices')   /* /api/agents/../prices = /api/prices */.then((p) => { rpPrices = p; if (section === 'reports') render(); }, (e) => { rpPriceMsg = e.message; render(); });
+    return h('p', { class: 'help' }, rpPriceMsg || t('Cargando…'));
+  }
+  const rows = rpPrices.prices;
+  const save = async () => {
+    try { rpPrices = await api('PUT', '/../prices', { currency: rpPrices.currency, prices: rows.map(({ default: _, unit: __, ...r }) => r) }); rpPriceMsg = t('Precios guardados.'); }
+    catch (e) { rpPriceMsg = e.message; }
+    render();
+  };
+  return h('div', { class: 'stack', style: 'gap:8px' },
+    h('p', { class: 'help', style: 'font-size:13px' }, owner ? t('Precio por unidad (la columna «por»). Vacío = sin precio. Los de fábrica traen su fuente y la fecha en que se revisaron.')
+      : t('Solo el dueño puede cambiar los precios.')),
+    lab(t('Moneda'), h('input', { value: rpPrices.currency, maxlength: 3, disabled: !owner, style: 'width:80px', oninput: (e) => { rpPrices.currency = e.target.value.toUpperCase(); } })),
+    h('div', { class: 'rp-scroll' }, h('table', { class: 'rp-table' },
+      h('tr', {}, h('th', {}, t('Qué')), h('th', {}, t('Proveedor')), h('th', {}, t('Modelo')), h('th', { class: 'n' }, t('Precio')), h('th', {}, t('por')), h('th', {}, t('Fuente'))),
+      rows.map((r) => h('tr', {}, h('td', {}, window.rpKind(r.kind)), h('td', {}, r.provider), h('td', {}, r.model),
+        h('td', { class: 'n' }, h('input', { type: 'number', min: 0, step: 'any', value: r.price ?? '', disabled: !owner, 'aria-label': t('Precio'),
+          placeholder: t('completá el precio'), oninput: (e) => { r.price = e.target.value === '' ? null : Number(e.target.value); } })),
+        h('td', {}, r.unit),
+        h('td', {}, r.source && r.source.startsWith('http') ? h('a', { href: r.source, target: '_blank', rel: 'noopener' }, t('fuente')) : r.source || '',
+          r.checked ? h('small', { class: 'help' }, ' · ' + r.checked) : null, r.note ? h('small', { class: 'help' }, ' · ' + r.note) : null))))),
+    owner ? h('div', { class: 'row' }, h('button', { class: 'btn small', onclick: save }, t('Guardar precios')), rpPriceMsg ? h('span', { class: 'help', role: 'status' }, rpPriceMsg) : null) : null);
+}
+
 function rpReport() {
   if (rpCampFor !== agent.id) {          // una vez por agente; si todavía no hay campañas (o el servidor no las tiene) no aparece el filtro
     rpCampFor = agent.id; rpCampaigns = null; rpCampaign = '';
@@ -143,10 +223,13 @@ function rpReport() {
   const stats = h('div', { class: 'stack', style: 'gap:18px', 'aria-live': 'polite' }, h('p', { class: 'help' }, t('Cargando los números…')));
   api('GET', '/' + agent.id + '/insights/analytics?' + q).then((a) => { if (stats.isConnected) stats.replaceChildren(...rpAnalytics(a).filter(Boolean)); },
     (e) => stats.replaceChildren(h('p', { class: 'rp-error' }, t('No se pudieron cargar los números: {error}.', { error: e.message }))));
-  if (!agent.classifications.length) return [filters, stats,
+  if (!agent.classifications.length) return [filters, stats, costs,
     h('div', { class: 'empty' }, h('h2', {}, t('Todavía no hay clasificaciones')),
       h('p', {}, t('Para ver cómo terminaron las conversaciones, creá clasificaciones (por ejemplo «Turno agendado» o «Cancelación») y aplicalas desde un flujo.')),
       h('button', { class: 'btn', onclick: rpGoClassifications }, t('Ir a Clasificaciones')))];
+  const costs = h('div', { 'aria-live': 'polite' }, h('p', { class: 'help' }, t('Cargando los costos…')));
+  api('GET', '/' + agent.id + '/costs?' + q).then((c) => { if (costs.isConnected) costs.replaceChildren(rpCosts(c, q)); },
+    (e) => costs.replaceChildren(h('p', { class: 'rp-error' }, t('No se pudieron cargar los costos: {error}.', { error: e.message }))));
   const box = h('div', { class: 'panel', 'aria-live': 'polite' }, h('p', { class: 'help' }, t('Cargando el reporte…')));
   (async () => {
     try {
@@ -160,7 +243,7 @@ function rpReport() {
         h('div', {}, h('button', { class: 'btn quiet small', onclick: () => render() }, t('Probar de nuevo'))));
     }
   })();
-  return [filters, stats, box];
+  return [filters, stats, costs, box];
 }
 
 window.reportsView = () => h('div', { class: 'page' }, h('h1', {}, t('Reportes')),

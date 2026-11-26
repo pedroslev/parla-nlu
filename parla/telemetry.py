@@ -36,6 +36,8 @@ DEFS = {    # nombre -> (tipo, ayuda, buckets). La lista completa, con sus etiqu
     "parla_nlu_duration_seconds": ("histogram", "NLU latency by stage (classify, extract).", LATENCY),
     "parla_llm_request_duration_seconds": ("histogram", "LLM calls by provider and outcome.", LATENCY),
     "parla_llm_tokens_total": ("counter", "LLM tokens by provider and type (input, output), when the provider reports them.", None),
+    "parla_usage_total": ("counter", "Billable usage by agent, kind (llm_input, llm_output, llm_cached, llm_compute, asr, tts, phone, phone_call, whatsapp, telegram, turn), provider and unit.", None),
+    "parla_cost_total": ("counter", "Estimated cost at the current price table, by agent, kind, provider and currency (unpriced usage is not counted).", None),
     "parla_asr_duration_seconds": ("histogram", "Speech-to-text calls by provider and outcome.", LATENCY),
     "parla_tts_duration_seconds": ("histogram", "Text-to-speech calls by provider and outcome.", LATENCY),
     "parla_http_step_duration_seconds": ("histogram", "HTTP steps and HTTP tools by outcome (ok, http_error, unreachable, error).", LATENCY),

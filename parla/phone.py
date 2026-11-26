@@ -25,7 +25,7 @@ import unicodedata
 import urllib.parse
 from xml.sax.saxutils import escape, quoteattr
 
-from . import auth, channels, outbound, telemetry, vault, voice
+from . import auth, channels, costs, outbound, telemetry, vault, voice
 from . import handoff as handoff_mod
 from .channels import ChannelError
 
@@ -154,7 +154,8 @@ def audio(ref, token):
     if not found:
         return 403, b"", "text/plain"
     try:
-        return 200, voice.speak(*found, tts=voice.settings(agent)["tts"]), "audio/wav"
+        with costs.scope(agent["id"], channel="phone"):     # ponytail: el token no lleva la conversación: cuenta para el agente
+            return 200, voice.speak(*found, tts=voice.settings(agent)["tts"]), "audio/wav"
     except Exception as error:  # noqa: BLE001 - sin piper: que se vea en Canales
         channels._log(agent["id"], "phone", error)
         return 503, b"", "text/plain"
@@ -376,6 +377,9 @@ def webhook(headers, rfile, method, ref, provider, action, path, length):
     if action == "status":           # cortó (o no atendió): la conversación termina
         if pending:
             outbound.call_status(pending["id"], status)
+        seconds = params.get("CallDuration") if provider == "twilio" else params.get("duration")
+        if status in ENDED and str(seconds or "").isdigit():     # minutos que factura el proveedor (costs.py)
+            costs.record("phone", provider, "outbound" if pending else "inbound", int(seconds) / 60, agent=agent_id, session=sid, channel="phone")
         if status in ENDED:
             with channels._session_lock(agent_id + "/" + sid):
                 if (app.load_session(agent_id, sid) or {}).get("ended") is False:

@@ -27,7 +27,7 @@ import urllib.request
 import uuid
 from collections import OrderedDict
 
-from . import auth, files, outbound, telemetry, vault
+from . import auth, costs, files, outbound, telemetry, vault
 
 CHANNELS = ("whatsapp", "telegram")
 SECRETS = {"whatsapp": ("WHATSAPP_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN"),
@@ -221,6 +221,8 @@ def _send(agent, channel, sid, replies, lang):
     to, last = sid.split("-", 1)[1], None
     for reply in replies:
         sent = (_wa_send if channel == "whatsapp" else _tg_send)(agent, to, reply, lang) or {}
+        costs.record(channel, "meta" if channel == "whatsapp" else "telegram", "service" if channel == "whatsapp" else "bot", 1,
+                     agent=agent["id"], session=sid, channel=channel)
         last = ((sent.get("messages") or [{}])[0].get("id") if channel == "whatsapp"
                 else (sent.get("result") or {}).get("message_id") if isinstance(sent.get("result"), dict) else None) or last
     if replies:

@@ -24,7 +24,7 @@ from collections import deque
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from . import auth, bus, channels, db, pii, telemetry, vault
+from . import auth, bus, channels, costs, db, pii, telemetry, vault
 
 WINDOW = 24 * 3600              # la ventana de atención de WhatsApp
 MAX_ATTEMPTS = 3
@@ -282,6 +282,8 @@ def send(agent, channel, to, data=None, flow=None, template=None, text=None, cam
         if not token or not re.fullmatch(r"\d{1,30}", phone_id):
             raise OutboundError("falta la clave WHATSAPP_TOKEN o el «phone_number_id»")
         sent = channels._post(agent["id"], "%s/%s/messages" % (channels._wa_api(), phone_id), message, token=token)
+        costs.record("whatsapp", "meta", "template:%s" % str(tpl.get("category") or "unknown").lower()[:30], 1,
+                     agent=agent["id"], session=sid, channel="whatsapp")
         app.outbound_session(agent["id"], sid, channel, data, flow=None, campaign=campaign, on_reply=flow,
                              note="Se envió la plantilla «%s»" % tpl["name"])
         return {"sessionId": sid, "via": "template", "messages": [], "message_id": ((sent.get("messages") or [{}])[0]).get("id")}
@@ -331,6 +333,7 @@ def _call(agent, address, data, flow, campaign, row):
     if not phone.CALL_ID.fullmatch(call):
         raise channels.ChannelError("el proveedor no devolvió el id de la llamada")
     db.q("UPDATE campaign_recipients SET session_id = ? WHERE id = ?", ("call-" + call, row))
+    costs.record("phone_call", provider, "outbound", 1, agent=agent["id"], session="call-" + call, channel="phone")
     return {"sessionId": "call-" + call, "via": "call", "messages": [], "message_id": call}
 
 

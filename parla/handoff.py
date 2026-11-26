@@ -27,7 +27,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import auth, channels, db, llm, outbound, pii, telemetry, vault
+from . import auth, channels, costs, db, llm, outbound, pii, telemetry, vault
 
 EVENTS = ("handoff.requested", "handoff.released", "conversation.started", "conversation.ended",
           "message.user", "message.bot", "csat.received", "campaign.finished")
@@ -37,6 +37,7 @@ BACKOFF = 30                    # segundos antes del primer reintento; después 
 MAX_WAIT = 4 * 3600             # …hasta 4 h entre intentos
 MAX_ATTEMPTS = 14               # 30 s, 1, 2, 4… min, 4 h, 4 h…: ~24 h en total; después «dead»
 TIMEOUT = 10                    # segundos por entrega
+SUMMARY_WAIT = 10               # segundos que el webhook handoff.requested espera el resumen de la IA (si no, va el fijo)
 SIP_VALUE_MAX = 128             # caracteres por encabezado (ya codificado)
 SIP_TOTAL_MAX = 1000            # Twilio: los encabezados del URI tienen que sumar menos de 1024
 clock = time.time               # las pruebas lo cambian por un reloj propio
@@ -128,18 +129,26 @@ def context(agent, record):
 LABELS = {"es": ("Motivo", "Intención", "Datos"), "en": ("Reason", "Intent", "Data"), "pt": ("Motivo", "Intenção", "Dados")}
 
 
-def summary(agent, record, reason=None):
-    """Una o dos líneas para quien atiende: con la IA del agente si está prendida; si no (o si falla), intención + slots."""
+def plain_summary(agent, record, reason=None):
+    """El resumen fijo, al instante: motivo + intención + slots (tapados con pii_redaction)."""
     cats = pii.categories(agent.get("pii_redaction"))
     cover = (lambda v: pii.scrub(v, cats)) if cats else (lambda v: v)
     state = record.get("state") or {}
     words = LABELS.get(state.get("lang"), LABELS["es"])
     slots = cover({k: v for k, v in (state.get("slots") or {}).items() if v not in (None, "")})
-    plain = "; ".join(filter(None, ["%s: %s" % (words[0], reason) if reason else None,
-                                    "%s: %s" % (words[1], intent_of(record)) if intent_of(record) else None,
-                                    "%s: %s" % (words[2], ", ".join("%s=%s" % kv for kv in slots.items())) if slots else None]))
+    return "; ".join(filter(None, ["%s: %s" % (words[0], reason) if reason else None,
+                                   "%s: %s" % (words[1], intent_of(record)) if intent_of(record) else None,
+                                   "%s: %s" % (words[2], ", ".join("%s=%s" % kv for kv in slots.items())) if slots else None]))[:300]
+
+
+def summary(agent, record, reason=None):
+    """Una o dos líneas para quien atiende: con la IA del agente si está prendida; si no (o si falla), el fijo.
+    Tarda lo que tarde el modelo (hasta 8 s): started() la corre en segundo plano, nunca en el turno."""
+    cats = pii.categories(agent.get("pii_redaction"))
+    cover = (lambda v: pii.scrub(v, cats)) if cats else (lambda v: v)
+    plain = plain_summary(agent, record, reason)
     if not ((agent.get("ai") or {}).get("enabled")):
-        return plain[:300]
+        return plain
     talk = "\n".join("%s: %s" % (m["from"], cover(m.get("text") or "")) for m in (record.get("history") or [])[-20:] if m["from"] in ("user", "bot"))
     try:
         text = llm.chat(llm.settings(agent), [
@@ -152,11 +161,50 @@ def summary(agent, record, reason=None):
 
 
 def started(agent, record):
-    """La charla acaba de pasar a una persona: completa el handoff (modo, destino, resumen) y avisa a los webhooks."""
+    """La charla acaba de pasar a una persona: completa el handoff (modo, destino, resumen fijo) y avisa a los
+    webhooks. Con IA, el resumen de la IA se hace en segundo plano (el turno contesta ya): el webhook
+    handoff.requested espera hasta SUMMARY_WAIT segundos para llevarlo; si no llega, sale con el fijo. La
+    transferencia telefónica (encabezados SIP, Flex) usa el fijo, sin esperar."""
     c, hand = conf(agent), record["state"].get("handoff") or {}
-    hand.update(mode=c["mode"], target=c["target"], summary=summary(agent, record, hand.get("reason")))
+    plain = plain_summary(agent, record, hand.get("reason"))
+    hand.update(mode=c["mode"], target=c["target"], summary=plain)
     record["handoff"] = hand
-    emit(agent, "handoff.requested", record)
+    ai = bool((agent.get("ai") or {}).get("enabled"))
+    event_id = "evt_" + secrets.token_hex(12)
+    emit(agent, "handoff.requested", record, _event_id=event_id, _hold=SUMMARY_WAIT if ai else 0)
+    if ai:
+        snapshot = json.loads(json.dumps(record))
+        threading.Thread(target=_ai_summary, args=(agent, snapshot, plain, event_id), daemon=True, name="parla-summary").start()
+
+
+def _ai_summary(agent, record, plain, event_id):
+    """En segundo plano: el resumen de la IA va al webhook que lo espera y a la conversación guardada."""
+    text = plain
+    try:
+        with costs.scope(agent["id"], record["sessionId"], record.get("channel")):
+            text = summary(agent, record, (record.get("handoff") or {}).get("reason"))
+        for rid, raw in db.q("SELECT id, body FROM webhook_deliveries WHERE event_id = ? AND status = 'queued'", (event_id,)):
+            body = json.loads(raw)
+            if text != plain and isinstance(body.get("handoff"), dict):
+                body["handoff"]["summary"] = text
+            db.q("UPDATE webhook_deliveries SET body = ?, next_at = 0 WHERE id = ? AND status = 'queued'",
+                 (json.dumps(body, ensure_ascii=False, separators=(",", ":")), rid))
+        _wake.set()
+        app = _app()
+        # ponytail: el turno guarda la conversación justo después de started(); se reintenta un poco hasta verla.
+        # Un turno que guarda en el mismo instante puede pisar el resumen (queda el fijo); un lock por conversación si molesta
+        for _ in range(10) if text != plain else ():
+            saved = app.load_session(agent["id"], record["sessionId"])
+            hand = (saved or {}).get("handoff") or {}
+            if hand.get("summary") == plain and hand.get("active"):
+                for where in (hand, (saved.get("state") or {}).get("handoff") or {}):
+                    where["summary"] = text
+                app.save_session(agent["id"], saved)
+                return
+            time.sleep(0.2)
+    except Exception:  # noqa: BLE001 - el webhook sale igual con el fijo cuando vence la espera
+        import traceback
+        traceback.print_exc(file=sys.stderr)
 
 
 # ---------- encabezados SIP para transferir la llamada con contexto ----------
@@ -208,18 +256,20 @@ def task_attributes(agent, record):
 
 # ---------- webhooks: encolar ----------
 
-def emit(agent, event, record=None, **extra):
-    """Encola el evento para cada webhook del agente que lo pidió. agent: el borrador (o lo que tenga «webhooks»)."""
+def emit(agent, event, record=None, _event_id=None, _hold=0, **extra):
+    """Encola el evento para cada webhook del agente que lo pidió. agent: el borrador (o lo que tenga «webhooks»).
+    _hold: segundos antes de entregarlo (handoff.requested espera el resumen de la IA)."""
     hooks = [w for w in webhooks(agent) if event in w["events"]]
     if not hooks:
         return 0
-    body = {"id": "evt_" + secrets.token_hex(12), "type": event, "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(clock()))}
+    body = {"id": _event_id or "evt_" + secrets.token_hex(12), "type": event, "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(clock()))}
     body.update(context(agent, record) if record is not None else {"agent": {"id": agent["id"], "name": agent.get("name")}, "links": links(agent)})
     cats = pii.categories(agent.get("pii_redaction"))
     body.update(pii.scrub(extra, cats) if cats else extra)
     raw = json.dumps(body, ensure_ascii=False, separators=(",", ":"))
     for w in hooks:
-        enqueue(agent["id"], w["url"], event, body["id"], record["sessionId"] if record is not None else None, raw)
+        enqueue(agent["id"], w["url"], event, body["id"], record["sessionId"] if record is not None else None, raw,
+                clock() + _hold if _hold else 0)
     return len(hooks)
 
 
@@ -234,9 +284,9 @@ def emit_by_id(agent_id, event, record=None, **extra):
         traceback.print_exc(file=sys.stderr)
 
 
-def enqueue(agent_id, url, event, event_id, session_id, raw):
-    db.q("INSERT INTO webhook_deliveries (agent_id, url, event, event_id, session_id, body, status, created, updated) "
-         "VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?)", (agent_id, url, event, event_id, session_id, raw, _now_text(), _now_text()))
+def enqueue(agent_id, url, event, event_id, session_id, raw, next_at=0):
+    db.q("INSERT INTO webhook_deliveries (agent_id, url, event, event_id, session_id, body, status, next_at, created, updated) "
+         "VALUES (?, ?, ?, ?, ?, ?, 'queued', ?, ?, ?)", (agent_id, url, event, event_id, session_id, raw, next_at, _now_text(), _now_text()))
     _wake.set()
 
 

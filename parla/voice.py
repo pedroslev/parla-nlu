@@ -22,7 +22,7 @@ import urllib.parse
 import wave
 from pathlib import Path
 
-from . import DATA, llm, telemetry, vault
+from . import DATA, costs, llm, telemetry, vault
 
 MODELS = Path(DATA) / "models"
 PIPER_DIR = MODELS / "piper"
@@ -144,7 +144,9 @@ def _transcribe(audio_bytes, mime, language, hint, asr):
     if asr and asr.get("provider", "local") != "local":
         if len(audio_bytes) > MAX_UPLOAD:
             raise ValueError("El audio es muy largo (máximo %d segundos)." % MAX_SECONDS)
-        text = _remote_asr(asr, audio_bytes, mime, language or "es", hint)
+        text, seconds = _remote_asr(asr, audio_bytes, mime, language or "es", hint)
+        costs.record("asr", asr["provider"], asr.get("model") or ASR_MODELS.get(asr["provider"]) or "default",
+                     (seconds if seconds is not None else _seconds(audio_bytes) or 0) / 60)
         return {"text": text.strip(), "language": lang, "ms": int((time.time() - t0) * 1000), "provider": asr["provider"]}
     with _slot() as slot:
         model = _whisper(slot)
@@ -163,7 +165,20 @@ def _transcribe(audio_bytes, mime, language, hint, asr):
         # o como repetición anormal
         kept = [s for s in segments if not (s.no_speech_prob > 0.6 and s.avg_logprob < -0.8) and s.compression_ratio < 2.4]
         text = " ".join(s.text.strip() for s in kept).strip()
+    costs.record("asr", "local", "whisper-" + STT_MODEL, seconds / 60)
     return {"text": text, "language": info.language, "ms": int((time.time() - t0) * 1000), "provider": "local"}
+
+
+def _seconds(audio):
+    """Duración del audio para la cuenta de costos cuando el proveedor no la informa: WAV por el encabezado; lo demás
+    decodificado (PyAV, viene con faster-whisper). None si no se puede."""
+    try:
+        if audio[:4] == b"RIFF":
+            with wave.open(io.BytesIO(audio)) as w:
+                return w.getnframes() / float(w.getframerate())
+        return len(_decode(audio)) / 16000
+    except Exception:  # noqa: BLE001 - sin decodificador: ese audio no se cuenta
+        return None
 
 
 def _voice(lang, slot):
@@ -256,7 +271,11 @@ def speak(text, language="es", keep=True, tts=None):
     with telemetry.span("tts", kind="internal" if provider == "local" else "client", metric="parla_tts_duration_seconds",
                         labels={"provider": provider}, **{"parla.voice.provider": provider, "parla.text.chars": len(text)}):
         if tts and tts.get("provider", "local") != "local":
-            return _remote_tts(tts, text, language or lang)
+            audio = _remote_tts(tts, text, language or lang)
+            costs.record("tts", tts["provider"], tts.get("model") or TTS_MODELS.get(tts["provider"]) or tts.get("voice")
+                         or (TTS_VOICES.get("deepgram", {}).get(lang) if tts["provider"] == "deepgram" else "") or "default", len(text))
+            return audio
+        costs.record("tts", "local", "piper", len(text))
         buf = io.BytesIO()
         with _slot() as slot:
             v = _voice(lang, slot)
@@ -343,7 +362,9 @@ def _remote_asr(asr, audio, mime, language, hint):
     if provider == "openai":
         fields = [("model", model), ("language", lang), ("response_format", "json")] + ([("prompt", hint)] if hint else [])
         body, form = multipart(fields, [("file", "audio." + ext, ctype, audio)])
-        return _call(_base("openai") + "/v1/audio/transcriptions", body, {"Content-Type": form, "Authorization": "Bearer " + key}, key).get("text") or ""
+        data = _call(_base("openai") + "/v1/audio/transcriptions", body, {"Content-Type": form, "Authorization": "Bearer " + key}, key)
+        usage = data.get("usage") or {}       # whisper-1: {"type": "duration", "seconds"}; los gpt-4o-*: por tokens (sin duración)
+        return data.get("text") or "", usage.get("seconds") if usage.get("type") == "duration" else None
     if provider == "deepgram":
         query = [("model", model), ("language", lang), ("smart_format", "true")]
         if model.startswith("nova-3"):                # keyterm: solo Nova-3 (keywords no anda con Nova-3)
@@ -351,11 +372,11 @@ def _remote_asr(asr, audio, mime, language, hint):
         data = _call(_base("deepgram") + "/v1/listen?" + urllib.parse.urlencode(query), audio,
                      {"Content-Type": ctype, "Authorization": "Token " + key}, key)
         channels = (data.get("results") or {}).get("channels") or [{}]
-        return ((channels[0].get("alternatives") or [{}])[0]).get("transcript") or ""
+        return ((channels[0].get("alternatives") or [{}])[0]).get("transcript") or "", (data.get("metadata") or {}).get("duration")
     if provider == "elevenlabs":
         fields = [("model_id", model), ("language_code", lang)] + [("keyterms", t) for t in _terms(hint)]
         body, form = multipart(fields, [("file", "audio." + ext, ctype, audio)])
-        return _call(_base("elevenlabs") + "/v1/speech-to-text", body, {"Content-Type": form, "xi-api-key": key}, key).get("text") or ""
+        return _call(_base("elevenlabs") + "/v1/speech-to-text", body, {"Content-Type": form, "xi-api-key": key}, key).get("text") or "", None
     # google: Speech-to-Text v1. WAV/FLAC traen su frecuencia; webm/ogg del navegador son Opus a 48 kHz; lo demás -> WAV
     if audio[:4] == b"RIFF":
         encoding = {"encoding": "LINEAR16"}
@@ -371,7 +392,9 @@ def _remote_asr(asr, audio, mime, language, hint):
     data = _call(_base("google_speech") + "/v1/speech:recognize",
                  json.dumps({"config": config, "audio": {"content": base64.b64encode(audio).decode()}}).encode(),
                  {"Content-Type": "application/json", "x-goog-api-key": key}, key)
-    return " ".join(((r.get("alternatives") or [{}])[0].get("transcript") or "").strip() for r in data.get("results") or []).strip()
+    billed = (data.get("totalBilledTime") or "").rstrip("s")      # «3.5s»
+    return (" ".join(((r.get("alternatives") or [{}])[0].get("transcript") or "").strip() for r in data.get("results") or []).strip(),
+            float(billed) if billed.replace(".", "", 1).isdigit() else None)
 
 
 def _wav(audio):

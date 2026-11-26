@@ -11,7 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import telemetry, vault
+from . import costs, telemetry, vault
 
 # Proveedores: ollama (local, por defecto); openai = OpenAI o cualquier servidor compatible con «url» (así venían los
 # agentes viejos); openai_compatible = lo mismo con otro nombre; anthropic (Claude, SDK oficial, opcional) y gemini (REST).
@@ -263,6 +263,25 @@ def pull_progress():
         return {k: dict(v) for k, v in _progress.items()}
 
 
+def _usage(cfg, inp=None, out=None, cached=None, seconds=None):
+    """Tokens que informó el proveedor: a la traza/métricas y a la cuenta de costos de la conversación (costs.py).
+    inp: los de entrada sin los leídos de caché (esos van en cached)."""
+    total_in = (inp or 0) + (cached or 0) if isinstance(inp, int) or isinstance(cached, int) else None
+    telemetry.tokens(total_in, out)
+    costs.llm(cfg["provider"], cfg.get("model"), inp, out, cached, seconds)
+
+
+def _openai_usage(cfg, usage):
+    cached = ((usage.get("prompt_tokens_details") or {}).get("cached_tokens")) or 0
+    prompt = usage.get("prompt_tokens")
+    _usage(cfg, prompt - cached if isinstance(prompt, int) else None, usage.get("completion_tokens"), cached)
+
+
+def _ollama_usage(cfg, data):
+    ns = sum(n for n in (data.get("prompt_eval_duration"), data.get("eval_duration")) if isinstance(n, (int, float)))
+    _usage(cfg, data.get("prompt_eval_count"), data.get("eval_count"), seconds=ns / 1e9 if ns else None)
+
+
 def _schema_prompt(schema):
     return {"role": "system", "content": "Respondé solo con un objeto JSON que cumpla este esquema: " + json.dumps(schema, ensure_ascii=False)}
 
@@ -280,14 +299,14 @@ def _openai(cfg, messages, schema, timeout, max_tokens, temperature, sink=None):
     url = cfg["url"] + "/chat/completions"
     if sink:        # streaming (SSE): data: {"choices": [{"delta": {"content": "..."}}]} … data: [DONE]
         text = ""
-        with _request(url, dict(body, stream=True), timeout, cfg) as r:
+        streamed = dict(body, stream=True, **({"stream_options": {"include_usage": True}} if "api.openai.com" in url else {}))
+        with _request(url, streamed, timeout, cfg) as r:
             for data in _sse(r, timeout):
                 piece = ((data.get("choices") or [{}])[0].get("delta") or {}).get("content") or ""
                 text += piece
                 sink(piece)
-                usage = data.get("usage") or {}
-                if usage:
-                    telemetry.tokens(usage.get("prompt_tokens"), usage.get("completion_tokens"))
+                if data.get("usage"):
+                    _openai_usage(cfg, data["usage"])
         return _first_json(text) if schema else text
     if schema and url not in _no_json_mode:
         try:
@@ -299,8 +318,7 @@ def _openai(cfg, messages, schema, timeout, max_tokens, temperature, sink=None):
             _no_json_mode.add(url)
     else:
         data = _json(url, body, timeout, cfg)
-    usage = data.get("usage") or {}
-    telemetry.tokens(usage.get("prompt_tokens"), usage.get("completion_tokens"))
+    _openai_usage(cfg, data.get("usage") or {})
     text = ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
     return _first_json(text) if schema else text
 
@@ -391,7 +409,10 @@ def _anthropic(cfg, messages, schema, timeout, max_tokens, sink=None):
     except Exception as error:  # noqa: BLE001
         raise _claude_error(error, cfg, timeout) from None
     usage = getattr(response, "usage", None)
-    telemetry.tokens(getattr(usage, "input_tokens", None), getattr(usage, "output_tokens", None))
+    num = lambda name: getattr(usage, name, None) if isinstance(getattr(usage, name, None), int) else 0
+    # ponytail: la escritura de caché (cache_creation_input_tokens, ~1.25×) se cuenta como entrada normal; Parla no marca cache_control
+    _usage(cfg, num("input_tokens") + num("cache_creation_input_tokens") if usage is not None else None, getattr(usage, "output_tokens", None),
+           num("cache_read_input_tokens"))
     if response.stop_reason == "refusal":
         raise LLMError("el modelo no quiso contestar eso (lo frenó un filtro de seguridad del proveedor)")
     if response.stop_reason == "max_tokens":
@@ -441,7 +462,10 @@ def _gemini(cfg, messages, schema, timeout, max_tokens, sink=None):
         _gemini_plain.add(cfg["model"])
         return _gemini(cfg, messages, schema, timeout, max_tokens, sink)
     usage = data.get("usageMetadata") or {}
-    telemetry.tokens(usage.get("promptTokenCount"), usage.get("candidatesTokenCount"))
+    cached, prompt = usage.get("cachedContentTokenCount") or 0, usage.get("promptTokenCount")
+    thoughts = usage.get("thoughtsTokenCount") or 0         # el razonamiento se cobra como salida
+    out = usage.get("candidatesTokenCount")
+    _usage(cfg, prompt - cached if isinstance(prompt, int) else None, (out or 0) + thoughts if isinstance(out, int) or thoughts else None, cached)
     if (data.get("promptFeedback") or {}).get("blockReason"):
         raise LLMError("el modelo no quiso contestar eso (lo frenó un filtro de seguridad del proveedor)")
     candidate = (data.get("candidates") or [{}])[0]
@@ -492,10 +516,10 @@ def _chat(cfg, messages, schema, timeout, max_tokens, temperature, sink=None):
                     text += piece
                     sink(piece)
                     if data.get("done"):
-                        telemetry.tokens(data.get("prompt_eval_count"), data.get("eval_count"))
+                        _ollama_usage(cfg, data)
         else:
             data = _json(cfg["url"] + "/api/chat", body, timeout)
-            telemetry.tokens(data.get("prompt_eval_count"), data.get("eval_count"))
+            _ollama_usage(cfg, data)
             text = (data.get("message") or {}).get("content") or ""
     if not schema:
         return text.strip()

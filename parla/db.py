@@ -11,6 +11,8 @@ campaign_recipients(id, campaign_id, agent_id, address, spec, status, error, att
 optouts(agent_id, address, channel, keyword, at)    quien pidió que no le escriban más (por agente)
 webhook_deliveries(id, agent_id, url, event, event_id, session_id, body, status, attempts, next_at, code, error, ...)
     la cola de webhooks salientes (handoff.py)
+usage(agent_id, session_id, day, channel, provider, model, kind, qty)   uso medido (costs.py): tokens, minutos, caracteres…
+    sumado por día y conversación; el costo se calcula al leer, con los precios de ahora
 """
 import concurrent.futures
 import contextlib
@@ -50,6 +52,10 @@ CREATE TABLE IF NOT EXISTS webhook_deliveries (id INTEGER PRIMARY KEY, agent_id 
     created TEXT NOT NULL, updated TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS webhook_due ON webhook_deliveries (status, next_at);
 CREATE INDEX IF NOT EXISTS webhook_order ON webhook_deliveries (agent_id, url, session_id, status);
+CREATE TABLE IF NOT EXISTS usage (agent_id TEXT NOT NULL, session_id TEXT NOT NULL DEFAULT '', day TEXT NOT NULL,
+    channel TEXT NOT NULL DEFAULT '', provider TEXT NOT NULL, model TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL, qty REAL NOT NULL,
+    PRIMARY KEY (agent_id, day, session_id, channel, provider, model, kind));
+CREATE INDEX IF NOT EXISTS usage_session ON usage (agent_id, session_id);
 """
 # Lecturas: una conexión por hilo, sin lock (WAL deja leer mientras otro escribe). Escrituras: un solo hilo escritor
 # con una cola y group commit (todo lo que se juntó va en una transacción). q() de escritura vuelve recién después del
@@ -156,6 +162,13 @@ def q(sql, args=()):
     future = concurrent.futures.Future()
     _writes.put((path(), sql, args, future))
     return future.result()
+
+
+def later(sql, args=()):
+    """Una escritura sin esperar el COMMIT (va en el próximo group commit; si falla, se pierde en silencio). Para lo
+    que no puede frenar un turno: la contabilidad de uso (costs.py)."""
+    _conn()
+    _writes.put((path(), sql, args, concurrent.futures.Future()))
 
 
 def pending():

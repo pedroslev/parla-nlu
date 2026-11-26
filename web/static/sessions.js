@@ -145,7 +145,8 @@ window.sessionsView = () => {
     h('div', { class: 'stack', style: 'gap:4px' }, h('h1', {}, t('Conversaciones')),
       h('p', { class: 'help' }, t('Lo que la gente habló con este agente. Abrí una para leerla, re-ejecutarla contra el bot o seguir hablando como ese cliente.'))),
     body);
-  if (window.sessionsFilter) { if (window.sessionsFilter.classification) { svClass = window.sessionsFilter.classification; svSel = null; } if (window.sessionsFilter.environment) { svEnv = window.sessionsFilter.environment; svSel = null; } delete window.sessionsFilter; }
+  if (window.sessionsFilter) { if (window.sessionsFilter.classification) { svClass = window.sessionsFilter.classification; svSel = null; } if (window.sessionsFilter.environment) { svEnv = window.sessionsFilter.environment; svSel = null; }
+    if (window.sessionsFilter.session) { svSel = window.sessionsFilter.session; svQuery = ''; svChannel = svClass = svEnv = svDate = 'all'; } delete window.sessionsFilter; }
   const myAgent = agent;
   Promise.all([svGet(''), api('GET', '/' + myAgent.id + '/inbox').catch(() => ({ sessions: [] }))]).then(([{ sessions }, inbox]) => {
     svHand = new Map((inbox.sessions || []).map((s) => [s.sessionId, s.handoff || {}]));
@@ -336,6 +337,10 @@ function svDetail(s, redraw) {
     ho ? [t('Persona'), ho.active ? svHandBadge(ho) : h('span', { class: 'sv-badge quiet' }, icon('hand'), t('Pasó a una persona') + (ho.by ? ' (' + ho.by + ')' : '') + (ho.reason ? ': ' + ho.reason : ''))] : null,
     errors ? [t('Errores'), h('span', { style: 'color:var(--warn);font-weight:600' }, t.plural(errors, '{n} paso falló', '{n} pasos fallaron'))] : null,
     !s.ended && s.waiting_for ? [t('Quedó'), [t('esperando '), h('strong', {}, s.waiting_for), s.flow ? t(' en el flujo «{flow}»', { flow: s.flow }) : '']] : null,
+    s.usage?.items?.length ? [t('Costo estimado'), h('details', {}, h('summary', {}, window.costText(s.usage.total, s.usage.currency)),
+      h('dl', { class: 'kv' }, s.usage.items.map((u) => [h('dt', {}, window.rpKind(u.kind) + ' · ' + u.provider + (u.model ? ' ' + u.model : '')),
+        h('dd', {}, u.qty.toLocaleString(t.locale, { maximumFractionDigits: 2 }) + ' ' + u.unit + ' · ' + (u.priced ? window.costText(u.cost, s.usage.currency) : t('completá el precio')))])),
+      h('small', { class: 'help' }, t('Estimado con los precios actuales.')))] : null,
   ].filter(Boolean);
   const slots = Object.entries(s.slots || {}).filter(([, v]) => v != null && v !== '');
 
