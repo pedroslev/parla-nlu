@@ -31,6 +31,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Real-time voice over WebSocket ([docs/ai-and-voice.md](docs/ai-and-voice.md#real-time-voice)): streaming ASR
+  (Deepgram live with partials and endpointing; otherwise a VAD that sends each utterance to the usual ASR), TTS from
+  the first sentence of the reply (streaming HTTP for OpenAI, Deepgram Aura and ElevenLabs) and true barge-in (audio
+  cleared, the AI stream of that turn cut, the interruption recorded in the history). Phone `channels.phone.mode:
+  "stream"`: Twilio Media Streams (signed upgrade, `clear`, DTMF) and jambonz `listen` (L16, `killAudio`, DTMF), with
+  transfer/hang-up after the stream ([docs/channels.md](docs/channels.md#real-time-stream-mode)). The test chat's
+  **Call (voice)** and the widget microphone use `/api/v1/bots/{bot}/voice/ws` when available
+  ([docs/api.md](docs/api.md#real-time-voice-websocket)). Metrics `parla_voice_e2e_latency_seconds`,
+  `parla_voice_tts_first_byte_seconds`, `parla_voice_barge_ins_total`. Turn mode stays the default.
 - Costs per conversation ([docs/costs.md](docs/costs.md)): usage measured per turn and per conversation (LLM input,
   output and cached tokens by provider and model, Ollama compute time, ASR minutes, TTS characters, phone minutes from
   Twilio/jambonz status callbacks, outbound calls, WhatsApp service and template messages, Telegram, engine turns),

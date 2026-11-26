@@ -41,6 +41,9 @@ so "calls by outcome" is `rate(<name>_count{outcome="error"}[5m])`. `outcome` is
 | `parla_cost_total` | counter | `agent`, `kind`, `provider`, `currency` | The same usage priced with the price table at the moment it happened (unpriced usage and the spread server cost aren't counted; the Costs report recalculates with today's prices). |
 | `parla_asr_duration_seconds` | histogram | `provider`, `outcome` | Speech to text (`local`, `openai`, `deepgram`, `elevenlabs`, `google`). |
 | `parla_tts_duration_seconds` | histogram | `provider`, `outcome` | Text to speech. Cached fixed phrases aren't counted. |
+| `parla_voice_e2e_latency_seconds` | histogram | `channel`, `asr`, `tts` | Real-time voice: end of the person's speech (including the end-of-turn silence) to the first audio byte sent back. Target < 1 s with streaming providers. |
+| `parla_voice_tts_first_byte_seconds` | histogram | `provider` | Real-time voice: a sentence handed to TTS to its first audio byte. |
+| `parla_voice_barge_ins_total` | counter | `channel` | Real-time voice: the person talked over the bot and it stopped. |
 | `parla_http_step_duration_seconds` | histogram | `outcome` | `http` steps and HTTP tools of the agent step. |
 | `parla_function_duration_seconds` | histogram | `language`, `outcome` | Function runs (steps and agent-step tools). |
 | `parla_knowledge_search_duration_seconds` | histogram | `outcome` | Knowledge base searches. |
@@ -48,7 +51,7 @@ so "calls by outcome" is `rate(<name>_count{outcome="error"}[5m])`. `outcome` is
 | `parla_webhook_deliveries_total` | counter | `outcome` | Handoff webhook attempts: `delivered`, `retry` (will be retried), `dead` (no more retries). |
 | `parla_webhook_delivery_duration_seconds` | histogram | | Webhook HTTP round trip (each attempt that got an answer or timed out). |
 | `parla_csat_score` | histogram | `agent` | CSAT answers, buckets 1 to 5 (average: `_sum / _count`). |
-| `parla_connections` | gauge | `kind` | Open connections: `http` (keep-alive), `ws`, `sse`. |
+| `parla_connections` | gauge | `kind` | Open connections: `http` (keep-alive), `ws`, `sse`, `voice` (real-time voice WebSockets). |
 | `parla_queue_depth` | gauge | `queue` | `executor` (requests waiting for a thread), `inflight`, `sessions` (conversations with a turn running or queued), `bus_subscribers`, `db_write`, `embed`, `webhooks` (handoff webhook deliveries queued or sending). |
 | `parla_embed_batches_total`, `parla_embed_items_total` | counter | | ONNX embedding calls and texts: items / batches = mean batch size. |
 | `parla_db_commits_total`, `parla_db_statements_total` | counter | | SQLite group commits and the writes in them: statements / commits = mean group size. |

@@ -46,6 +46,11 @@ una edición paga que se guarde funciones.
 - **Telefonía**: llamadas entrantes por Twilio Programmable Voice o jambonz (código abierto, se puede instalar en
   casa), con voz y teclado (DTMF), menús de teclas para los botones, interrupción (barge-in), transferencia a una
   persona y la voz de Parla (piper) como opción. Ver [channels_es.md](channels_es.md#llamadas-telefónicas-twilio-y-jambonz).
+- **Voz en tiempo real**: audio por WebSocket para el teléfono (Twilio Media Streams, jambonz `listen`), la llamada del
+  navegador y el widget: ASR en streaming (Deepgram live, o VAD + ASR por frase), TTS desde la primera oración,
+  barge-in de verdad y métricas de latencia. Ver [ai-and-voice.md](ai-and-voice_es.md#voz-en-tiempo-real). Después:
+  adaptadores de OpenAI Realtime / STT realtime de ElevenLabs, un VAD entrenado (silero), estado de la llamada
+  compartido entre réplicas.
 - **Interfaz en inglés y portugués**: toda la interfaz, los mensajes del servidor y el widget web en español, inglés
   o portugués (pt-BR), a elección de cada usuario (al lado del selector de tema: inicio, menú ⋯ o pantalla de
   entrada), con un idioma por defecto de la instalación en `PARLA_LANG` (`scripts/setup.sh --lang en|es|pt`); los bots con inglés como idioma principal traen en

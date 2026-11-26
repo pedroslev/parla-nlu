@@ -143,6 +143,11 @@ panel **Probar** (micrófono y llamadas), en el widget web con micrófono y en l
 Vale la misma regla de privacidad: con un proveedor de afuera (OpenAI, Deepgram, ElevenLabs, Google Cloud), *el
 audio de lo que dice la persona* o *el texto de las respuestas* se manda a esa empresa. Parla te avisa en pantalla.
 
+**Voz en tiempo real.** La **Llamada (voz)** del chat de prueba y el micrófono del widget hablan con el servidor por
+una conexión de audio en vivo: el bot empieza a contestar con la primera oración y se calla apenas le hablás encima.
+En el teléfono es una opción del canal (`mode: "stream"`). Detalle en
+[ai-and-voice.md](../ai-and-voice_es.md#voz-en-tiempo-real).
+
 Si los botones de voz no aparecen o el micrófono no anda, mirá
 [Problemas frecuentes](10-troubleshooting_es.md#la-voz-no-funciona).
 

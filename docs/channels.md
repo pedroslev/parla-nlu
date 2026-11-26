@@ -167,6 +167,7 @@ up (`<Hangup>` / `hangup`).
 | `handoff_to` | Where to transfer when the conversation goes to a person: a number (`+5491112345678`) or a SIP URI (`sip:desk@pbx.mydomain.com`). |
 | `finish_on_key` | Key that ends a number typed on the keypad. Default `#`. |
 | `greeting` | What to say when the call starts if the bot has no `__start__` flow. Default «Hola, ¿en qué te puedo ayudar?» in the bot's language. |
+| `mode` | `turns` (default, as described here) or `stream`: live audio over WebSocket with the agent's voice, sub-second replies and barge-in. See [Real-time (stream mode)](#real-time-stream-mode). |
 | `from` | **Number calls are made from**: your number at the provider, or a SIP URI. Only for outbound calls. |
 | `api_url` | **jambonz API address** for outbound calls. Default `https://api.jambonz.cloud`. |
 | `application_sid` | **Application SID**: the jambonz application that handles outbound calls (recommended). |
@@ -261,15 +262,38 @@ with the context as task attributes. Details in [contact-centers.md](contact-cen
 
 - Outbound calls (the API, campaigns and reminders) need `from`, the provider's keys and, on jambonz, `api_url` and
   `application_sid`: see [outbound.md](outbound.md#phone-outbound-calls). There is no answering machine detection.
-- Speech recognition is done by the provider (Twilio, or what jambonz is configured with), not by Parla (neither
-  local faster-whisper nor the agent's `voice.asr`). Turns are request/response (no audio streaming), so each answer
-  waits for the end of the caller's sentence.
+- In turn mode speech recognition is done by the provider (Twilio, or what jambonz is configured with), not by Parla
+  (neither local faster-whisper nor the agent's `voice.asr`). Turns are request/response, so each answer waits for
+  the end of the caller's sentence. Stream mode lifts both (below).
 - The provider waits about 15 seconds for each answer: slow AI steps or HTTP calls can make it fail. Keep them fast.
 - Mid-call handoffs from the Inbox happen on the caller's next turn (or silence), not instantly.
 - The silence counter and the key that signs audio URLs live in memory: a restart invalidates audio URLs being
   played (they last 10 minutes anyway), and several replicas need one shared instance (run one).
 - `tts: "parla"` needs the voice extras on the server (with piper) or the voice provider's key in **Secrets**, and
   the provider has to reach the audio URLs (they are under `/api/v1/`, like the webhooks).
+
+### Real-time (stream mode)
+
+`"mode": "stream"` in `channels.phone`. The start webhook is the same; instead of a `<Gather>` Parla answers:
+
+- **Twilio:** `<Connect><Stream url="wss://<public address>/api/v1/bots/{bot}/phone/twilio/stream">` (bidirectional
+  Media Streams: μ-law 8 kHz) followed by `<Redirect>` to `/phone/twilio/after`. Parla validates the
+  `X-Twilio-Signature` of the WebSocket upgrade (HMAC-SHA1 of the `wss://` URL with `TWILIO_AUTH_TOKEN`).
+- **jambonz:** a `listen` verb to `wss://…/phone/jambonz/stream?t=<signed token>` with `sampleRate` 8000,
+  `bidirectionalAudio: {enabled, streaming: true, sampleRate: 8000}` (L16 both ways), `passDtmf: true` and
+  `actionHook` `/phone/jambonz/after`. The token comes from the (signed) webhook and lasts 10 minutes; with
+  `JAMBONZ_BASIC_USER`/`PASSWORD` the verb also carries `wsAuth` and Parla checks it.
+
+From then on the audio is Parla's: the agent's `voice.asr` (Deepgram live recommended) and `voice.tts`, reply from
+the first sentence, barge-in (`clear` / `killAudio`), keys pressed (`dtmf` events: a menu key answers at once, a
+number ends with `finish_on_key` or 2 s without keys), re-prompt after `voice.stream.idle_seconds` of silence. To
+transfer or hang up Parla lets the last sentence play, closes the stream (jambonz: `disconnect`) and the provider
+requests `/after`, which answers `<Dial>`/`dial` (same SIP headers and Flex as turn mode) or `<Hangup>`. Details and
+latency in [ai-and-voice.md](ai-and-voice.md#real-time-voice).
+
+- Behind a proxy, allow WebSocket upgrades on `/api/v1/` with long read timeouts (see [deployment.md](deployment.md)).
+- `tts`, `voice` and `language` of the provider don't apply in stream mode (Parla speaks).
+- The greeting and what follows the stream live in memory per call: the call has to stay on the same replica.
 
 ## Testing without real accounts
 

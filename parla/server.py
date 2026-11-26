@@ -1844,10 +1844,11 @@ def converse(agent_id, record, text):
                                             "parla.environment": record.get("environment"), "parla.version": number}) as sp:
         topic = "session:%s:%s" % (agent_id, record["sessionId"])
         llm.STREAM.sink = (lambda event: bus.publish(topic, event)) if bus.has(topic) else None   # tokens de la IA en vivo
+        llm.STREAM.topic = topic                        # voicestream corta el stream si la persona interrumpe
         try:
             result = handle(agent, state, text, parse=lambda a, t: parse(snap["data"], t, snap["tagger"], snap.get("index")))
         finally:
-            llm.STREAM.sink = llm.STREAM.last = None
+            llm.STREAM.sink = llm.STREAM.last = llm.STREAM.topic = None
         measure(agent, record, result, text, was_handoff, sp)
         costs.record("turn", "parla", "engine", 1)
         used = spent.take()          # lo que costó este turno (y el audio de antes, si vino por voz)
@@ -2408,7 +2409,7 @@ class Handler(BaseHTTPRequestHandler):
             # webhooks de Meta y Telegram: vienen de otro Host y sin sesión; los autentica la firma o el secreto (channels.py)
             status, body, ctype = channels.webhook(self.headers, self.rfile, method, *hooked.groups(), query, length)
             return self.reply(body, status, ctype)
-        called = re.fullmatch(r"/api/v1/bots/([^/]+)/phone/(twilio|jambonz)(?:/(gather|status))?", url)
+        called = re.fullmatch(r"/api/v1/bots/([^/]+)/phone/(twilio|jambonz)(?:/(gather|status|after))?", url)
         if called:      # llamadas de Twilio o jambonz: las autentica su firma (phone.py), como los webhooks de arriba
             status, body, ctype = phone.webhook(self.headers, self.rfile, method, called.group(1), called.group(2),
                                                 called.group(3) or "", self.path, length)

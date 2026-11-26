@@ -109,6 +109,8 @@ The interface is available in English, Spanish and Portuguese (pick it next to t
 - WhatsApp (Cloud API) and Telegram channels, with buttons, files and Inbox replies ([docs/channels.md](docs/channels.md)).
 - Phone calls through Twilio or jambonz (open source, self-hostable): speech and keypad (DTMF), buttons as «press 1
   for…» menus, barge-in, transfer to a person, optional local piper voice ([docs/channels.md](docs/channels.md#phone-calls-twilio-and-jambonz)).
+- Real-time voice (phone stream mode, browser call, widget): streaming ASR, reply from the first sentence and true
+  barge-in over WebSocket, under a second with streaming providers ([docs/ai-and-voice.md](docs/ai-and-voice.md#real-time-voice)).
 - The bot writes first: an outbound API, **campaigns** from a CSV (WhatsApp templates, Telegram or outbound calls,
   with schedule, rate, quiet hours, delivery statuses and conversions), reminders from a flow, and automatic
   opt-outs («STOP», «BAJA») ([docs/outbound.md](docs/outbound.md)).

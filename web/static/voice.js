@@ -99,6 +99,81 @@
 
   window.parlaVoice = {
     log,
+
+    // Voz en tiempo real por WebSocket (parla/voicestream.py, protocolo en docs/api.md): el micrófono sale como PCM16
+    // 16 kHz, la voz del bot vuelve igual y suena en cola; «clear» (la persona habló encima) la corta al instante.
+    // Sin depender de nada de index.html: también la usa el widget. Rechaza si el servidor no la tiene (-> por turnos).
+    // opts: {url, ctx, onEvent(msg), onIdle(), onClose()} -> {aec, begin({sessionId, language, channel, environment, replay}), mute(on), close()}
+    async stream(opts) {
+      const ctx = opts.ctx || this.unlock();
+      const ws = new WebSocket(opts.url);
+      ws.binaryType = 'arraybuffer';
+      await new Promise((ok, no) => {     // «ready»: el servidor tiene voz en tiempo real
+        const timer = setTimeout(() => no(new Error('el WebSocket de voz no contestó')), 4000);
+        ws.onmessage = e => { if (typeof e.data === 'string' && JSON.parse(e.data).type === 'ready') { clearTimeout(timer); ok(); } };
+        ws.onerror = ws.onclose = () => { clearTimeout(timer); no(new Error('sin WebSocket de voz')); };
+      });
+      let mic, tap, route = null, closed = false, at = 0, muted = false;
+      const sources = new Set();
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        try { ws.close(); } catch (e) { /* ya cerrado */ }
+        sources.forEach(s => { try { s.stop(); } catch (e) { /* ya paró */ } });
+        if (tap) { tap.port.onmessage = null; try { tap.disconnect(); } catch (e) { /* ya */ } }
+        if (mic) mic.getTracks().forEach(t => t.stop());
+        if (route) route.close();
+        ctx.close().catch(() => {});
+        opts.onClose && opts.onClose();
+      };
+      try {
+        mic = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true}});
+        await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([TAP], {type: 'application/javascript'})));
+      } catch (e) { ws.close(); if (mic) mic.getTracks().forEach(t => t.stop()); throw e; }
+      ctx.resume().catch(() => {});
+      tap = new AudioWorkletNode(ctx, 'parla-tap');
+      const sink = ctx.createGain();
+      sink.gain.value = 0;
+      ctx.createMediaStreamSource(mic).connect(tap).connect(sink).connect(ctx.destination);
+      try { route = await loopback(ctx); } catch (e) { log('sin loopback WebRTC: la voz suena directo', e); }   // así el cancelador de eco resta al bot
+      const ratio = ctx.sampleRate / 16000;
+      tap.port.onmessage = e => {              // Float32 a la frecuencia del navegador -> PCM16 16 kHz (promedio por ventana)
+        if (closed || ws.readyState !== 1) return;
+        const f = e.data, n = Math.floor(f.length / ratio), out = new Int16Array(n);
+        for (let i = 0; i < n; i++) {
+          let s = 0, a = Math.floor(i * ratio), b = Math.max(a + 1, Math.floor((i + 1) * ratio));
+          for (let j = a; j < b; j++) s += f[j] || 0;
+          out[i] = muted ? 0 : Math.max(-1, Math.min(1, s / (b - a))) * 0x7fff;
+        }
+        ws.send(out.buffer);
+      };
+      ws.onmessage = e => {
+        if (closed) return;
+        if (typeof e.data !== 'string') {      // PCM16 16 kHz del bot: a la cola
+          const pcm = new Int16Array(e.data), buf = ctx.createBuffer(1, pcm.length, 16000), ch = buf.getChannelData(0);
+          for (let i = 0; i < pcm.length; i++) ch[i] = pcm[i] / 0x8000;
+          const src = ctx.createBufferSource();
+          src.buffer = buf;
+          src.connect(route ? route.dest : ctx.destination);
+          at = Math.max(at, ctx.currentTime);
+          src.start(at);
+          at += buf.duration;
+          sources.add(src);
+          src.onended = () => { sources.delete(src); if (!sources.size && opts.onIdle) opts.onIdle(); };
+          return;
+        }
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'clear') { sources.forEach(s => { s.onended = null; try { s.stop(); } catch (x) { /* ya */ } }); sources.clear(); at = 0; }
+        opts.onEvent && opts.onEvent(msg);
+      };
+      ws.onclose = close;
+      return {
+        aec: !!route,
+        begin(start) { ws.send(JSON.stringify(Object.assign({type: 'start'}, start))); },
+        mute(on) { muted = !!on; mic.getAudioTracks().forEach(t => { t.enabled = !muted; }); },
+        close() { try { ws.send(JSON.stringify({type: 'stop'})); } catch (e) { /* ya cerrado */ } close(); },
+      };
+    },
     available() {
       return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
     },

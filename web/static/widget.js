@@ -269,9 +269,28 @@
   }
 
   // ---------- voz (opcional) ----------
-  let rec = null;
+  let rec = null, talk = null;    // talk: voz en tiempo real (parla/voicestream.py) si el servidor la tiene
+  const micIdle = () => { mic.setAttribute('aria-pressed', 'false'); mic.setAttribute('aria-label', L.speak); mic.replaceChildren(svg(I.mic)); };
+  async function liveVoice() {     // manos libres: escucha, contesta en voz alta y se la puede interrumpir; false -> grabar y mandar
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();     // dentro del click: Chrome deja sonar
+    try {
+      if (!window.parlaVoice?.stream) await new Promise((ok, no) => {
+        const s = document.createElement('script'); s.src = base + '/static/voice.js'; s.onload = ok; s.onerror = no; document.head.append(s);
+      });
+      await ready;
+      const me = await window.parlaVoice.stream({ ctx, url: api.replace(/^http/, 'ws') + '/voice/ws',
+        onEvent: (m) => { if (m.type === 'transcript') add('user', m.text); else if (m.type === 'reply' && m.status === 200) turn(m.body); },
+        onClose: () => { if (talk === me) { talk = null; micIdle(); } } });
+      talk = me;
+      me.begin({ sessionId: sid, channel });
+      mic.setAttribute('aria-pressed', 'true'); mic.setAttribute('aria-label', L.stopRec); mic.replaceChildren(svg(I.stop));
+      return true;
+    } catch { ctx.close().catch(() => {}); return false; }
+  }
   async function toggleMic() {
+    if (talk) { const me = talk; talk = null; me.close(); return micIdle(); }
     if (rec) return rec.stop();
+    if (await liveVoice()) return;
     let stream;
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { return add('err', L.noMic); }
     const chunks = [];
@@ -298,5 +317,5 @@
     mic.setAttribute('aria-pressed', 'true'); mic.setAttribute('aria-label', L.stopRec); mic.replaceChildren(svg(I.stop));
   }
 
-  host.parlaDestroy = () => { clearInterval(poller); rec?.stop(); host.remove(); };
+  host.parlaDestroy = () => { clearInterval(poller); rec?.stop(); talk?.close(); host.remove(); };
 })();

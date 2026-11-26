@@ -175,6 +175,7 @@ cortar (`<Hangup>` / `hangup`).
 | `handoff_to` | A dónde transferir cuando la charla pasa a una persona: un número (`+5491112345678`) o una dirección SIP (`sip:mesa@pbx.midominio.com`). |
 | `finish_on_key` | Tecla que termina un número escrito con el teclado. Por defecto `#`. |
 | `greeting` | Qué decir al atender si el bot no tiene flujo `__start__`. Por defecto «Hola, ¿en qué te puedo ayudar?» en el idioma del bot. |
+| `mode` | `turns` (por defecto, lo de esta sección) o `stream`: audio en vivo por WebSocket con la voz del agente, respuestas en menos de un segundo y barge-in. Ver [En tiempo real (modo stream)](#modo-stream-en-tiempo-real). |
 | `from` | **Número desde el que se llama**: tu número en el proveedor, o una URI SIP. Solo para llamadas salientes. |
 | `api_url` | **Dirección de la API de jambonz** para llamadas salientes. Por defecto `https://api.jambonz.cloud`. |
 | `application_sid` | **Application SID**: la aplicación de jambonz que atiende las llamadas salientes (recomendado). |
@@ -273,9 +274,9 @@ ASCII, cada valor hasta 128 caracteres y todos menos de 1000; nada de la bóveda
 - Las llamadas salientes (la API, campañas y recordatorios) necesitan `from`, las claves del proveedor y, en jambonz,
   `api_url` y `application_sid`: ver [outbound_es.md](outbound_es.md#teléfono-llamadas-salientes). No se detectan
   contestadores automáticos.
-- El reconocimiento de voz lo hace el proveedor (Twilio, o lo que tenga configurado jambonz), no Parla (ni el
-  faster-whisper local ni el `voice.asr` del agente). Los turnos son pedido/respuesta (sin audio en streaming): cada
-  respuesta espera a que la persona termine la frase.
+- En modo por turnos el reconocimiento de voz lo hace el proveedor (Twilio, o lo que tenga configurado jambonz), no
+  Parla (ni el faster-whisper local ni el `voice.asr` del agente). Los turnos son pedido/respuesta: cada respuesta
+  espera a que la persona termine la frase. El modo stream saca las dos cosas (abajo).
 - El proveedor espera unos 15 segundos cada respuesta: pasos de IA o consultas HTTP lentas pueden hacerla fallar.
   Que sean rápidos.
 - Tomar una llamada desde la Bandeja transfiere en el próximo turno (o silencio) de la persona, no al instante.
@@ -283,6 +284,30 @@ ASCII, cada valor hasta 128 caracteres y todos menos de 1000; nada de la bóveda
   están reproduciendo (igual duran 10 minutos), y varias réplicas necesitan una sola instancia (corré una).
 - `tts: "parla"` necesita los extras de voz en el servidor (con piper) o la key del proveedor de voz en **Claves**,
   y el proveedor tiene que llegar a las direcciones de los audios (están bajo `/api/v1/`, como los webhooks).
+
+### Modo stream (en tiempo real)
+
+`"mode": "stream"` en `channels.phone`. El webhook de inicio es el mismo; en vez de un `<Gather>` Parla contesta:
+
+- **Twilio:** `<Connect><Stream url="wss://<dirección pública>/api/v1/bots/{bot}/phone/twilio/stream">` (Media
+  Streams bidireccional: μ-law 8 kHz) y después `<Redirect>` a `/phone/twilio/after`. Parla valida el
+  `X-Twilio-Signature` del upgrade del WebSocket (HMAC-SHA1 de la URL `wss://` con `TWILIO_AUTH_TOKEN`).
+- **jambonz:** un verbo `listen` a `wss://…/phone/jambonz/stream?t=<token firmado>` con `sampleRate` 8000,
+  `bidirectionalAudio: {enabled, streaming: true, sampleRate: 8000}` (L16 de ida y vuelta), `passDtmf: true` y
+  `actionHook` `/phone/jambonz/after`. El token sale del webhook (firmado) y dura 10 minutos; con
+  `JAMBONZ_BASIC_USER`/`PASSWORD` el verbo lleva también `wsAuth` y Parla lo controla.
+
+Desde ahí el audio es de Parla: el `voice.asr` del agente (recomendado Deepgram live) y su `voice.tts`, respuesta
+desde la primera oración, barge-in (`clear` / `killAudio`), teclas (eventos `dtmf`: la tecla de un menú contesta al
+toque, un número termina con `finish_on_key` o 2 s sin teclas) y repregunta tras `voice.stream.idle_seconds` de
+silencio. Para transferir o cortar, Parla deja sonar la última oración, cierra el stream (jambonz: `disconnect`) y el
+proveedor pide `/after`, que contesta `<Dial>`/`dial` (con los mismos encabezados SIP y Flex que por turnos) o
+`<Hangup>`. Detalle y latencias en [ai-and-voice.md](ai-and-voice_es.md#voz-en-tiempo-real).
+
+- Detrás de un proxy, permití el upgrade a WebSocket en `/api/v1/` con timeouts de lectura largos (ver
+  [deployment.md](deployment_es.md)).
+- `tts`, `voice` y `language` del proveedor no se usan en modo stream (habla Parla).
+- El saludo y lo que sigue al stream viven en memoria por llamada: la llamada tiene que quedar en la misma réplica.
 
 ## Probar sin cuentas reales
 

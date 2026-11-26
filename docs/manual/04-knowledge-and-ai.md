@@ -141,6 +141,11 @@ It's used in the Try it panel (microphone and calls), in the web widget with mic
 The same privacy rule applies: with an external provider (OpenAI, Deepgram, ElevenLabs, Google Cloud), *the audio
 of what the person says* or *the text of the replies* is sent to that company. Parla warns you on screen.
 
+**Real-time voice.** The test chat's **Call (voice)** and the widget microphone talk to the server over a live
+audio connection: the bot starts answering with the first sentence and stops as soon as you talk over it. On the
+phone it's an option of the channel (`mode: "stream"`). Details in
+[ai-and-voice.md](../ai-and-voice.md#real-time-voice).
+
 If the voice buttons don't appear or the microphone doesn't work, see
 [Troubleshooting](10-troubleshooting.md#voice-doesnt-work).
 

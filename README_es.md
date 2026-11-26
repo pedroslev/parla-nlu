@@ -104,6 +104,9 @@ tema: inicio, menú ⋯ o pantalla de entrada).
 - Canales de WhatsApp (Cloud API) y Telegram, con botones, archivos y respuestas desde la Bandeja ([docs/channels_es.md](docs/channels_es.md)).
 - Llamadas telefónicas por Twilio o jambonz (código abierto, se puede instalar en casa): voz y teclado (DTMF), botones
   como menú «marcá 1 para…», interrupción, transferencia a una persona y voz piper local como opción ([docs/channels_es.md](docs/channels_es.md#llamadas-telefónicas-twilio-y-jambonz)).
+- Voz en tiempo real (modo stream del teléfono, llamada en el navegador, widget): ASR en streaming, respuesta desde la
+  primera oración y barge-in de verdad por WebSocket, en menos de un segundo con proveedores en streaming
+  ([docs/ai-and-voice.md](docs/ai-and-voice_es.md#voz-en-tiempo-real)).
 - El bot escribe primero: una API de salida, **campañas** desde un CSV (plantillas de WhatsApp, Telegram o llamadas
   salientes, con fecha de inicio, ritmo, horario de silencio, estados de entrega y conversiones), recordatorios desde
   un flujo y bajas automáticas («STOP», «BAJA») ([docs/outbound_es.md](docs/outbound_es.md)).

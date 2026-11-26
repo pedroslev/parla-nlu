@@ -492,7 +492,12 @@ def chat(cfg, messages, schema=None, timeout=45, max_tokens=300, stream=None):
                         labels={"provider": provider}, **{"gen_ai.operation.name": "chat", "gen_ai.system": system,
                         "gen_ai.provider.name": system, "gen_ai.request.model": cfg.get("model"),
                         "gen_ai.request.max_tokens": max_tokens, "gen_ai.request.temperature": temperature}):
-        return _chat(cfg, messages, schema, timeout, max_tokens, temperature, _streamer(stream))
+        sink = _streamer(stream)
+        try:
+            return _chat(cfg, messages, schema, timeout, max_tokens, temperature, sink)
+        except Cancelled:       # la persona interrumpió (voz en tiempo real): lo escrito hasta ahí es la respuesta
+            shown = (STREAM.last or {}).get("shown", "")
+            return ({stream: shown} if isinstance(stream, str) else {"text": shown}) if schema else shown.strip()
 
 
 def _chat(cfg, messages, schema, timeout, max_tokens, temperature, sink=None):
@@ -536,6 +541,11 @@ def _chat(cfg, messages, schema, timeout, max_tokens, temperature, sink=None):
 
 STREAM = threading.local()      # .sink = función(evento) del turno en curso (server.converse la pone si alguien escucha)
 _streams = [0]
+CANCEL = set()                  # temas «session:<agente>:<sesión>» cuyo turno se cortó (barge-in): el stream se corta ahí
+
+
+class Cancelled(Exception):
+    pass
 
 
 def _lines(response, timeout):
@@ -597,8 +607,11 @@ def _streamer(stream):
     sid, field, state = _streams[0], None if stream is True else stream, {"raw": "", "shown": ""}
     STREAM.last = state
     state["id"] = sid
+    topic = getattr(STREAM, "topic", None)
 
     def sink(piece):
+        if topic in CANCEL:
+            raise Cancelled()
         state["raw"] += piece or ""
         now = visible(state["raw"], field)
         if len(now) > len(state["shown"]) and now.startswith(state["shown"]):

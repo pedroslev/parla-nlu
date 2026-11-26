@@ -8,6 +8,7 @@
   cuando no queda nadie); conversaciones distintas corren en paralelo.
 - Canales de empuje sobre la misma conexión: WebSocket (RFC 6455) en /api/v1/bots/{bot}/ws y SSE en
   /api/v1/bots/{bot}/sessions/{sid}/stream, /api/agents/{id}/inbox/stream y /api/agents/{id}/campaigns/stream.
+  Voz en tiempo real (voicestream.py): /api/v1/bots/{bot}/voice/ws y /api/v1/bots/{bot}/phone/{twilio|jambonz}/stream.
   Autorizan corriendo el pedido de polling equivalente por el Handler (las mismas reglas, sin duplicarlas) y
   después escuchan el bus (bus.py). El protocolo está en docs/api.md.
 """
@@ -36,7 +37,7 @@ WS_MAX = int(os.environ.get("PARLA_WS_MAX_MESSAGE") or 1_000_000)
 WS_IDLE, PING, SSE_PING = 120, 30, 15
 GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 POOL = concurrent.futures.ThreadPoolExecutor(THREADS, thread_name_prefix="parla-http")
-STATS = {"http": 0, "ws": 0, "sse": 0, "inflight": 0}
+STATS = {"http": 0, "ws": 0, "sse": 0, "voice": 0, "inflight": 0}
 _locks = {}                  # (bot, sessionId) -> [asyncio.Lock, esperando]: la fila de cada conversación activa
 _static = {}                 # archivo -> (mtime, bytes)
 PORT = [8000]
@@ -145,6 +146,7 @@ def _static_file(name):
 
 EVENTS = re.compile(r"/api/v1/bots/([^/]+)/(events|audio)")
 WS = re.compile(r"/api/v1/bots/([^/]+)/ws")
+VOICE_WS = re.compile(r"/api/v1/bots/([^/]+)/(?:voice/ws|phone/(twilio|jambonz)/stream)")
 SSE = re.compile(r"/api/v1/bots/([^/]+)/sessions/([^/]+)/stream|/api/agents/([0-9a-f]{8})/(inbox|campaigns)/stream")
 
 
@@ -187,6 +189,10 @@ async def _one(reader, writer, peer):
     path = target.split("?", 1)[0]
     if method == "GET" and (headers.get("Upgrade") or "").lower() == "websocket" and WS.fullmatch(path):
         await websocket(reader, writer, headers, peer, WS.fullmatch(path).group(1))
+        return False
+    if method == "GET" and (headers.get("Upgrade") or "").lower() == "websocket" and VOICE_WS.fullmatch(path):
+        from . import voicestream              # voz en tiempo real: navegador, Twilio Media Streams, jambonz listen
+        await voicestream.serve(reader, writer, headers, peer, target, *VOICE_WS.fullmatch(path).groups())
         return False
     if method == "GET" and SSE.fullmatch(path):
         await sse(writer, target, headers, peer, SSE.fullmatch(path))
@@ -324,9 +330,10 @@ async def read_frame(reader):
     return fin, op, data
 
 
-async def messages(reader):
-    """Los mensajes de texto del cliente ya armados (fragmentos juntos); contesta ping y cierra con el código que va."""
-    buf = None
+async def messages(reader, binary=False):
+    """Los mensajes de texto del cliente ya armados (fragmentos juntos); contesta ping y cierra con el código que va.
+    binary: también los binarios (audio de voicestream.py), como ("binary", bytes)."""
+    buf, kind = None, 1
     while True:
         fin, op, data = await asyncio.wait_for(read_frame(reader), WS_IDLE)
         if op == 8:
@@ -344,14 +351,17 @@ async def messages(reader):
         elif op in (1, 2):
             if buf is not None:
                 raise Closed(1002, "mensaje nuevo a mitad de otro")
-            if op == 2:
+            if op == 2 and not binary:
                 raise Closed(1003, "solo mensajes de texto (JSON)")
-            buf = data
+            buf, kind = data, op
         else:
             raise Closed(1002, "opcode desconocido")
         if len(buf) > WS_MAX:
             raise Closed(1009, "mensaje demasiado grande")
-        if fin:
+        if fin and kind == 2:
+            buf, data = None, buf
+            yield ("binary", data)
+        elif fin:
             try:
                 text = buf.decode("utf-8")
             except UnicodeDecodeError:
@@ -365,24 +375,43 @@ def _ours(headers, origin):
     return host in {"127.0.0.1:%d" % PORT[0], "localhost:%d" % PORT[0]} | set(auth.hosts())
 
 
-async def websocket(reader, writer, headers, peer, ref):
+def handshake_ok(headers):
     key = headers.get("Sec-WebSocket-Key") or ""
-    if headers.get("Sec-WebSocket-Version") != "13" or "upgrade" not in (headers.get("Connection") or "").lower() or len(base64.b64decode(key + "==")[:16]) != 16:
+    try:
+        return headers.get("Sec-WebSocket-Version") == "13" and "upgrade" in (headers.get("Connection") or "").lower() and len(base64.b64decode(key + "==")[:16]) == 16
+    except ValueError:
+        return False
+
+
+def upgrade(writer, headers):
+    accept = base64.b64encode(hashlib.sha1(((headers.get("Sec-WebSocket-Key") or "") + GUID).encode()).digest())
+    writer.write(b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n" % accept)
+
+
+async def authorize(writer, headers, peer, ref):
+    """¿Puede abrir un WebSocket de este bot? Las reglas de siempre: Origin propio o del widget, y sesión, API key o el
+    widget público. Si no, ya contestó el error."""
+    if not handshake_ok(headers):
         writer.write(_simple(400, "handshake de WebSocket inválido"))
-        return
+        return False
     origin, app = headers.get("Origin"), _app()
     if origin and not _ours(headers, origin) and not await run(app.Handler.widget_origin, None, "/api/v1/bots/%s/events" % ref, origin):
         writer.write(_simple(403, "pedido de otro sitio web rechazado"))       # Cross-Site WebSocket Hijacking
-        return
+        return False
     raw = await run(call, "GET", "/api/v1/bots/%s" % ref, headers, b"", peer)  # quién es: sesión, API key o el widget público
     status = _parse(raw)[0]
     if status != 200:
         agent = await run(app.find_bot, urllib.parse.unquote(ref))
         if status not in (401, 403) or not ((agent or {}).get("widget") or {}).get("enabled"):
             writer.write(raw)
-            return
-    accept = base64.b64encode(hashlib.sha1((key + GUID).encode()).digest())
-    writer.write(b"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n" % accept)
+            return False
+    return True
+
+
+async def websocket(reader, writer, headers, peer, ref):
+    if not await authorize(writer, headers, peer, ref):
+        return
+    upgrade(writer, headers)
     STATS["ws"] += 1
     sock = _Socket(writer, headers, peer, ref)
     pinger = asyncio.create_task(sock.pinger())
@@ -520,7 +549,7 @@ def serve(host, port, ready=None):
 
 def gauges():
     """Para /metrics."""
-    return {"connections": [({"kind": k}, STATS[k]) for k in ("http", "ws", "sse")],
+    return {"connections": [({"kind": k}, STATS[k]) for k in ("http", "ws", "sse", "voice")],
             "queues": [({"queue": "executor"}, POOL._work_queue.qsize()), ({"queue": "inflight"}, STATS["inflight"]),
                        ({"queue": "sessions"}, len(_locks)), ({"queue": "bus_subscribers"}, bus.subscribers())]}
 

@@ -176,6 +176,9 @@ EN = {
     "NameError: definí una función run(inputs) que devuelva un objeto": "NameError: define a run(inputs) function that returns an object",
     "Error: definí una función run(inputs) que devuelva un objeto": "Error: define a run(inputs) function that returns an object",
     # ---------- IA (llm.py) ----------
+    "WAV de %d bits: se espera 16": "%d-bit WAV: 16 expected",
+    "el proveedor rechazó el WebSocket: %s": "the provider rejected the WebSocket: %s",
+    "mandá primero {\"type\": \"start\", \"sessionId\": …}": "send {\"type\": \"start\", \"sessionId\": …} first",
     "el servidor respondió %s (%s): %s": "the server responded %s (%s): %s",
     "el servidor respondió %s (%s)": "the server responded %s (%s)",
     "el servidor respondió %s: %s": "the server responded %s: %s",
@@ -566,6 +569,9 @@ PT = {
     "NameError: definí una función run(inputs) que devuelva un objeto": "NameError: defina uma função run(inputs) que retorne um objeto",
     "Error: definí una función run(inputs) que devuelva un objeto": "Error: defina uma função run(inputs) que retorne um objeto",
     # ---------- IA (llm.py) ----------
+    "WAV de %d bits: se espera 16": "WAV de %d bits: era esperado 16",
+    "el proveedor rechazó el WebSocket: %s": "o provedor recusou o WebSocket: %s",
+    "mandá primero {\"type\": \"start\", \"sessionId\": …}": "envie primeiro {\"type\": \"start\", \"sessionId\": …}",
     "el servidor respondió %s (%s): %s": "o servidor respondeu %s (%s): %s",
     "el servidor respondió %s (%s)": "o servidor respondeu %s (%s)",
     "el servidor respondió %s: %s": "o servidor respondeu %s: %s",

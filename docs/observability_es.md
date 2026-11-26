@@ -41,6 +41,9 @@ y `_sum`, así que «llamadas por resultado» es `rate(<nombre>_count{outcome="e
 | `parla_cost_total` | counter | `agent`, `kind`, `provider`, `currency` | El mismo uso con el precio de la tabla en ese momento (sin el uso sin precio ni el costo fijo repartido; el reporte de Costos recalcula con los precios de hoy). |
 | `parla_asr_duration_seconds` | histogram | `provider`, `outcome` | Voz a texto (`local`, `openai`, `deepgram`, `elevenlabs`, `google`). |
 | `parla_tts_duration_seconds` | histogram | `provider`, `outcome` | Texto a voz. Las frases fijas ya pregeneradas no cuentan. |
+| `parla_voice_e2e_latency_seconds` | histogram | `channel`, `asr`, `tts` | Voz en tiempo real: fin de lo que dice la persona (con el silencio de fin de turno) hasta el primer byte de audio que sale. Objetivo < 1 s con proveedores en streaming. |
+| `parla_voice_tts_first_byte_seconds` | histogram | `provider` | Voz en tiempo real: de una oración que va al TTS a su primer byte de audio. |
+| `parla_voice_barge_ins_total` | counter | `channel` | Voz en tiempo real: la persona habló encima del bot y el bot se calló. |
 | `parla_http_step_duration_seconds` | histogram | `outcome` | Pasos `http` y herramientas HTTP del paso agente. |
 | `parla_function_duration_seconds` | histogram | `language`, `outcome` | Ejecuciones de funciones (pasos y herramientas del paso agente). |
 | `parla_knowledge_search_duration_seconds` | histogram | `outcome` | Búsquedas en la base de conocimiento. |
@@ -48,7 +51,7 @@ y `_sum`, así que «llamadas por resultado» es `rate(<nombre>_count{outcome="e
 | `parla_webhook_deliveries_total` | counter | `outcome` | Intentos de los webhooks de la derivación: `delivered`, `retry` (se va a reintentar), `dead` (sin más reintentos). |
 | `parla_webhook_delivery_duration_seconds` | histogram | | Ida y vuelta HTTP del webhook (cada intento que tuvo respuesta o venció). |
 | `parla_csat_score` | histogram | `agent` | Respuestas a la encuesta CSAT, buckets de 1 a 5 (promedio: `_sum / _count`). |
-| `parla_connections` | gauge | `kind` | Conexiones abiertas: `http` (keep-alive), `ws`, `sse`. |
+| `parla_connections` | gauge | `kind` | Conexiones abiertas: `http` (keep-alive), `ws`, `sse`, `voice` (WebSockets de voz en tiempo real). |
 | `parla_queue_depth` | gauge | `queue` | `executor` (pedidos esperando un hilo), `inflight`, `sessions` (charlas con un turno en curso o en fila), `bus_subscribers`, `db_write`, `embed`, `webhooks` (entregas de webhooks de la derivación en cola o saliendo). |
 | `parla_embed_batches_total`, `parla_embed_items_total` | counter | | Llamadas de embeddings a ONNX y textos: textos / llamadas = tamaño medio del lote. |
 | `parla_db_commits_total`, `parla_db_statements_total` | counter | | Group commits de SQLite y sus escrituras: sentencias / commits = tamaño medio del grupo. |

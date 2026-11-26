@@ -434,8 +434,55 @@ hints. Languages `es`/`en`/`pt` are mapped for each provider.
   model and voice, so switching never plays stale audio.
 - Each voice call has a 30 s timeout. Keys and masking work as in [Keys](#keys).
 - **Phone:** `channels.phone.tts: "parla"` uses the agent's `voice.tts` (piper or a cloud provider); `"provider"` is
-  still Twilio/jambonz's own voice. Speech recognition on the phone is always Twilio/jambonz.
+  still Twilio/jambonz's own voice. In turn mode speech recognition on the phone is Twilio/jambonz; in stream mode
+  ([Real-time voice](#real-time-voice)) it's the agent's `voice.asr`.
 - **Privacy and cost:** cloud ASR receives the person's audio and the vocabulary hints; cloud TTS receives the bot's
   reply text. Usage is billed by the provider to the key owner.
 - API: `POST /api/voice/speak` and `POST /api/voice/voices` take an `agent` (or an unsaved `voice` to test);
   `POST /api/agents/{id}/voice/transcribe` uses the agent's ASR. See [api.md](api.md).
+
+## Real-time voice
+
+Sub-second replies and real barge-in, over WebSocket (`parla/voicestream.py`). Used by **Call (voice)** in the test
+chat and the widget microphone (both fall back to the per-turn mode if the WebSocket doesn't answer) and by the phone
+with `channels.phone.mode: "stream"` ([channels.md](channels.md#real-time-stream-mode)). Protocol in
+[api.md](api.md#real-time-voice-websocket).
+
+```
+audio in ─► ASR stream ──final──► turn (POST /events, same rules) ──AI tokens via the bus──► sentence chunker
+ (μ-law/L16/PCM16 → 16 kHz)  │                                                                 │
+                             └─partial/speech while the bot talks─► barge-in                   ▼
+audio out ◄── channel format (μ-law 8 kHz / L16 8 kHz / PCM16 16 kHz) ◄── TTS per sentence (streaming HTTP)
+```
+
+- **ASR.** `deepgram`: Deepgram live (`/v1/listen` WebSocket) with `interim_results`, `endpointing` (300 ms),
+  `utterance_end_ms`, `vad_events` and the bot's words as `keyterm`. Any other provider (`local`, `openai`,
+  `elevenlabs`, `google`): an energy VAD in Python cuts each utterance (default 600 ms of silence) and it's
+  transcribed right away with the usual per-utterance ASR (faster-whisper through the voice worker pool, or the
+  provider's batch API). No interim results there, so barge-in is triggered by the VAD. OpenAI Realtime and
+  ElevenLabs realtime STT aren't wired yet.
+- **TTS.** As soon as the first sentence of the reply exists (AI tokens stream through the bus; NLU replies are
+  whole), each sentence goes to TTS. `openai` (`response_format: "pcm"`), `deepgram` Aura (`container=none`) and
+  `elevenlabs` (`/stream`, `pcm_16000`) stream: audio goes out with the first chunk. piper, Google and the
+  pre-generated phrase cache produce the whole sentence. All of it is converted to the channel's format (pure
+  numpy μ-law and resampling: `audioop` is gone in Python 3.13).
+- **Barge-in.** While the bot speaks Parla keeps listening. Speech detected (VAD) or a Deepgram partial with ≥
+  `barge_in_chars` characters stops the audio at once (`clear` on Twilio, `killAudio` on jambonz, `clear` in the
+  browser), cuts the AI stream of that turn (the reply keeps what was written) and the history gets an event «La
+  persona interrumpió al bot después de «…»» with what was heard. Then the new utterance is processed.
+- **Config** (optional, per agent): `"voice": {"stream": {"barge_in": true, "barge_in_chars": 2, "silence_ms": 600,
+  "idle_seconds": 8}}`. `silence_ms` is the end of turn (300 with Deepgram); `idle_seconds` re-prompts on the phone
+  like the Gather did (the third silence hangs up).
+- **Costs and metrics** as always: ASR seconds (Deepgram: streamed seconds) and TTS characters per conversation;
+  `parla_voice_e2e_latency_seconds`, `parla_voice_tts_first_byte_seconds`, `parla_voice_barge_ins_total`
+  ([observability.md](observability.md)).
+
+**Latency** (end of the person's speech → first audio byte out, includes the end-of-turn silence):
+
+| Setup | Measured |
+|---|---|
+| Deepgram live + ElevenLabs streaming (fake servers in `tests/test_voice_stream.py`, NLU reply) | ~0.34 s (300 ms of it is endpointing); real providers add their network/processing time — verify with your account |
+| Local, phone (VAD 600 ms + fake ASR/TTS) | ~0.62 s |
+| Local, real models on an Apple Silicon laptop: whisper `base` ~0.40 s for 2 s of speech, piper ~0.22 s for the first sentence | ~1.2 s with `silence_ms` 600, ~1.0 s with 400; fixed phrases from the cache skip piper |
+
+With an LLM reply add the model's time to the first sentence. On a slower CPU use `PARLA_WHISPER=tiny` or a cloud ASR.

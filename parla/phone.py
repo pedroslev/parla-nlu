@@ -3,7 +3,8 @@
 Configuración (no secreta) en el JSON del agente:
     "channels": {"phone": {"enabled": true, "provider": "twilio" | "jambonz", "language": "es-AR", "voice": "Polly.Mia",
                            "handoff_to": "+5491112345678" | "sip:mesa@pbx.midominio.com", "tts": "provider" | "parla",
-                           "finish_on_key": "#", "greeting": "Hola, ¿en qué te ayudo?"}}
+                           "finish_on_key": "#", "greeting": "Hola, ¿en qué te ayudo?", "mode": "turns" | "stream"}}
+«mode» stream: el audio va en vivo por WebSocket (Twilio Media Streams / jambonz listen) y lo atiende voicestream.py.
 Secretos en la bóveda (vault.py): ver SECRETS.
 
 Cada llamada es una conversación «call-<CallSid>» del canal «phone»: el proveedor pide un webhook al empezar, otro con
@@ -54,6 +55,15 @@ SORRY = {"es": "Perdón, tuve un problema. Probá llamar de nuevo.", "en": "Sorr
 # ponytail: clave de los audios y silencios en memoria: se pierden al reiniciar y no sirven con varias réplicas
 _KEY = tokens.token_bytes(32)
 _silent = {}                    # sesión -> respuestas vacías seguidas
+# modo «stream» (voicestream.py): lo primero que dice el WebSocket y lo que sigue cuando se cierra (transferir o
+# cortar), por sesión. ponytail: en memoria, la llamada tiene que volver a la misma réplica (sticky por CallSid)
+_greet, _after = {}, {}
+
+
+def stash(store, sid, p):
+    store[sid] = p
+    while len(store) > 1000:          # llamadas que nunca conectaron el stream: no crece sin fin
+        store.pop(next(iter(store)))
 
 
 def _lang(language):
@@ -268,8 +278,40 @@ def _language(conf, lang):
     return own if own and _lang(own) == _lang(lang) else LANGS[_lang(lang)]
 
 
+def streaming(conf):
+    return conf.get("mode") == "stream"
+
+
+def stream_url(agent, provider, sid):
+    """wss://…/phone/<proveedor>/stream. Twilio firma la URL (sin query: <Stream> no la acepta); jambonz lleva un token."""
+    url = re.sub(r"^http", "ws", _hook(agent, provider, "stream"))
+    return url if provider == "twilio" else url + "?t=" + stream_token(agent["id"], sid)
+
+
+def stream_token(agent_id, sid, now=None):
+    payload = _b64(json.dumps([agent_id, sid, int((now or time.time()) + AUDIO_TTL)]).encode())
+    return payload + "." + _sign(payload)
+
+
+def stream_sid(agent_id, token, now=None):
+    """La sesión de un token de stream válido, sin vencer y de este agente; None si no."""
+    payload, _, sig = str(token or "").partition(".")
+    if not hmac.compare_digest(sig.encode(), _sign(payload).encode()):
+        return None
+    try:
+        owner, sid, expires = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
+    except (ValueError, TypeError):
+        return None
+    return sid if owner == agent_id and expires >= (now or time.time()) else None
+
+
 def twiml(agent, conf, p):
     lang = _language(conf, p["lang"])
+    if streaming(conf) and p["then"] == "gather" and p.get("sid"):     # audio en vivo: lo dice el WebSocket
+        stash(_greet, p["sid"], p)
+        return ('<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url=%s><Parameter name="sid" value=%s/></Stream>'
+                '</Connect><Redirect method="POST">%s</Redirect></Response>' % (
+                    quoteattr(stream_url(agent, "twilio", p["sid"])), quoteattr(p["sid"]), escape(_hook(agent, "twilio", "after")))).encode()
     if conf.get("tts") == "parla":
         speech = "".join("<Play>%s</Play>" % escape(_audio_url(agent, s, p["lang"])) for s in p["say"])
     else:
@@ -298,6 +340,15 @@ def twiml(agent, conf, p):
 
 def verbs(agent, conf, p):
     lang, keys = _language(conf, p["lang"]), vault.values(agent["id"])
+    if streaming(conf) and p["then"] == "gather" and p.get("sid"):     # listen: L16 8 kHz de ida y vuelta, teclas por el socket
+        stash(_greet, p["sid"], p)
+        hook = _hook(agent, "jambonz", "after")
+        listen = {"verb": "listen", "url": stream_url(agent, "jambonz", p["sid"]), "sampleRate": 8000, "passDtmf": True,
+                  "bidirectionalAudio": {"enabled": True, "streaming": True, "sampleRate": 8000}, "metadata": {"sid": p["sid"]}}
+        if keys.get("JAMBONZ_BASIC_USER") and keys.get("JAMBONZ_BASIC_PASSWORD"):
+            listen["wsAuth"] = {"username": keys["JAMBONZ_BASIC_USER"], "password": keys["JAMBONZ_BASIC_PASSWORD"]}
+            hook = {"url": hook, "method": "POST", "username": keys["JAMBONZ_BASIC_USER"], "password": keys["JAMBONZ_BASIC_PASSWORD"]}
+        return [dict(listen, actionHook=hook)]
     if not p["say"]:
         prompt = {}
     elif conf.get("tts") == "parla":
@@ -386,6 +437,16 @@ def webhook(headers, rfile, method, ref, provider, action, path, length):
                     app.end_session(agent_id, sid)
                 _silent.pop(sid, None)
         return 200, b"{}" if provider == "jambonz" else b"", "application/json" if provider == "jambonz" else "text/plain"
+    if action == "after":            # se cerró el stream (voicestream.py): transferir, cortar o volver a escuchar
+        p = _after.pop(sid, None)
+        if p is None:
+            p = {"say": [], "then": "hangup", "lang": "es"}
+            with channels._session_lock(agent_id + "/" + sid):
+                if (app.load_session(agent_id, sid) or {}).get("ended") is False:
+                    app.end_session(agent_id, sid)
+        p = dict(p, say=[], sid=sid)
+        return (200, twiml(agent, conf, p), "text/xml") if provider == "twilio" else (
+            200, json.dumps(verbs(agent, conf, p), ensure_ascii=False).encode(), "application/json")
     with channels._session_lock(agent_id + "/" + sid), telemetry.span("phone.turn", **{
             "parla.agent.id": agent_id, "parla.phone.provider": provider, "parla.phone.action": action or "start"}):
         try:
@@ -402,15 +463,35 @@ def webhook(headers, rfile, method, ref, provider, action, path, length):
             lang = ((app.load_session(agent_id, sid) or {}).get("state") or {}).get("lang") or "es"
             p = _close(app, agent, sid, {"say": [SORRY[_lang(lang)]], "then": "hangup", "lang": lang})
     channels._note(agent_id, "phone", last_out=time.strftime("%Y-%m-%dT%H:%M:%S"))
+    p["sid"] = sid
     if provider == "twilio":
         return 200, twiml(agent, conf, p), "text/xml"
     return 200, json.dumps(verbs(agent, conf, p), ensure_ascii=False).encode(), "application/json"
+
+
+def stream_turn(agent, conf, sid, kind, text=None):
+    """Un turno del modo stream (voicestream.py): kind «message», «digits» o «silence». Como el webhook: con el lock
+    de la sesión y, si algo falla, se disculpa y corta."""
+    app, agent_id = auth._app(), agent["id"]
+    with channels._session_lock(agent_id + "/" + sid), telemetry.span("phone.turn", **{
+            "parla.agent.id": agent_id, "parla.phone.provider": conf.get("provider") or "twilio", "parla.phone.action": "stream"}):
+        try:
+            if kind == "digits":
+                text = pick(app.load_session(agent_id, sid), None, text)
+                kind = "message" if text else "silence"
+            return plan(agent, conf, sid, kind, text)
+        except Exception as error:  # noqa: BLE001
+            channels._log(agent_id, "phone", error)
+            lang = ((app.load_session(agent_id, sid) or {}).get("state") or {}).get("lang") or "es"
+            return _close(app, agent, sid, {"say": [SORRY[_lang(lang)]], "then": "hangup", "lang": lang})
+        finally:
+            channels._note(agent_id, "phone", last_in=time.strftime("%Y-%m-%dT%H:%M:%S"))
 
 
 def info(agent):
     """Lo que muestra «Canales → Teléfono»: proveedor, webhooks para pegar, claves y estado."""
     conf, names = channels.config(agent, "phone"), set(vault.names(agent["id"]))
     provider = conf.get("provider") if conf.get("provider") in PROVIDERS else "twilio"
-    return {"enabled": bool(conf.get("enabled")), "provider": provider, "webhook": _hook(agent, provider),
+    return {"enabled": bool(conf.get("enabled")), "provider": provider, "webhook": _hook(agent, provider), "mode": "stream" if streaming(conf) else "turns",
             "status_webhook": _hook(agent, provider, "status"),
             "secrets": {n: n in names for p in PROVIDERS for n in SECRETS[p]}, "status": dict(channels.STATUS.get((agent["id"], "phone")) or {})}

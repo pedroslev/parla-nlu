@@ -265,6 +265,28 @@ regex, "the fallback must ask back", the knowledge support check) run at the end
 was streamed, a `replace` event with the same `stream` id carries the final text (`""` = remove it). The `reply` /
 `messages` event always has the final text, so clients without streaming see exactly what they saw before.
 
+### Real-time voice WebSocket
+
+`GET /api/v1/bots/{bot}/voice/ws` (same authentication and `Origin` rules as `/ws`, public widget included). Binary
+frames are audio, PCM16 little-endian mono 16 kHz, both ways (send ~20–100 ms per frame). Text frames are JSON.
+Engine and latency: [ai-and-voice.md](ai-and-voice.md#real-time-voice).
+
+```text
+← {"type": "ready", "rate": 16000}
+→ {"type": "start", "sessionId": "cliente-42", "language": "es", "channel": "web", "replay": true}
+   (the conversation must exist: start it with POST /events; replay: say aloud the bot's last messages)
+→ <binary PCM16>  …                                    ← <binary PCM16> (the bot's voice, queue it)
+← {"type": "partial", "text": "quiero una"}             (Deepgram only)
+← {"type": "transcript", "text": "quiero una muzza"}    (end of the person's turn; runs as a POST /events message)
+← {"type": "speaking", "latency_ms": 412}               (first audio byte of the reply)
+← {"type": "reply", "status": 200, "body": {...same as POST /events...}}
+← {"type": "clear"}                                     (barge-in: stop playback now, drop what's queued)
+→ {"type": "stop"}
+```
+
+The phone streams (`/phone/twilio/stream`, `/phone/jambonz/stream`) are the providers' protocols, not this one: see
+[channels.md](channels.md#real-time-stream-mode).
+
 ### `DELETE /api/v1/bots/{bot}/sessions/{sessionId}`
 
 ```json

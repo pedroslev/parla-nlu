@@ -431,9 +431,56 @@ andan igual.
   caché incluye proveedor, modelo y voz, así que al cambiar nunca suena un audio viejo.
 - Cada llamada de voz tiene un timeout de 30 s. Las keys y cómo se tapan, igual que en [Claves](#claves).
 - **Teléfono:** `channels.phone.tts: "parla"` usa el `voice.tts` del agente (piper o un proveedor en la nube);
-  `"provider"` sigue siendo la voz propia de Twilio/jambonz. El reconocimiento de voz en el teléfono lo hace siempre
-  Twilio/jambonz.
+  `"provider"` sigue siendo la voz propia de Twilio/jambonz. En modo por turnos el reconocimiento de voz en el
+  teléfono lo hace Twilio/jambonz; en modo stream ([Voz en tiempo real](#voz-en-tiempo-real)), el `voice.asr` del agente.
 - **Privacidad y costo:** el ASR en la nube recibe el audio de la persona y las pistas de vocabulario; el TTS en la
   nube recibe el texto de la respuesta del bot. El proveedor le cobra el uso al dueño de la key.
 - API: `POST /api/voice/speak` y `POST /api/voice/voices` aceptan un `agent` (o un `voice` sin guardar para probar);
   `POST /api/agents/{id}/voice/transcribe` usa el ASR del agente. Ver [api.md](api_es.md).
+
+## Voz en tiempo real
+
+Respuestas en menos de un segundo y barge-in de verdad, por WebSocket (`parla/voicestream.py`). La usan **Llamada
+(voz)** del chat de prueba y el micrófono del widget (los dos vuelven al modo por turnos si el WebSocket no contesta) y
+el teléfono con `channels.phone.mode: "stream"` ([channels.md](channels_es.md#modo-stream-en-tiempo-real)). Protocolo
+en [api.md](api_es.md#websocket-de-voz-en-tiempo-real).
+
+```
+audio ─► ASR en streaming ──final──► turno (POST /events, mismas reglas) ──tokens de la IA por el bus──► oraciones
+ (μ-law/L16/PCM16 → 16 kHz)  │                                                                            │
+                             └─parcial/voz mientras habla el bot─► barge-in                               ▼
+audio ◄── formato del canal (μ-law 8 kHz / L16 8 kHz / PCM16 16 kHz) ◄── TTS por oración (HTTP en streaming)
+```
+
+- **ASR.** `deepgram`: Deepgram live (WebSocket `/v1/listen`) con `interim_results`, `endpointing` (300 ms),
+  `utterance_end_ms`, `vad_events` y las palabras del bot como `keyterm`. Cualquier otro proveedor (`local`,
+  `openai`, `elevenlabs`, `google`): un VAD por energía en Python corta cada frase (600 ms de silencio por defecto) y
+  se transcribe en el momento con el ASR por frase de siempre (faster-whisper por el pool de modelos de voz, o la API
+  batch del proveedor). Ahí no hay parciales: el barge-in lo dispara el VAD. OpenAI Realtime y el STT realtime de
+  ElevenLabs todavía no están conectados.
+- **TTS.** Apenas existe la primera oración de la respuesta (los tokens de la IA llegan por el bus; las respuestas del
+  NLU vienen enteras), cada oración va al TTS. `openai` (`response_format: "pcm"`), `deepgram` Aura
+  (`container=none`) y `elevenlabs` (`/stream`, `pcm_16000`) transmiten: el audio sale con el primer pedazo. piper,
+  Google y la caché de frases pregeneradas dan la oración entera. Todo se convierte al formato del canal (μ-law y
+  remuestreo con numpy: `audioop` ya no está en Python 3.13).
+- **Barge-in.** Mientras habla el bot, Parla sigue escuchando. Voz detectada (VAD) o un parcial de Deepgram con ≥
+  `barge_in_chars` letras corta el audio al instante (`clear` en Twilio, `killAudio` en jambonz, `clear` en el
+  navegador), corta el stream de la IA de ese turno (la respuesta queda con lo escrito) y el historial suma un evento
+  «La persona interrumpió al bot después de «…»» con lo que llegó a escuchar. Después se atiende la frase nueva.
+- **Config** (opcional, por agente): `"voice": {"stream": {"barge_in": true, "barge_in_chars": 2, "silence_ms": 600,
+  "idle_seconds": 8}}`. `silence_ms` es el fin del turno (300 con Deepgram); `idle_seconds` repregunta en el teléfono
+  como hacía el Gather (al tercer silencio corta).
+- **Costos y métricas** como siempre: segundos de ASR (Deepgram: los segundos transmitidos) y letras de TTS por
+  conversación; `parla_voice_e2e_latency_seconds`, `parla_voice_tts_first_byte_seconds`,
+  `parla_voice_barge_ins_total` ([observability.md](observability_es.md)).
+
+**Latencia** (fin de lo que dice la persona → primer byte de audio que sale; incluye el silencio de fin de turno):
+
+| Armado | Medido |
+|---|---|
+| Deepgram live + ElevenLabs en streaming (servidores falsos de `tests/test_voice_stream.py`, respuesta del NLU) | ~0,34 s (300 ms son el endpointing); los proveedores reales suman su red y proceso: verificalo con tu cuenta |
+| Local, teléfono (VAD 600 ms + ASR/TTS falsos) | ~0,62 s |
+| Local, modelos reales en una laptop Apple Silicon: whisper `base` ~0,40 s para 2 s de voz, piper ~0,22 s la primera oración | ~1,2 s con `silence_ms` 600, ~1,0 s con 400; las frases fijas de la caché no pasan por piper |
+
+Con una respuesta de la IA sumá lo que tarda el modelo en la primera oración. En una CPU más lenta, `PARLA_WHISPER=tiny`
+o un ASR en la nube.

@@ -1657,6 +1657,7 @@ async function startVoiceCall(ctx) {    // escucha → pasa a texto → responde
   const live = () => callView === view && call === me && agent?.id === id;
   const set = (st) => { if (live() && view.state !== st) { view.state = st; renderChat(); } };
   const fail = (msg) => { if (callView === view) { view.error = msg; renderChat(); } };
+  if (await streamCall(ctx, view, id)) return;   // voz en tiempo real si el servidor la tiene; si no, por turnos
   let me = null;
   try { me = await window.parlaVoice.openCall({ ctx, agent: id }); }
   catch (err) { ctx?.close().catch(() => {}); view.state = 'failed'; return fail(err.message); }
@@ -1702,6 +1703,32 @@ async function startVoiceCall(ctx) {    // escucha → pasa a texto → responde
     pending = said(before);
   }
   if (callView === view) hangUp();       // cambió de agente o falló 3 veces seguidas
+}
+async function streamCall(ctx, view, id) {   // WebSocket de voz (parla/voicestream.py): barge-in y respuesta apenas hay una oración
+  const set = (st) => { if (callView === view && view.state !== st) { view.state = st; renderChat(); } };
+  let me;
+  try {
+    me = await window.parlaVoice.stream({ ctx, url: location.origin.replace(/^http/, 'ws') + '/api/v1/bots/' + encodeURIComponent(id) + '/voice/ws',
+      onIdle: () => set('listening'), onClose: () => { if (callView === view && call === me) hangUp(); },
+      onEvent: (m) => {
+        if (callView !== view) return;
+        if (m.type === 'transcript') { view.error = ''; chat.push({ who: 'user', text: m.text }); set('thinking'); renderChat(); }
+        else if (m.type === 'reply') { if (m.status === 200) takeTurn(m.body, true); else chat.push({ who: 'problem', text: m.body?.error || String(m.status) }); renderChat(); }
+        else if (m.type === 'speaking') { set('speaking'); window.parlaVoice.log('turno en vivo: fin de la voz → primer audio', m.latency_ms, 'ms'); }
+        else if (m.type === 'clear' || m.type === 'partial') set('listening');
+        else if (m.type === 'error') { view.error = m.error; renderChat(); }
+      } });
+  } catch (err) { window.parlaVoice.log('sin voz en tiempo real, va por turnos:', err?.message || err); return false; }
+  if (callView !== view) { me.close(); return true; }
+  call = me;
+  view.aec = me.aec;
+  await startChat(startPayload());       // el saludo queda en la charla y el WebSocket lo dice (replay)
+  if (callView !== view) return true;
+  view.start = Date.now();
+  callTick = setInterval(() => { const el = $('.call-timer'); if (el) el.textContent = callClock(); }, 1000);
+  me.begin({ sessionId: session, language: lastLang || langs()[0], channel: 'prueba', environment: testEnv, replay: true });
+  set('listening');
+  return true;
 }
 const callClock = () => { const s = callView?.start ? Math.floor((Date.now() - callView.start) / 1000) : 0; return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
 function hangUp() {

@@ -45,6 +45,10 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 - **Telephony**: inbound phone calls through Twilio Programmable Voice or jambonz (open source, self-hostable),
   with speech and DTMF input, keypad menus for buttons, barge-in, transfer to a person and optional Parla (piper)
   voice. See [channels.md](channels.md#phone-calls-twilio-and-jambonz).
+- **Real-time voice**: WebSocket audio for the phone (Twilio Media Streams, jambonz `listen`), the browser call and
+  the widget: streaming ASR (Deepgram live, or VAD + per-utterance ASR), TTS from the first sentence, true barge-in
+  and latency metrics. See [ai-and-voice.md](ai-and-voice.md#real-time-voice). Next: OpenAI Realtime / ElevenLabs
+  realtime STT adapters, a trained VAD (silero), shared call state for several replicas.
 - **English and Portuguese UI**: the whole interface, server messages and the web widget in English, Spanish or
   Portuguese (pt-BR), chosen per user (next to the theme picker: home screen, ⋯ menu or sign-in screen), with an
   install default in `PARLA_LANG` (`scripts/setup.sh --lang en|es|pt`); bots whose main language is English get

@@ -51,6 +51,7 @@ file there (`parla.db`). That shapes how it's deployed:
 | `PARLA_EMBED_WORKERS`, `PARLA_EMBED_THREADS` | | Parallel embedding calls (default: cores / 2) and ONNX threads per call (default `2`). |
 | `PARLA_EMBED_BATCH`, `PARLA_EMBED_WAIT_MS` | | Texts per embedding call (default `16`) and how long to wait to fill a batch (default `0`: only what is already queued). |
 | `PARLA_VOICE_WORKERS` | | Local Whisper/Piper model sets that work at the same time (default `min(2, cores / 4)`; each one uses its own RAM). |
+| `PARLA_VOICE_MAX_SECONDS` | | Longest real-time voice stream (call, browser or widget) before Parla closes it (default `3600`). |
 | `PARLA_IDLE_TIMEOUT`, `PARLA_WS_MAX_MESSAGE` | | Seconds without data before a connection is closed (default `30`) and the largest WebSocket message (default `1000000` bytes). |
 
 The port is the argument to `app.py` (the image uses `8000`). The Ollama address isn't a variable: it's configured
@@ -272,6 +273,9 @@ from 50 up to 1,000 concurrent with 0 errors, and 5,000 idle WebSocket/SSE conne
 - Behind a proxy, WebSocket needs `Upgrade`/`Connection` forwarded, and SSE needs buffering off and a long read timeout
   (see the nginx block above; for ingress-nginx, the annotations in [kubernetes.md](kubernetes.md)). If the proxy
   can't, the widget and the UI fall back to polling on their own.
+- Real-time voice ([ai-and-voice.md](ai-and-voice.md#real-time-voice)) uses the same WebSocket setup (the 3600 s
+  timeouts above already cover a long call); the phone streams come from Twilio/jambonz, so `/api/v1/` must be
+  reachable from the internet with TLS (`wss://`). With several replicas a phone call must stay on one replica.
 - Writes to SQLite go through one writer thread that commits in groups; a write the API acknowledged is in the WAL
   (`synchronous=NORMAL`: survives a process crash; a power cut can lose the last transactions).
 

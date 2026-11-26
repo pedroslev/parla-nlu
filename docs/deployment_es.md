@@ -52,6 +52,7 @@ auditoría van en un archivo SQLite ahí mismo (`parla.db`). Eso define cómo se
 | `PARLA_EMBED_WORKERS`, `PARLA_EMBED_THREADS` | | Llamadas de embeddings en paralelo (por defecto: núcleos / 2) e hilos de ONNX por llamada (por defecto `2`). |
 | `PARLA_EMBED_BATCH`, `PARLA_EMBED_WAIT_MS` | | Textos por llamada (por defecto `16`) y cuánto esperar para llenar un lote (por defecto `0`: solo lo que ya está en la cola). |
 | `PARLA_VOICE_WORKERS` | | Juegos de modelos locales Whisper/Piper que trabajan a la vez (por defecto `min(2, núcleos / 4)`; cada uno usa su RAM). |
+| `PARLA_VOICE_MAX_SECONDS` | | El stream de voz en tiempo real más largo (llamada, navegador o widget) antes de que Parla lo cierre (por defecto `3600`). |
 | `PARLA_IDLE_TIMEOUT`, `PARLA_WS_MAX_MESSAGE` | | Segundos sin datos antes de cerrar una conexión (por defecto `30`) y el mensaje de WebSocket más grande (por defecto `1000000` bytes). |
 
 El puerto es el argumento de `app.py` (la imagen usa `8000`). La dirección de Ollama no es una variable: se
@@ -272,6 +273,10 @@ WebSocket y SSE comparten el puerto 8000, así que las probes y las rutas del in
 - Detrás de un proxy, WebSocket necesita que pase `Upgrade`/`Connection`, y SSE el buffering apagado y un timeout de
   lectura largo (el bloque de nginx de arriba; para ingress-nginx, las anotaciones de [kubernetes_es.md](kubernetes_es.md)).
   Si el proxy no puede, el widget y la interfaz vuelven solos al polling.
+- La voz en tiempo real ([ai-and-voice.md](ai-and-voice_es.md#voz-en-tiempo-real)) usa la misma configuración de
+  WebSocket (los timeouts de 3600 s de arriba ya cubren una llamada larga); los streams del teléfono vienen de
+  Twilio/jambonz, así que `/api/v1/` tiene que llegar desde internet con TLS (`wss://`). Con varias réplicas, una
+  llamada tiene que quedar en una sola.
 - Las escrituras a SQLite pasan por un solo hilo que hace commit en grupo; lo que la API confirmó ya está en el WAL
   (`synchronous=NORMAL`: sobrevive a que se caiga el proceso; un corte de luz puede perder las últimas transacciones).
 
