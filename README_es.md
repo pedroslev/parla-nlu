@@ -86,6 +86,9 @@ tema: inicio, menú ⋯ o pantalla de entrada).
   prueba contra otra versión o seguir hablando como ese cliente.
 - «Para enseñar»: lo que la gente escribió y el bot no entendió, agrupado por parecido y con la intención sugerida.
 - Analítica: contención, derivaciones, fallbacks, CSAT y abandono por flujo y pregunta.
+- Observabilidad: métricas de Prometheus en `/metrics`, trazas de OpenTelemetry por OTLP/HTTP (con atributos GenAI
+  y contexto de traza W3C hacia tus APIs) y logs de pedidos en JSON; apagado por defecto y sin el contenido de las
+  conversaciones ([docs/observability_es.md](docs/observability_es.md)).
 
 ### Publicación
 - Borrador → versiones numeradas inmutables → entornos `staging` y `production`. Diff antes de publicar,
@@ -238,6 +241,7 @@ parla/
   dates.py              fechas en lenguaje natural, por reglas
   insights.py           «para enseñar» y analítica
   runner.py             funciones en un proceso aparte
+  telemetry.py          métricas de Prometheus, trazas de OpenTelemetry, logs JSON
   vault.py              claves secretas por agente
   voice.py              voz: local o proveedores con tu key (y caché de frases pregeneradas)
   phone.py              llamadas telefónicas (Twilio, jambonz)
@@ -268,6 +272,9 @@ Todo es opcional. Copiá `.env.example` para ver los valores.
 | `PARLA_RETENTION_DAYS` | vacío | Días que se guardan las conversaciones sin movimiento, para los agentes sin `retention_days` propio. Vacío o `0`: para siempre. |
 | `PARLA_AUDIT_DAYS` | `365` | Días que se guarda la auditoría. |
 | `PARLA_PUBLIC_URL` | vacío | Dirección pública con HTTPS, para los webhooks de WhatsApp, Telegram y teléfono (ver [docs/channels_es.md](docs/channels_es.md)) y la redirect URI del SSO. |
+| `PARLA_METRICS`, `PARLA_METRICS_TOKEN` | vacío | `1` sirve métricas de Prometheus en `/metrics`; desde otra máquina hace falta el token (`Authorization: Bearer`). Ver [docs/observability_es.md](docs/observability_es.md). |
+| `PARLA_OTEL_ENDPOINT` | vacío | URL base OTLP/HTTP para las trazas de OpenTelemetry (también valen las estándar `OTEL_EXPORTER_OTLP_*` y `OTEL_SERVICE_NAME`). `PARLA_OTEL_CONTENT=1` suma el texto de los mensajes, tapado. |
+| `PARLA_LOG_FORMAT` | vacío | `json`: una línea JSON por pedido en stderr, con `trace_id` y `span_id`. |
 | `PARLA_OIDC_ISSUER`, `PARLA_OIDC_CLIENT_ID` | vacío | Inicio de sesión único con OIDC; el secreto, el mapa de roles y las demás `PARLA_OIDC_*` en [docs/sso_es.md](docs/sso_es.md). |
 | `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` u `off` apagan las funciones de los agentes. |
 | `PARLA_WHISPER` | `base` | Modelo de faster-whisper (`tiny` si la máquina es lenta). |

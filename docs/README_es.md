@@ -16,6 +16,7 @@
 | [Seguridad](security_es.md) | Quien lo instala | Usuarios, roles, claves, funciones, qué hacer antes de exponerlo. |
 | [Inicio de sesión único (OIDC)](sso_es.md) | Quien lo instala | Entrar con Keycloak, Entra ID, Google Workspace, Okta, Authentik o Auth0: variables, mapa de roles, pasos por proveedor, problemas comunes. |
 | [Despliegue](deployment_es.md) | Quien lo instala | Local, Docker, Kubernetes, detrás de un proxy, copias de seguridad. |
+| [Observabilidad](observability_es.md) | Quien lo instala | Métricas de Prometheus, trazas de OpenTelemetry, logs JSON: cada métrica, el árbol de spans, Grafana, Jaeger, Tempo, Datadog, Honeycomb, privacidad. |
 | [Desarrollo](development_es.md) | Desarrolladores | Comandos, variables de entorno, código, internals del motor, cómo sumar un tipo de paso, pruebas, estilo. |
 | [Preguntas frecuentes](faq_es.md) | Todos | Dudas comunes. |
 | [Migrar desde Rasa](migrate-from-rasa_es.md) | Quien viene de Rasa | Importar un proyecto de Rasa 3.x (clásico o CALM): qué pasa a qué, qué no se soporta, interfaz, API, CLI y MCP. |

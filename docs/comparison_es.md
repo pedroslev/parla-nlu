@@ -40,6 +40,7 @@ tiene un **compromiso de no open core**: todas las funciones siguen siendo de c�
 | Canales | API HTTP, widget web, WhatsApp, Telegram, teléfono (Twilio, jambonz) | Muchos conectores | Muchos | Muchos | Muchas integraciones | Teams, web y canales de Microsoft | Muchos | Muchos |
 | MCP | Servidor MCP (27 herramientas) para construir, probar y publicar bots; herramientas MCP en el paso agente (cliente, Streamable HTTP, con allow-list) | Servidor de herramientas MCP para IDE (beta, 3.16) [1] | Herramientas MCP en agentes; endpoint de servidor MCP (experimental) [4] | No verificado en la documentación oficial | No verificado en la documentación oficial | Herramientas MCP en agentes (GA) [10] | MCP en el ADK CLI, según fuentes de terceros [12] | Herramientas MCP en agentes + servidor MCP alojado [14] |
 | Analítica | Contención, derivaciones, fallbacks, CSAT, abandono | Panel integrado en Studio 1.16 [1] | Sí | Sí | Sí (Google Cloud) | Sí | Sí | Sí (observabilidad) [13] |
+| Observabilidad | Métricas de Prometheus, trazas de OpenTelemetry por OTLP (convenciones GenAI, contexto de traza W3C), logs JSON; privadas por defecto | No verificado para esta página | No verificado para esta página | No verificado para esta página | No verificado para esta página | No verificado para esta página | No verificado para esta página | Funciones de observabilidad [13] |
 | Pruebas | Suites de tests de conversación (interfaz, CLI, CI, freno al publicar), autoevaluación, matriz de confusión, reproducción contra otra versión | Sí (pruebas E2E) | Simulador [3] | Sí | Sí | Sí | Sí | Sí |
 | SSO | Sí, OIDC (Keycloak, Entra ID, Google, Okta, Authentik, Auth0) | No verificado para esta página | No verificado para esta página | No verificado para esta página | Identidad de Google Cloud | Microsoft Entra ID | No verificado para esta página | No verificado para esta página |
 
@@ -134,8 +135,6 @@ Ser honestos con lo que falta importa más que una lista larga de funciones. Est
   sin campañas salientes ni audio en streaming); sin conectores de AudioCodes ni de centros de contacto (CCaaS).
 - **Escalado horizontal:** Parla es un solo proceso con archivos en disco; está pensado para un servidor chico.
 - **Inicio de sesión único con SAML** (el SSO es solo OIDC, ver [sso_es.md](sso_es.md)).
-
-- **Exportación de observabilidad** (OpenTelemetry, Prometheus o similares).
 
 Si alguna de estas es un requisito excluyente hoy, probablemente te convenga una de las plataformas de arriba.
 

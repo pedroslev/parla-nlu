@@ -384,6 +384,29 @@ with full access, if Parla has no users). It listens on `127.0.0.1` by default (
 publish it, protect it at the proxy and set `PARLA_MCP_ALLOWED_HOSTS` (the accepted `Host` values, in addition to
 `127.0.0.1` and `localhost`). With `stdio` (the usual way) it doesn't open any port.
 
+## Metrics and traces
+
+All off by default ([observability.md](observability.md)).
+
+- **`/metrics`** exists only with `PARLA_METRICS=1`. With `PARLA_METRICS_TOKEN` it requires
+  `Authorization: Bearer <token>` (compared in constant time); without a token it only answers a connection from
+  loopback with a `Host` of `127.0.0.1`, `localhost` or `[::1]`. A `PARLA_HOSTS` domain doesn't count, because a proxy
+  on the same machine would let anyone through. It's outside `/api/`: no session, no role, no audit entry. Don't
+  publish it at the proxy; the example Ingress doesn't.
+- **What metrics reveal:** agent ids, route templates, counts and latencies, LLM and voice providers, CSAT
+  distribution. Never messages, slot values, session ids or secrets. Label values come from a fixed set or are
+  ids, and new series stop at 5,000, so a client can't blow up memory with odd paths.
+- **Traces** carry ids, intent, flow, entity and function names, confidence, status, durations, the model name,
+  token counts and the host of each `http` step (not its path or query, which can carry data or keys). Exceptions
+  only send their class. The outgoing `traceparent` header on `http` steps reveals the trace id to that service,
+  nothing else.
+- **`PARLA_OTEL_CONTENT=1`** sends the person's message and the bot's reply in the `parla.turn` span, with vault
+  secrets replaced by `••••` and every PII category masked. Masking is a heuristic (see
+  [Personal data](#personal-data-in-conversations)): treat the trace backend as holding conversations, with the
+  same access control and retention as `parla.db`.
+- **The collector** is called from the server like an `http` step: the `OTEL_EXPORTER_OTLP_HEADERS` (API keys) are
+  environment variables, not in any agent, and never logged.
+
 ## Before exposing it to the internet
 
 1. **Create the owner** with a strong password before opening anything, and the other users with the minimum role
@@ -405,12 +428,15 @@ publish it, protect it at the proxy and set `PARLA_MCP_ALLOWED_HOSTS` (the accep
 9. Review `http` steps, widget origins and old API keys (especially the ones from “Connect to AI”).
 10. If you use MCP with `--http`, protect it at the proxy.
 11. Add a rate limit at the proxy: Parla only has one on login.
+12. If you turn on metrics, set `PARLA_METRICS_TOKEN` and keep `/metrics` off the proxy; keep `PARLA_OTEL_CONTENT`
+    off unless the trace backend is as private as the data folder.
 
 ## Not there yet
 
 - One replica per data folder. Login lockout counters are in memory: they reset on restart.
 - No rate limiting, except the login lockout.
-- No access log: the audit log records writes, not reads or every request.
+- No access log with users or IPs: the audit log records writes, and `PARLA_LOG_FORMAT=json` logs every request
+  with its route template, status and duration but not who made it.
 - No second factor for local passwords (with [SSO](sso.md), your identity provider can require MFA), no password
   policy and no list of open sessions to end by hand.
 - Keys aren't encrypted on disk. Agents are saved with the system's normal permissions; `users.json`, the keys and

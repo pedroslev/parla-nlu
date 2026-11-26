@@ -9,6 +9,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Observability, standard library only and off by default ([docs/observability.md](docs/observability.md)).
+  **Prometheus metrics** at `GET /metrics` with `PARLA_METRICS=1` (bearer `PARLA_METRICS_TOKEN`, or loopback only
+  without one): HTTP requests and latency by route template, turns by agent/channel/environment, intent outcomes
+  (matched, answer, system, fallback), NLU, LLM (by provider, with token counts), ASR/TTS, HTTP step, function and
+  knowledge search latency by outcome, handoffs, CSAT histogram, active sessions, test suite runs and `parla_info`.
+  **OpenTelemetry traces** over OTLP/HTTP JSON (`PARLA_OTEL_ENDPOINT` or the standard `OTEL_EXPORTER_OTLP_*`,
+  `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`) from a bounded background exporter that drops instead of
+  blocking: HTTP server span → `parla.turn` → `nlu.classify` / `nlu.extract`, `flow.run`, `http.step`,
+  `function.run`, `agent.step`, `chat {model}` (gen_ai.* attributes and token usage), `knowledge.search`, `asr`,
+  `tts`, `channel.message`, `phone.turn`. Incoming W3C `traceparent` continues the trace and `http` steps send it on.
+  No message text, slot values or secrets in metrics or spans; `PARLA_OTEL_CONTENT=1` adds the turn's text with vault
+  secrets and personal data masked. `PARLA_LOG_FORMAT=json` logs one line per request with `trace_id`/`span_id`.
+  Optional `observability` compose profile (Jaeger all-in-one + Prometheus), commented `ServiceMonitor` and scrape
+  annotations for Kubernetes, and a Grafana dashboard in `deploy/observability/`.
 - Bring-your-own-key providers, chosen per agent (local stays the default). **AI** (`ai.provider`): `openai`
   (api.openai.com, or any compatible server with `url` as before), `openai_compatible`, `anthropic` (Claude through
   the official `anthropic` SDK, optional `requirements-providers.txt`: structured outputs, effort `low`, server-side

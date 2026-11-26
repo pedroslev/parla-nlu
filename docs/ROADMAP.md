@@ -12,6 +12,10 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Shipped recently
 
+- **Observability**: Prometheus metrics at `/metrics` (requests, turns, fallback rate, NLU, LLM, voice, HTTP steps,
+  functions, handoffs, CSAT, active sessions), OpenTelemetry traces over OTLP/HTTP with GenAI attributes and W3C
+  trace context, and JSON request logs. Standard library only, off by default, no conversation content unless you
+  opt in. See [observability.md](observability.md).
 - **Bring-your-own-key providers**: the AI can use OpenAI, Claude (Anthropic), Google Gemini or any OpenAI-compatible
   endpoint, and voice can use OpenAI, Deepgram, ElevenLabs or Google Cloud for transcription and text-to-speech
   (also for the phone's Parla voice). Keys stay in the vault; local stays the default. See [ai-and-voice.md](ai-and-voice.md).
@@ -47,7 +51,6 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Next
 
-- **Observability**: OpenTelemetry traces and metrics export.
 - **Outbound campaigns**: start conversations proactively (reminders, notifications).
 
 ## Later
@@ -60,4 +63,4 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 For reference, what Parla does today: no-code builder, embeddings + CRF NLU, flows with many step types, optional
 LLM (local or your own key), voice (local or your own key), versions with `staging`/`production`, users and roles, OIDC single sign-on, secret vault, inbox, analytics,
-HTTP API, web widget, MCP server, agent-step tools (MCP client), Docker and Kubernetes. See the [README](../README.md#features).
+HTTP API, web widget, MCP server, agent-step tools (MCP client), Prometheus metrics and OpenTelemetry traces, Docker and Kubernetes. See the [README](../README.md#features).

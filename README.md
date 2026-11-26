@@ -90,6 +90,9 @@ The interface is available in English, Spanish and Portuguese (pick it next to t
 - **Improve**: what people wrote that the bot didn't understand, grouped by similarity and with a
   suggested intent.
 - Analytics: containment, handoffs, fallbacks, CSAT and drop-off by flow and question.
+- Observability: Prometheus metrics at `/metrics`, OpenTelemetry traces over OTLP/HTTP (with GenAI attributes and
+  W3C trace context to your APIs) and JSON request logs; off by default and without conversation content
+  ([docs/observability.md](docs/observability.md)).
 
 ### Publishing
 - Draft → immutable numbered versions → `staging` and `production` environments. Diff before publishing, rollback
@@ -240,6 +243,7 @@ parla/
   dates.py              rule-based natural-language dates
   insights.py           “Improve” and analytics
   runner.py             functions in a separate process
+  telemetry.py          Prometheus metrics, OpenTelemetry traces, JSON logs
   vault.py              per-agent secrets
   voice.py              voice: local or BYOK providers (and cache of pre-generated phrases)
   phone.py              phone calls (Twilio, jambonz)
@@ -270,6 +274,9 @@ Everything is optional. Copy `.env.example` to see the values.
 | `PARLA_RETENTION_DAYS` | empty | Days to keep conversations with no activity, for agents without their own `retention_days`. Empty or `0`: forever. |
 | `PARLA_AUDIT_DAYS` | `365` | Days to keep the audit log. |
 | `PARLA_PUBLIC_URL` | empty | Public HTTPS address, for the WhatsApp, Telegram and phone webhooks (see [docs/channels.md](docs/channels.md)) and the SSO redirect URI. |
+| `PARLA_METRICS`, `PARLA_METRICS_TOKEN` | empty | `1` serves Prometheus metrics at `/metrics`; the token (`Authorization: Bearer`) is needed from another host. See [docs/observability.md](docs/observability.md). |
+| `PARLA_OTEL_ENDPOINT` | empty | OTLP/HTTP base URL for OpenTelemetry traces (the standard `OTEL_EXPORTER_OTLP_*` and `OTEL_SERVICE_NAME` work too). `PARLA_OTEL_CONTENT=1` adds masked message text. |
+| `PARLA_LOG_FORMAT` | empty | `json`: one JSON line per request on stderr, with `trace_id` and `span_id`. |
 | `PARLA_OIDC_ISSUER`, `PARLA_OIDC_CLIENT_ID` | empty | Single sign-on with OIDC; secret, role mapping and the other `PARLA_OIDC_*` in [docs/sso.md](docs/sso.md). |
 | `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` or `off` disable agent functions. |
 | `PARLA_WHISPER` | `base` | faster-whisper model (`tiny` if the machine is slow). |

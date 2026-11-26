@@ -72,6 +72,7 @@ All are optional. Nothing loads `.env` automatically: export them in your shell.
 | `parla/files.py` | Files for the `file` step: `save`, `listing`, `find`, `read`, `delete`. |
 | `parla/insights.py` | `unrecognized` and `analytics`, computed on the fly over the conversations. |
 | `parla/runner.py` | `run_function`: functions in a separate process. |
+| `parla/telemetry.py` | Observability: `count`, `observe`, `gauge` and `render` (Prometheus), `span` (OpenTelemetry, OTLP/HTTP JSON exporter thread), `log_request` (JSON logs). See [observability.md](observability.md). |
 | `parla/vault.py` | Per-agent secrets: `put`, `delete`, `names`, `values`, `mask`. |
 | `parla/voice.py` | `transcribe`, `speak` and `prewarm` (cache of fixed phrases). |
 | `parla/connect.py` | “Connect to AI”. |

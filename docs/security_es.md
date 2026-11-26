@@ -396,6 +396,30 @@ Los archivos del paso «Enviar un archivo»:
 protegelo en el proxy y configurá `PARLA_MCP_ALLOWED_HOSTS` (los `Host` aceptados, además de `127.0.0.1` y
 `localhost`). Con `stdio` (lo normal) no abre ningún puerto.
 
+## Métricas y trazas
+
+Todo apagado por defecto ([observability.md](observability_es.md)).
+
+- **`/metrics`** existe solo con `PARLA_METRICS=1`. Con `PARLA_METRICS_TOKEN` pide `Authorization: Bearer <token>`
+  (comparado en tiempo constante); sin token solo le contesta a una conexión desde loopback con `Host`
+  `127.0.0.1`, `localhost` o `[::1]`. Un dominio de `PARLA_HOSTS` no cuenta, porque un proxy en la misma máquina
+  dejaría pasar a cualquiera. Está fuera de `/api/`: sin sesión, sin rol, sin entrada en la auditoría. No lo
+  publiques en el proxy; el Ingress de ejemplo no lo hace.
+- **Lo que muestran las métricas:** ids de agentes, plantillas de rutas, cantidades y latencias, proveedores de IA y
+  de voz, la distribución del CSAT. Nunca mensajes, valores de slots, ids de conversación ni claves. Los valores de
+  las etiquetas salen de una lista fija o son ids, y las series nuevas se cortan en 5.000: un cliente no puede
+  llenar la memoria con rutas raras.
+- **Las trazas** llevan ids, nombres de intenciones, flujos, entidades y funciones, confianza, estado, duraciones,
+  el nombre del modelo, la cantidad de tokens y el host de cada paso `http` (no su ruta ni su query, que pueden
+  traer datos o claves). De las excepciones solo va la clase. El encabezado `traceparent` que sale en los pasos
+  `http` le muestra a ese servicio el id de la traza, nada más.
+- **`PARLA_OTEL_CONTENT=1`** manda el mensaje de la persona y la respuesta del bot en el span `parla.turn`, con las
+  claves de la bóveda reemplazadas por `••••` y todas las categorías de datos personales tapadas. Tapar es una
+  heurística (ver [Datos personales](#datos-personales-en-las-conversaciones)): tratá al backend de trazas como si
+  guardara conversaciones, con el mismo control de acceso y retención que `parla.db`.
+- **El colector** se llama desde el servidor como un paso `http`: los `OTEL_EXPORTER_OTLP_HEADERS` (API keys) son
+  variables de entorno, no están en ningún agente y nunca se loguean.
+
 ## Antes de exponerlo a internet
 
 1. **Creá el dueño** con una contraseña fuerte antes de abrir nada, y los demás usuarios con el rol mínimo y solo
@@ -418,13 +442,16 @@ protegelo en el proxy y configurá `PARLA_MCP_ALLOWED_HOSTS` (los `Host` aceptad
    IA»).
 10. Si usás el MCP con `--http`, protegelo en el proxy.
 11. Agregá en el proxy un límite de pedidos: Parla solo lo tiene en el login.
+12. Si prendés las métricas, poné `PARLA_METRICS_TOKEN` y dejá `/metrics` fuera del proxy; dejá `PARLA_OTEL_CONTENT`
+    apagado salvo que el backend de trazas sea tan privado como la carpeta de datos.
 
 ## Lo que todavía no hay
 
 - Una sola réplica por carpeta de datos. Los contadores del bloqueo de login viven en memoria: se reinician con el
   servidor.
 - Sin límite de pedidos, salvo el bloqueo de login.
-- Sin registro de accesos: la auditoría anota escrituras, no lecturas ni cada pedido.
+- Sin registro de accesos con usuarios o IPs: la auditoría anota escrituras, y `PARLA_LOG_FORMAT=json` anota cada
+  pedido con su plantilla de ruta, estado y duración, pero no quién lo hizo.
 - Sin segundo factor para las contraseñas locales (con [SSO](sso_es.md), tu proveedor de identidad puede pedir
   MFA), sin política de contraseñas y sin lista de sesiones abiertas para cerrarlas a mano.
 - Las claves no se cifran en disco. Los agentes se guardan con los permisos normales del sistema; `users.json`, las

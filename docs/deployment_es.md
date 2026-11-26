@@ -28,6 +28,9 @@ auditoría van en un archivo SQLite ahí mismo (`parla.db`). Eso define cómo se
 | `PARLA_RETENTION_DAYS` | | Días que se guardan las conversaciones sin movimiento, para los agentes sin `retention_days` propio. Sin definir o `0`: para siempre. |
 | `PARLA_AUDIT_DAYS` | | Días que se guarda la auditoría. Sin definir: `365`. |
 | `PARLA_PUBLIC_URL` | | Dirección pública (`https://bots.example.com`): webhooks y la redirect URI del SSO. |
+| `PARLA_METRICS`, `PARLA_METRICS_TOKEN` | | `1`: métricas de Prometheus en `GET /metrics`, con el token como `Authorization: Bearer` (obligatorio desde otra máquina o contenedor). Ver [Observabilidad](#observabilidad). |
+| `PARLA_OTEL_ENDPOINT` | | URL base OTLP/HTTP para las trazas de OpenTelemetry (`http://jaeger:4318`). También valen las estándar `OTEL_EXPORTER_OTLP_*` y `OTEL_SERVICE_NAME`. |
+| `PARLA_LOG_FORMAT` | | `json`: una línea JSON por pedido en stderr, con `trace_id` y `span_id`. |
 | `PARLA_OIDC_ISSUER`, `PARLA_OIDC_CLIENT_ID` | | Inicio de sesión único con tu proveedor de identidad. El secreto va en `PARLA_OIDC_CLIENT_SECRET` o, mejor, en un archivo con `PARLA_OIDC_CLIENT_SECRET_FILE`. El resto (`PARLA_OIDC_ROLE_CLAIM`, `PARLA_OIDC_ROLE_MAP`, `PARLA_OIDC_ONLY`…) en [sso_es.md](sso_es.md). |
 
 El puerto es el argumento de `app.py` (la imagen usa `8000`). La dirección de Ollama no es una variable: se
@@ -89,6 +92,7 @@ docker run -d --name parla --restart unless-stopped \
 docker compose up -d                       # Parla en http://127.0.0.1:8000
 docker compose --profile ai up -d          # + Ollama (IA local)
 PARLA_VOICE=1 docker compose up -d --build # con voz
+docker compose --profile observability up -d   # + Jaeger y Prometheus (ver Observabilidad más abajo)
 docker compose logs -f parla
 ```
 
@@ -124,8 +128,9 @@ Qué trae el Deployment:
 - No root (uid/gid `10001`, `fsGroup` para el volumen), `readOnlyRootFilesystem`, sin capabilities, sin token de
   service account. `/tmp` es un `emptyDir`.
 - Probes en `GET /` (devuelve la página estática, no toca modelos ni disco).
-- La configuración va en el ConfigMap `parla`. Las claves de los bots y los usuarios viven en el volumen; el único
-  secreto que Parla lee de afuera es el del cliente de SSO (ver [Inicio de sesión único](#inicio-de-sesión-único)).
+- La configuración va en el ConfigMap `parla`. Las claves de los bots y los usuarios viven en el volumen; los únicos
+  secretos que Parla lee de afuera son el del cliente de SSO (ver [Inicio de sesión único](#inicio-de-sesión-único))
+  y, si leés las métricas, el `PARLA_METRICS_TOKEN` (ver [Observabilidad](#observabilidad)).
 
 ### Administrar
 
@@ -320,6 +325,50 @@ Medido: con el modelo de vectores cargado el proceso usa ~970 MB. El Deployment 
 subilo a 4 Gi con voz. No tiene límite de CPU a propósito (entrenar es un pico corto). Las conversaciones crecen
 sin límite salvo que pongas una retención (`retention_days` o `PARLA_RETENTION_DAYS`, ver
 [concepts_es.md](concepts_es.md#retención-y-datos-personales)).
+
+## Observabilidad
+
+Las métricas, las trazas y los logs JSON vienen apagados; [observability.md](observability_es.md) tiene la lista
+completa de métricas, el árbol de spans, todas las variables y ejemplos para Grafana Tempo, Datadog y Honeycomb.
+En corto:
+
+- **Prometheus:** `PARLA_METRICS=1` y un `PARLA_METRICS_TOKEN` largo y al azar; después leé `/metrics` con
+  `Authorization: Bearer <token>`. Sin token, `/metrics` solo le contesta al propio `127.0.0.1`, que para Prometheus
+  nunca es un contenedor ni un pod.
+- **Trazas:** `PARLA_OTEL_ENDPOINT=http://<colector>:4318` (OTLP/HTTP JSON). El exportador nunca frena los pedidos:
+  si el colector está caído, los spans se descartan.
+- **Logs:** `PARLA_LOG_FORMAT=json` para una línea por pedido con `trace_id`.
+
+**Docker Compose.** El perfil opcional `observability` suma Jaeger all-in-one y Prometheus, solo en `127.0.0.1`:
+
+```sh
+export PARLA_METRICS=1 PARLA_METRICS_TOKEN="$(openssl rand -hex 24)" PARLA_OTEL_ENDPOINT=http://jaeger:4318
+docker compose --profile observability up -d
+# trazas: http://127.0.0.1:16686   métricas: http://127.0.0.1:9090
+```
+
+**Kubernetes.** Poné el token en un Secret y descomentá las variables, el `secretRef` y (para descubrir por
+anotaciones) las anotaciones `prometheus.io/*` en `deploy/k8s/parla.yaml`:
+
+```sh
+kubectl -n parla create secret generic parla-metrics --from-literal=PARLA_METRICS_TOKEN="$(openssl rand -hex 24)"
+```
+
+Con el Prometheus Operator, `deploy/k8s/servicemonitor.yaml` es un `ServiceMonitor` comentado que manda ese mismo
+Secret como token bearer. Una configuración de Prometheus común:
+
+```yaml
+scrape_configs:
+  - job_name: parla
+    metrics_path: /metrics
+    authorization: {type: Bearer, credentials_file: /etc/prometheus/parla-token}
+    kubernetes_sd_configs: [{role: pod, namespaces: {names: [parla]}}]
+    relabel_configs:
+      - {source_labels: [__meta_kubernetes_pod_label_app], regex: parla, action: keep}
+```
+
+El tablero de Grafana está en `deploy/observability/grafana-dashboard.json`. No publiques `/metrics` por el Ingress:
+solo `/api/v1/`, `/static/widget.js` y `/files/` necesitan ser públicos.
 
 ## Dónde quedan los datos
 
