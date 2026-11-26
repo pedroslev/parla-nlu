@@ -55,7 +55,7 @@ const ev = async (js) => {
 };
 // Listo = la condición se cumple y la red lleva 150 ms quieta (sin esperas fijas). Tope: 10 s.
 async function ready(cond = 'true') {
-  const until = Date.now() + 10000;
+  const until = Date.now() + (process.env.CI ? 25000 : 10000);   // los runners de CI son más lentos: más margen antes de dar la pantalla por colgada
   while (Date.now() < until) {
     const busy = [...inflight.values()].some((r) => Date.now() - r.at < 5000);   // más de 5 s abierto: un stream, no cuenta
     if (!busy && Date.now() - lastNet > 150 && await ev(`return !!(${cond})`)) return true;
