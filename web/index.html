@@ -205,6 +205,7 @@
   .badge.call { background: var(--soft); color: var(--ink); }
   .badge.agent { background: var(--brand-soft); color: var(--brand); }
   .badge.handoff { background: var(--warn-soft); color: var(--warn); }
+  .badge.remind { background: #DCEFFA; color: #0B4A75; }
 
   /* Botones, idiomas, interruptores */
   .btn-edit { display: flex; flex-direction: column; gap: 6px; border-top: 1px dashed var(--line); padding-top: 8px; }
@@ -395,6 +396,7 @@ const ICONS = {
   hand: 'M8 13V5a1.5 1.5 0 0 1 3 0v6|M11 11V4a1.5 1.5 0 0 1 3 0v7|M14 11V5.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7c-3 0-4.5-1.5-6-4l-1.5-3a1.5 1.5 0 0 1 2.6-1.5L8 15',
   clip: 'M20 11.5l-8.4 8.4a5 5 0 0 1-7.1-7.1l8.4-8.4a3.3 3.3 0 0 1 4.7 4.7l-8.4 8.4a1.7 1.7 0 0 1-2.4-2.4l7.7-7.7',
   phone: 'M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z',
+  megaphone: 'M3 10v4h3l8 5V5l-8 5z|M17 9a3 3 0 0 1 0 6|M6 14l1.5 6h3L9 14.6', clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z|M12 7v5l3 2',
   call: 'M4 4h7v7H4z|M7.5 11v5a3 3 0 0 0 3 3H17|M14 16l3 3-3 3', lightbulb: 'M9 18h6|M10 21h4|M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z',
 };
 const COLORS = [['#FFE566', '#5C4A00'], ['#FFB8D9', '#7A1447'], ['#B5F0B0', '#14531B'], ['#AEDDFF', '#0B4A75'], ['#FFCF99', '#7A3E00'], ['#D9C7FF', '#452089']];
@@ -422,6 +424,7 @@ const STEP_MENU = [
   ['agent', 'spark', t('Conversar con IA'), t('La IA charla, usa funciones y completa slots')],
   ['handoff', 'hand', t('Pasar a una persona'), t('El bot se pausa y responde alguien del equipo')],
   ['classify', 'bookmark', t('Clasificar la conversación'), t('Anota cómo terminó, para los reportes')],
+  ['remind', 'clock', t('Programar un recordatorio'), t('Le escribe más tarde a la misma persona, por ejemplo un recordatorio de turno')],
   ['end', 'stop', t('Terminar'), t('El flujo se corta acá')],
 ];
 const OPS = [['eq', t('es igual a')], ['ne', t('es distinto de')], ['contains', t('contiene')], ['gt', t('es mayor que')], ['lt', t('es menor que')], ['empty', t('está vacío')], ['filled', t('tiene un valor')]];
@@ -446,7 +449,7 @@ const SYSTEM = [
 ];
 const sysOf = (key) => agent.system?.[key] || {};   // el servidor manda agent.system completo (load); {} solo si una versión vieja restaurada no lo trae
 // roles (static/users.js deja window.me; null o undefined = sin usuarios, todo abierto)
-const ROLE_SECTIONS = { agent: ['inbox', 'sessions'], analyst: ['sessions', 'reports', 'inbox', 'improve', 'tests'] };
+const ROLE_SECTIONS = { agent: ['inbox', 'sessions'], analyst: ['sessions', 'reports', 'campaigns', 'inbox', 'improve', 'tests'] };
 const allowed = () => ROLE_SECTIONS[window.me?.role] || null;
 const canEdit = () => !allowed();
 
@@ -792,11 +795,11 @@ function render() {
       ['slots', 'box', t('Slots'), agent.slots.length], ['flows', 'flow', t('Flujos'), agent.flows.length], ['functions', 'braces', t('Funciones'), agent.functions.length],
       ['classifications', 'bookmark', t('Clasificaciones'), agent.classifications.length], ['settings', 'sliders', t('Ajustes')]]],
     [t('Inteligencia'), [['knowledge', 'book', t('Conocimiento'), (agent.knowledge || []).length], ['ai', 'spark', t('IA')]]],
-    [t('Operar'), [['inbox', 'inbox', t('Bandeja')], ['sessions', 'history', t('Conversaciones')], ['improve', 'lightbulb', t('Para enseñar')], ['reports', 'chart', t('Reportes')]]],
+    [t('Operar'), [['inbox', 'inbox', t('Bandeja')], ['sessions', 'history', t('Conversaciones')], ['improve', 'lightbulb', t('Para enseñar')], ['reports', 'chart', t('Reportes')], ['campaigns', 'megaphone', t('Campañas')]]],
     [t('Publicar'), [['tests', 'check', t('Tests'), agent.tests.length], ['releases', 'layers', t('Versiones')], ['widget', 'globe', t('Widget web')], ['channels', 'phone', t('Canales')], ['secrets', 'key', t('Claves')], ['api', 'code', t('API')]]],
   ].map(([name, items]) => [name, items.filter(([id]) => !allowed() || allowed().includes(id))]).filter(([, items]) => items.length);
   if (allowed() && !allowed().includes(section)) section = allowed()[0];     // cada rol ve solo lo suyo
-  if (!['intents','entities','slots','flows','functions','classifications','settings','knowledge','ai','inbox','sessions','improve','reports','tests','releases','widget','channels','secrets','api'].includes(section)) section = 'intents';
+  if (!['intents','entities','slots','flows','functions','classifications','settings','knowledge','ai','inbox','sessions','improve','reports','campaigns','tests','releases','widget','channels','secrets','api'].includes(section)) section = 'intents';
   history.replaceState(null, '', '#/' + agent.id + '/' + section);           // F5 vuelve acá, no a «Tus agentes»
   $('#nav').replaceChildren(...groups.flatMap(([name, items]) => [groups.length > 1 ? h('div', { class: 'nav-group', role: 'presentation' }, name) : null,
     ...items.map(([id, ic, text, n]) => h('button', {
@@ -806,7 +809,7 @@ function render() {
   // Conversaciones, Clasificaciones y API viven en /static/sessions.js, /static/classifications.js y /static/apidocs.js
   const fn = { intents: intentsView, entities: entitiesView, slots: slotsView, flows: flowsView, settings: settingsView,
     sessions: () => window.sessionsView(), reports: () => window.reportsView(), releases: () => window.releasesView(), tests: () => window.testsView(), classifications: () => window.classificationsView(), functions: () => window.functionsView(), api: () => window.apiDocsView(),
-    knowledge: () => window.knowledgeView(), ai: () => window.aiView(), inbox: () => window.inboxView(), improve: () => window.improveView(),
+    knowledge: () => window.knowledgeView(), ai: () => window.aiView(), inbox: () => window.inboxView(), improve: () => window.improveView(), campaigns: () => window.campaignsView(),
     widget: () => window.widgetView(), channels: () => window.channelsView(), secrets: () => window.secretsView() }[section];
   let view;
   try { view = fn(); } catch (e) { console.error(e); view = h('div', { class: 'empty' }, t('Esta sección todavía no está lista.')); }   // un módulo que falta no rompe el resto
@@ -1057,7 +1060,7 @@ function newStep(type) {
   return { type, ...{ message: { text: '' }, ask: { slot: '', text: '' }, http: { method: 'GET', url: '', headers: [], body: '', saves: [] },
     function: { function: '', auto_save: true, saves: [] }, if: { cond: { var: '', op: 'eq', value: '' }, then: [], else: [] }, set: { slot: '', mode: 'text', text: '' }, goto: { flow: '' },
     call: { flow: '' }, file: { file: '', text: '' }, agent: { instructions: '', functions: [], knowledge: true, slots: [], goal: '', max_turns: 8 },
-    handoff: { text: t('Te paso con una persona, ya te escriben.'), reason: '' }, classify: { classification: '' }, end: {} }[type] };
+    handoff: { text: t('Te paso con una persona, ya te escriben.'), reason: '' }, classify: { classification: '' }, remind: { after: '24h', flow: '' }, end: {} }[type] };
 }
 // ---------- idiomas, botones y selección múltiple ----------
 function langSwitch() {                // ES · PT · EN arriba de cada mensaje, solo si el bot habla más de un idioma
@@ -1290,7 +1293,24 @@ function stepView(s, list, i) {
     lab(t('Qué dice el bot antes de pasar'), area(s, 'text', { placeholder: t('Te paso con una persona, ya te escriben.') })),
     lab(t('Motivo (lo ve el equipo en Bandeja)'), h('input', { ...bind(s, 'reason'), placeholder: t('Por ejemplo: reclamo') })),
     h('p', { class: 'help', style: 'font-size:14px' }, t('La conversación aparece en Bandeja y el bot deja de responder hasta que alguien del equipo la devuelva.')));
+  if (s.type === 'remind') return card('remind', 'clock', t('Programar un recordatorio'), remindView(s));
   return card('end', 'stop', t('Terminar'), h('p', { class: 'help', style: 'font-size:14px' }, t('El flujo se corta acá y el bot espera un mensaje nuevo.')));
+}
+function remindView(s) {                 // s.after ("24h", "30m", "2d") o s.at ("{{ fecha }} 09:00"); corre s.flow o manda s.text
+  const upd = () => { touch(); render(); }, at = 'at' in s, tpls = agent.channels?.whatsapp?.templates || [];
+  const okAfter = (v) => /^\s*\d+\s*[mhd]\s*$/.test(v || '');
+  const warn = h('p', { class: 'help', style: 'font-size:14px;color:var(--warn)', hidden: at || okAfter(s.after) }, t('Escribí un número y una unidad: 30m, 24h o 2d.'));
+  return [
+    h('div', { class: 'row' }, pick([['after', t('Después de')], ['at', t('En una fecha y hora')]], at ? 'at' : 'after', (v) => {
+      if (v === 'at') { delete s.after; s.at = ''; } else { delete s.at; s.after = '24h'; } upd(); }, t('Cuándo')),
+      at ? h('input', { class: 'grow', ...bind(s, 'at'), placeholder: '{{ fecha }} 09:00', 'aria-label': t('Fecha y hora'), spellcheck: 'false' })
+        : h('input', { ...bind(s, 'after', (e) => { warn.hidden = okAfter(e.target.value); }), placeholder: '24h', 'aria-label': t('Cuánto después'), spellcheck: 'false', style: 'width:110px' })),
+    warn,
+    lab(t('Qué hace'), pick([['', t('Mandar un texto')], ...agent.flows.map((f) => [f.name, t('Correr el flujo «{name}»', { name: f.name })])], s.flow, (v) => { s.flow = v; upd(); }, t('Qué hace'))),
+    s.flow ? null : lab(t('Texto'), area(s, 'text', { placeholder: t('Hola {{ nombre }}, te recordamos tu turno de mañana.') })),
+    tpls.length ? lab(t('Plantilla de WhatsApp (opcional)'), pick([['', t('Sin plantilla')], ...tpls.map((x) => [x.name, x.name])], s.template, (v) => { if (v) s.template = v; else delete s.template; touch(); }, t('Plantilla de WhatsApp'))) : null,
+    h('p', { class: 'help', style: 'font-size:14px' }, t('En WhatsApp, si pasaron más de 24 horas desde el último mensaje de la persona, hace falta una plantilla aprobada (se cargan en Canales). No se manda a quien se dio de baja.')),
+  ];
 }
 function flowsView() {
   const fl = agent.flows[sel.flows];
@@ -1789,6 +1809,7 @@ addEventListener('DOMContentLoaded', () => {     // después de cargar /static/u
 <script src="/static/releases.js"></script>
 <script src="/static/tests.js"></script>
 <script src="/static/reports.js"></script>
+<script src="/static/campaigns.js"></script>
 <script src="/static/knowledge.js"></script>
 <script src="/static/ai.js"></script>
 <script src="/static/inbox.js"></script>

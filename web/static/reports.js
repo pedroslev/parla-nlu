@@ -1,5 +1,5 @@
 // Reportes: cómo terminaron las conversaciones, según las clasificaciones que aplican los flujos.
-let rpRange = '30', rpFrom = '', rpTo = '', rpChannel = '';
+let rpRange = '30', rpFrom = '', rpTo = '', rpChannel = '', rpCampaign = '', rpCampaigns = null, rpCampFor = null;   // rpCampaigns: las de /campaigns, para el filtro
 
 document.head.append(h('style', {}, `
   .rp-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
@@ -127,14 +127,19 @@ function rpAnalytics(a) {
 }
 
 function rpReport() {
+  if (rpCampFor !== agent.id) {          // una vez por agente; si todavía no hay campañas (o el servidor no las tiene) no aparece el filtro
+    rpCampFor = agent.id; rpCampaigns = null; rpCampaign = '';
+    api('GET', '/' + agent.id + '/campaigns').then((r) => { rpCampaigns = r.campaigns || []; if (rpCampaigns.length && section === 'reports') render(); }, () => {});
+  }
   const [from, to] = rpDates();
   const setDate = (which) => (e) => { [rpFrom, rpTo] = rpDates(); if (which === 'from') rpFrom = e.target.value; else rpTo = e.target.value; rpRange = 'custom'; render(); };
   const filters = h('div', { class: 'rp-filters' },
     lab(t('Período'), pick([['7', t('Últimos 7 días')], ['30', t('Últimos 30 días')], ['all', t('Todo')], ['custom', t('Elegir fechas')]], rpRange, (v) => { if (v === 'custom') [rpFrom, rpTo] = rpDates(); rpRange = v; render(); })),
     lab(t('Desde'), h('input', { type: 'date', value: from, max: to || null, onchange: setDate('from') })),
     lab(t('Hasta'), h('input', { type: 'date', value: to, min: from || null, onchange: setDate('to') })),
-    lab(t('Canal'), pick([['', t('Todos')], ['api', 'API'], ['prueba', t('Chat de prueba')]], rpChannel, (v) => { rpChannel = v; render(); })));
-  const q = new URLSearchParams(Object.entries({ from, to, channel: rpChannel }).filter(([, v]) => v));
+    lab(t('Canal'), pick([['', t('Todos')], ['api', 'API'], ['prueba', t('Chat de prueba')]], rpChannel, (v) => { rpChannel = v; render(); })),
+    rpCampaigns?.length ? lab(t('Campaña'), pick([['', t('Todas las conversaciones')], ...rpCampaigns.map((c) => [c.id, c.name])], rpCampaign, (v) => { rpCampaign = v; render(); })) : null);
+  const q = new URLSearchParams(Object.entries({ from, to, channel: rpChannel, campaign: rpCampaign }).filter(([, v]) => v));
   const stats = h('div', { class: 'stack', style: 'gap:18px', 'aria-live': 'polite' }, h('p', { class: 'help' }, t('Cargando los números…')));
   api('GET', '/' + agent.id + '/insights/analytics?' + q).then((a) => { if (stats.isConnected) stats.replaceChildren(...rpAnalytics(a).filter(Boolean)); },
     (e) => stats.replaceChildren(h('p', { class: 'rp-error' }, t('No se pudieron cargar los números: {error}.', { error: e.message }))));

@@ -88,6 +88,7 @@
   :root[data-theme="dark"] .badge.if { background: #2C2150; color: #C3A8FF; }
   :root[data-theme="dark"] .badge.set { background: #3A2D0E; color: #F0C766; }
   :root[data-theme="dark"] .badge.classify { background: #3D1A2C; color: #FF9CC8; }
+  :root[data-theme="dark"] .badge.remind { background: #10304A; color: #8FCBFF; }
   :root[data-theme="dark"] .leaf.saved { background: #12362D; border-color: #2E7A62; }
   :root[data-theme="dark"] .answer { border-color: #5A66A8; }
   :root[data-theme="dark"] .tl-score.meh strong { color: #E0B050; }

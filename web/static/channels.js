@@ -16,8 +16,11 @@ const CH_HELP = {
   JAMBONZ_WEBHOOK_SECRET: t('El «webhook secret» de tu cuenta de jambonz (Account). Se verifica la firma Jambonz-Signature.'),
   JAMBONZ_BASIC_USER: t('Opcional: usuario de HTTP basic que pusiste en la aplicación de jambonz.'),
   JAMBONZ_BASIC_PASSWORD: t('Opcional: la contraseña de HTTP basic de la aplicación de jambonz.'),
+  TWILIO_ACCOUNT_SID: t('El Account SID de Twilio (Console → Account Info). Hace falta para que Parla llame (campañas y recordatorios).'),
+  JAMBONZ_API_KEY: t('Una API key de jambonz (Account → API keys). Hace falta para que Parla llame (campañas y recordatorios).'),
+  JAMBONZ_ACCOUNT_SID: t('El Account SID de tu cuenta de jambonz. Hace falta para que Parla llame (campañas y recordatorios).'),
 };
-const CH_PHONE = { twilio: ['TWILIO_AUTH_TOKEN'], jambonz: ['JAMBONZ_WEBHOOK_SECRET', 'JAMBONZ_BASIC_USER', 'JAMBONZ_BASIC_PASSWORD'] };
+const CH_PHONE = { twilio: ['TWILIO_AUTH_TOKEN', 'TWILIO_ACCOUNT_SID'], jambonz: ['JAMBONZ_WEBHOOK_SECRET', 'JAMBONZ_BASIC_USER', 'JAMBONZ_BASIC_PASSWORD', 'JAMBONZ_API_KEY', 'JAMBONZ_ACCOUNT_SID'] };
 let chInfo = null, chFor = null, chError = '', chNote = '', chEditing = null, chBusy = false;
 
 async function chLoad() {
@@ -76,6 +79,20 @@ function chSelect(conf, key, options) {
     options.map(([value, label]) => h('option', { value, selected: (conf[key] || options[0][0]) === value }, label)));
 }
 
+function chTemplates(wa) {             // catálogo de plantillas aprobadas en Meta: [{name, language, params: [slots en orden para {{1}}, {{2}}…]}]
+  const list = (wa.templates ||= []);
+  const upd = () => { touch(); render(); };
+  return h('div', { class: 'panel phrases' }, h('strong', {}, t('Plantillas aprobadas')),
+    h('p', { class: 'help', style: 'font-size:14px' }, t('Para escribirle primero a alguien (campañas y recordatorios después de 24 horas), WhatsApp exige una plantilla aprobada en Meta. Cargá acá su nombre exacto, el idioma y qué slot va en cada {{1}}, {{2}}…')),
+    list.map((x, i) => h('div', { class: 'row', style: 'padding:6px 0' },
+      h('input', { ...bind(x, 'name'), placeholder: 'recordatorio_turno', 'aria-label': t('Nombre de la plantilla'), spellcheck: 'false', class: 'grow' }),
+      h('input', { ...bind(x, 'language'), placeholder: 'es_AR', 'aria-label': t('Idioma de la plantilla'), spellcheck: 'false', style: 'width:90px' }),
+      h('input', { value: (x.params || []).join(', '), placeholder: t('nombre, fecha, hora'), 'aria-label': t('Slots para {{1}}, {{2}}… separados por coma'), title: t('Slots para {{1}}, {{2}}… separados por coma'),
+        spellcheck: 'false', class: 'grow', onchange: (e) => { x.params = e.target.value.split(',').map((v) => v.trim()).filter(Boolean); touch(); } }),
+      iconBtn('x', t('Quitar plantilla'), () => { list.splice(i, 1); upd(); }))),
+    h('div', {}, h('button', { class: 'link', type: 'button', onclick: () => { list.push({ name: '', language: 'es', params: [] }); upd(); } }, t('Agregar plantilla'))));
+}
+
 function chPhone(base) {
   const ph = chConf('phone'), provider = ph.provider || 'twilio';
   const hook = base + '/api/v1/bots/' + agent.id + '/phone/' + provider;
@@ -84,6 +101,10 @@ function chPhone(base) {
     chCheck('phone', t('Atender llamadas'), ph.enabled ? t('Prendido: Parla atiende las llamadas firmadas por tu proveedor.') : t('Apagado: el webhook responde 403.')),
     lab(t('Proveedor'), chSelect(ph, 'provider', [['twilio', 'Twilio'], ['jambonz', t('jambonz (código abierto, propio)')]])),
     lab(t('Idioma de la llamada'), h('input', { ...bind(ph, 'language'), placeholder: 'es-AR' })),
+    lab(t('Número desde el que se llama'), h('input', { ...bind(ph, 'from'), placeholder: '+5491112345678', inputmode: 'tel' })),
+    provider === 'jambonz' ? [lab(t('Dirección de la API de jambonz'), h('input', { ...bind(ph, 'api_url'), placeholder: 'https://api.jambonz.cloud', spellcheck: 'false' })),
+      lab(t('Application SID'), h('input', { ...bind(ph, 'application_sid'), spellcheck: 'false' }))] : null,
+    h('p', { class: 'help', style: 'font-size:14px' }, t('El número, la dirección y las claves de abajo hacen falta solo para que Parla llame (campañas y recordatorios). Para atender no.')),
     lab(t('Voz'), chSelect(ph, 'tts', [['provider', t('La del proveedor')], ['parla', t('La de Parla (piper, en este servidor)')]])),
     ph.tts === 'parla' ? null : lab(t('Nombre de la voz del proveedor (opcional)'), h('input', { ...bind(ph, 'voice'), placeholder: provider === 'twilio' ? 'Polly.Mia-Neural' : 'es-US-Neural2-A' })),
     lab(t('Transferir a una persona'), h('input', { ...bind(ph, 'handoff_to'), placeholder: '+5491112345678 · sip:mesa@pbx.midominio.com' })),
@@ -118,7 +139,7 @@ window.channelsView = () => {
       lab(t('Identificador del número (Phone number ID)'), h('input', { ...bind(wa, 'phone_number_id'), inputmode: 'numeric', placeholder: '123456789012345' })),
       h('p', { class: 'help' }, t('En Meta, WhatsApp → Configuración → Webhook: pegá esta URL de devolución de llamada y tu token de verificación, y suscribite a «messages».')),
       chUrl(chHook('whatsapp')),
-      chSecrets('whatsapp'), chStatus('whatsapp')),
+      chTemplates(wa), chSecrets('whatsapp'), chStatus('whatsapp')),
     h('div', { class: 'panel' },
       h('h2', {}, 'Telegram'),
       chCheck('telegram', t('Atender por Telegram'), tg.enabled ? t('Prendido: Parla acepta los mensajes que traen el secreto del webhook.') : t('Apagado: el webhook responde 403.')),

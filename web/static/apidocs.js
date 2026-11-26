@@ -80,6 +80,8 @@
     del: () => ({ method: 'DELETE', path: '/bots/' + ref() + '/sessions/' + encodeURIComponent(sid) }),
     messages: () => ({ method: 'GET', path: '/bots/' + ref() + '/sessions/' + encodeURIComponent(sid) + '/messages?after=0' }),
     audio: () => ({ method: 'POST', path: '/bots/' + ref() + '/audio', body: { sessionId: sid, audio: t('<la grabación en base64>'), mime: 'audio/webm', speak: true } }),
+    outbound: () => ({ method: 'POST', path: '/bots/' + ref() + '/outbound', body: { channel: 'whatsapp', to: '+5491122334455',
+      template: { name: (agent.channels?.whatsapp?.templates || [])[0]?.name || 'recordatorio_turno' }, flow: agent.flows[0]?.name || null, data: sampleData() } }),
   };
 
   // Qué hace cada dirección: lo usan la página y los archivos exportados.
@@ -94,6 +96,7 @@
     report: t('Cuántas conversaciones hubo con cada clasificación, en total y por día. Sirve para tableros o planillas. Los filtros son opcionales; sin ellos cuenta todas las conversaciones.'),
     del: t('La elimina del todo, con su historial. No se puede deshacer.'),
     messages: t('Lo nuevo de la conversación desde la entrada número after del historial (0 = todo). Sirve para recibir lo que escribe una persona desde la Bandeja cuando el bot pasó la charla (handoff): preguntá cada pocos segundos mandando como after el next de la respuesta anterior.'),
+    outbound: t('El bot escribe primero: un mensaje de WhatsApp (con plantilla aprobada), Telegram o una llamada a una sola persona. Para muchas, armá una campaña en «Campañas». No se manda a quien se dio de baja.'),
     audio: t('Un mensaje de voz: Parla lo pasa a texto en esta computadora (sin servicios de afuera), lo atiende como un message y, con speak, te devuelve la respuesta también en audio. Trae lo mismo que message más heard y audio.'),
   };
 
@@ -608,6 +611,14 @@
           ['handoff', t('true mientras la charla la atiende una persona.')],
           ['ended', t('true si la conversación se terminó.')],
         ]) }),
+      endpoint('outbound', { title: t('Escribirle primero a alguien'), purpose: PURPOSE.outbound, noTry: true,
+        rows: [
+          ['channel', t('No'), t('"whatsapp" (por defecto), "telegram" o "phone".')],
+          ['to', t('Sí'), t('El número con código de país (+5491122334455) o el chat id de Telegram.')],
+          ['template', t('En WhatsApp'), t('La plantilla aprobada: su nombre o {name, language, params}. Se completa con el catálogo de Canales.')],
+          ['flow', t('No'), t('El flujo que corre: enseguida en Telegram y en llamadas, cuando la persona responde en WhatsApp.')],
+          ['data', t('No'), t('Datos que se guardan en slots y completan la plantilla.')],
+        ] }),
       endpoint('audio', { title: t('Mandar un mensaje de voz'), purpose: PURPOSE.audio, noTry: true,
         rows: [
           ['audio', t('Sí'), [t('La grabación en base64 (también acepta '), inline('data:audio/webm;base64,…'), t('). Hasta 25 MB.')]],
