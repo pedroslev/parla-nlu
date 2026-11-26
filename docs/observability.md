@@ -43,9 +43,11 @@ so "calls by outcome" is `rate(<name>_count{outcome="error"}[5m])`. `outcome` is
 | `parla_function_duration_seconds` | histogram | `language`, `outcome` | Function runs (steps and agent-step tools). |
 | `parla_knowledge_search_duration_seconds` | histogram | `outcome` | Knowledge base searches. |
 | `parla_handoffs_total` | counter | `agent`, `channel` | Conversations the bot handed to a person. |
+| `parla_webhook_deliveries_total` | counter | `outcome` | Handoff webhook attempts: `delivered`, `retry` (will be retried), `dead` (no more retries). |
+| `parla_webhook_delivery_duration_seconds` | histogram | | Webhook HTTP round trip (each attempt that got an answer or timed out). |
 | `parla_csat_score` | histogram | `agent` | CSAT answers, buckets 1 to 5 (average: `_sum / _count`). |
 | `parla_connections` | gauge | `kind` | Open connections: `http` (keep-alive), `ws`, `sse`. |
-| `parla_queue_depth` | gauge | `queue` | `executor` (requests waiting for a thread), `inflight`, `sessions` (conversations with a turn running or queued), `bus_subscribers`, `db_write`, `embed`. |
+| `parla_queue_depth` | gauge | `queue` | `executor` (requests waiting for a thread), `inflight`, `sessions` (conversations with a turn running or queued), `bus_subscribers`, `db_write`, `embed`, `webhooks` (handoff webhook deliveries queued or sending). |
 | `parla_embed_batches_total`, `parla_embed_items_total` | counter | | ONNX embedding calls and texts: items / batches = mean batch size. |
 | `parla_db_commits_total`, `parla_db_statements_total` | counter | | SQLite group commits and the writes in them: statements / commits = mean group size. |
 | `parla_active_sessions` | gauge | `agent` | Conversations not ended with activity in the last 30 minutes (computed on each scrape). |

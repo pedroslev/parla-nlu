@@ -260,6 +260,14 @@ Cuando un flujo o la persona piden hablar con alguien, Parla dice el texto del p
 escribir: en la Bandeja, **Tomar conversación** hace que Parla transfiera la llamada a `handoff_to` apenas la persona
 deje de hablar.
 
+**Transferir con contexto** (Canales → Derivación → Contexto en la transferencia telefónica): a un URI SIP, Parla
+puede sumar `X-Parla-Session`, `X-Parla-Intent`, `X-Parla-Language`, `X-Parla-Summary`, `X-Parla-Context` (la URL
+del lookup), `X-Parla-Slot-<nombre>` y `User-to-User` (Twilio: en el URI del `<Sip>`; jambonz: `dial.headers`). Solo
+ASCII, cada valor hasta 128 caracteres y todos menos de 1000; nada de la bóveda. A un número, Twilio usa
+`<Dial><Number>` (sin encabezados). Con un Workflow SID de Twilio Flex, la llamada va a
+`<Enqueue workflowSid><Task>{…}</Task></Enqueue>` con el contexto en los atributos de la tarea. Detalle en
+[contact-centers_es.md](contact-centers_es.md#teléfono-transferir-con-contexto).
+
 ### Límites del teléfono
 
 - Las llamadas salientes (la API, campañas y recordatorios) necesitan `from`, las claves del proveedor y, en jambonz,

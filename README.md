@@ -85,6 +85,8 @@ The interface is available in English, Spanish and Portuguese (pick it next to t
 
 ### Operations
 - **Inbox**: take over a conversation, reply to the person and hand it back to the bot.
+- **External contact centers**: hand off to Genesys, Twilio Flex, Five9, Zendesk, Salesforce… with signed webhooks, an
+  API to reply and release, and SIP headers with context on calls ([docs/contact-centers.md](docs/contact-centers.md)).
 - Saved conversations with filters, classifications and daily reports. Each one can be replayed as a test against
   another version, or you can keep talking as that customer.
 - **Improve**: what people wrote that the bot didn't understand, grouped by similarity and with a

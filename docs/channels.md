@@ -250,6 +250,13 @@ When a flow or the caller asks for a person, Parla says the handoff text and tra
 Parla apologizes and hangs up (and shows the error in **Channels**). There's nothing to type on a call: in the
 Inbox, **Take conversation** makes Parla transfer the call to `handoff_to` as soon as the caller stops talking.
 
+**Transfer with context** (Channels → Handoff → Context in phone transfers): to a SIP URI, Parla can add
+`X-Parla-Session`, `X-Parla-Intent`, `X-Parla-Language`, `X-Parla-Summary`, `X-Parla-Context` (lookup URL),
+`X-Parla-Slot-<name>` and `User-to-User` (Twilio: in the `<Sip>` URI; jambonz: `dial.headers`). ASCII only, each
+value up to 128 characters and all under 1000; nothing from the vault. To a number Twilio uses `<Dial><Number>`
+(no headers). With a Twilio Flex Workflow SID, the call goes to `<Enqueue workflowSid><Task>{…}</Task></Enqueue>`
+with the context as task attributes. Details in [contact-centers.md](contact-centers.md#phone-transfer-with-context).
+
 ### Phone limits
 
 - Outbound calls (the API, campaigns and reminders) need `from`, the provider's keys and, on jambonz, `api_url` and

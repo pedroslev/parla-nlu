@@ -10,6 +10,7 @@
 | [Probar bots](testing-bots_es.md) | Todos | Suites de pruebas de conversación: formato, «Guardar como test», el freno al publicar, API, línea de comandos y GitHub Actions. |
 | [API HTTP](api_es.md) | Desarrolladores | La API pública `/api/v1` con ejemplos `curl`, autenticación y roles, y la API interna. |
 | [WhatsApp y Telegram](channels_es.md) | Quien publica el bot | Conectar un bot a WhatsApp (Cloud API) y Telegram, paso a paso, límites y seguridad. |
+| [Contact centers externos](contact-centers_es.md) | Quien integra el bot | Derivar a tu propio contact center: webhooks firmados, la API del contact center, encabezados SIP y tareas de Flex, recetas para Genesys, Flex, Five9, Zendesk y Salesforce. |
 | [Mensajes salientes y campañas](outbound_es.md) | Quien publica el bot | El bot escribe primero: API de salida, plantillas de WhatsApp y la ventana de 24 horas, llamadas salientes, campañas con CSV, recordatorios, bajas, consentimiento. |
 | [MCP y «Conectar con IA»](mcp_es.md) | Todos | Que Claude, Codex o Cursor te armen el bot. |
 | [Skills para asistentes de IA](skills_es.md) | Todos | Las buenas prácticas para armar bots como Agent Skills: qué son y cómo instalarlas en Claude Code, Claude Desktop, Codex o Cursor. |

@@ -12,6 +12,11 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Shipped recently
 
+- **External contact centers**: handoff modes (Parla's Inbox, an external contact center or both), signed and
+  retried webhooks, an API for the contact center to accept, reply, release or close, lookup by phone or chat, and
+  phone transfers with context in SIP headers or Twilio Flex tasks. Recipes for Genesys Cloud, Twilio Flex, Five9,
+  Zendesk and Salesforce. See [contact-centers.md](contact-centers.md).
+
 - **Event-driven core, WebSocket/SSE, LLM streaming**: an asyncio server with keep-alive and per-conversation
   queues, micro-batched embeddings and a single SQLite writer (~5-13x the old throughput, 0 errors at 1,000
   concurrent conversations, 5,000 idle connections); WebSocket and SSE push for the widget, Inbox and Campaigns; AI

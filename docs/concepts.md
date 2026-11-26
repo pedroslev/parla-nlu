@@ -219,6 +219,12 @@ ready-to-use examples and a button to test them. See [security.md](security.md):
 The bot goes quiet and the conversation appears in the **Inbox** until a person hands it back. Without
 `text`, it uses the one from `system.handoff`.
 
+**Handoff modes** (Channels → Handoff, `agent.handoff.mode`): `inbox` (the default, above), `external` (your own
+contact center handles it: Parla sends a signed webhook, the Inbox shows it read-only, and the CC accepts, replies,
+releases or closes it through the API; optionally it returns to the bot or closes after `timeout_minutes`) and
+`both`. Every handoff gets a one or two line `summary` (AI if enabled, otherwise intent + slots). See
+[contact-centers.md](contact-centers.md).
+
 ### `agent`: let the AI converse
 ```json
 {"type": "agent", "instructions": "Ayudá a elegir un gusto y averiguá la dirección.",

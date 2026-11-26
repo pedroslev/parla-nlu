@@ -27,6 +27,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- External contact centers ([docs/contact-centers.md](docs/contact-centers.md)): per-agent `handoff.mode`
+  (`inbox`, `external`, `both`) with a timeout that returns the conversation to the bot or closes it; outbound
+  webhooks (`handoff.*`, `conversation.*`, `message.*`, `csat.received`, `campaign.finished`) signed with
+  `Parla-Signature`, delivered from a SQLite queue in order per conversation, retried for ~24 h and dead-lettered,
+  with a delivery log, test and retry in Channels → Handoff; contact center API `POST …/sessions/{sid}/handoff`
+  (accept, release with `data`/`flow`, close), `POST …/sessions/{sid}/messages` (widget, WhatsApp with the 24 h rule,
+  Telegram) and `GET …/lookup`; `integration`-scoped API keys; phone transfer with `X-Parla-*` / `User-to-User` SIP
+  headers (Twilio `<Sip>`, jambonz `dial.headers`), Twilio `<Number>` and Twilio Flex `<Enqueue><Task>`; a handoff
+  summary (AI if enabled, otherwise intent + slots). The Inbox shows external handoffs read-only. Metrics
+  `parla_webhook_deliveries_total`, `parla_webhook_delivery_duration_seconds`, `parla_queue_depth{queue="webhooks"}`.
 - UI sweep in CI (`make ui-test`, `tests/ui/run.py`): every role × language × agent × section in headless Chrome
   ([docs/development.md](docs/development.md#ui-sweep)).
 

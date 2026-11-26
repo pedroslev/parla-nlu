@@ -12,6 +12,11 @@ una edición paga que se guarde funciones.
 
 ## Recién salido
 
+- **Contact centers externos**: modos de derivación (la Bandeja de Parla, un contact center externo o ambos),
+  webhooks firmados con reintentos, una API para que el contact center acepte, responda, devuelva o cierre, búsqueda
+  por teléfono o chat, y transferencias telefónicas con contexto en encabezados SIP o tareas de Twilio Flex. Recetas
+  para Genesys Cloud, Twilio Flex, Five9, Zendesk y Salesforce. Ver [contact-centers_es.md](contact-centers_es.md).
+
 - **Núcleo por eventos, WebSocket/SSE, streaming de la IA**: un servidor asyncio con keep-alive y una fila por
   conversación, embeddings en micro-lotes y un solo escritor de SQLite (~5-13x lo de antes, sin errores con 1.000
   charlas a la vez, 5.000 conexiones quietas); WebSocket y SSE para el widget, la Bandeja y Campañas; respuestas de

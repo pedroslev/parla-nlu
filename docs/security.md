@@ -135,6 +135,7 @@ next to **Manage users**) or with `GET /api/audit` ([api.md](api.md)); other rol
 
 - For the API and MCP: `Authorization: Bearer parla_...`. They're created in **Users → a user → API keys**. Only the owner manages users and keys, for any user.
 - They act with the role and bots **of the user they belong to**: an analyst's key can only make `GET` requests.
+  A key created with `"scope": "integration"` only reaches the contact center routes (see [Outbound webhooks](#outbound-webhooks)).
 - They're shown only once. They're stored as a SHA-256 hash in `users.json`; deleting the key (or the user) cuts
   it off immediately.
 - With a valid key you can call `/api/` even if the `Host` isn't a known one (your backend behind a proxy). With a
@@ -341,6 +342,23 @@ what goes to it, handled under its terms (retention, training, region) and bille
   response to whoever runs the test. The same applies to importing knowledge from a URL and to an agent's AI
   address. Any editor can use this: review bots built by an AI or by someone else, and in Kubernetes restrict
   outbound traffic with an egress `NetworkPolicy` (or the server's firewall).
+
+## Outbound webhooks
+
+Handoff webhooks (`agent.webhooks`, [contact-centers.md](contact-centers.md)):
+
+- **Signed:** `Parla-Signature: t=<unix>,v1=<HMAC-SHA256 of "t.body">` with the vault key `secret_name`. Without
+  that key nothing is sent (it's retried until you add it). The receiver must verify with the raw body, reject old
+  `t` (replay) and deduplicate by event `id` (delivery is at least once).
+- **Personal data:** with redaction on, address, slots and messages are redacted; the WhatsApp/Telegram `sessionId`
+  (`wa-<phone>`) is not. Choose `message.user`/`message.bot` only if the CC needs every message.
+- **SSRF:** same egress rules as `http` steps: Parla posts to whatever URL an editor saves, including internal
+  addresses. Redirects are not followed (a 3xx counts as a failure). Restrict egress with a firewall or
+  `NetworkPolicy`. Only owner/editor configure webhooks; changes, tests and retries are audited
+  (`handoff.update`, `webhook.test`, `webhook.retry`).
+- **Integration keys:** `scope: "integration"` limits a key to `…/handoff`, `…/messages`, `…/lookup` and reading
+  conversations (never more than the user's own role; an analyst's key stays read-only). Use one per contact
+  center. The SIP headers never carry vault values, and `X-Parla-Context` is only a URL: calling it needs a key.
 
 ## Tools in the agent step
 

@@ -305,6 +305,22 @@ curl -s http://127.0.0.1:8000/api/v1/bots/clinica/outbound \
 - 409: fuera de la ventana sin plantilla, la persona se dio de baja, o una persona está atendiendo la conversación.
   429: más de `agent.outbound.api_per_minute` (30 por defecto) por minuto. 502: el canal lo rechazó.
 
+### Contact center (derivación externa)
+
+Para un contact center fuera de Parla ([contact-centers_es.md](contact-centers_es.md)). Clave de dueño/editor o una
+clave con scope `integration`.
+
+| Ruta | Cuerpo → respuesta |
+|---|---|
+| `POST /api/v1/bots/{bot}/sessions/{sid}/handoff` | `{"action": "accept", "agent_name"?}` · `{"action": "release", "data"?, "flow"?}` · `{"action": "close", "resolution"?}` → la conversación (como `GET …/sessions/{sid}` sin `history`). 400 acción/flujo desconocido, 404, 409 ya terminó. |
+| `POST /api/v1/bots/{bot}/sessions/{sid}/messages` | `{"text", "from_name"?}` → la conversación y `delivered`. Sale por el canal (widget, WhatsApp, Telegram). 409: llamada, terminada o WhatsApp fuera de las 24 h. 502: el proveedor lo rechazó. |
+| `GET /api/v1/bots/{bot}/lookup?phone=\|chat=\|sid=` | La última conversación abierta de esa persona (primero las derivadas), con el mismo cuerpo que el webhook (sin `id`/`type`). 404 si no hay. |
+
+**Webhooks salientes** (`agent.webhooks`): eventos `handoff.requested`, `handoff.released`, `conversation.started`,
+`conversation.ended`, `message.user`, `message.bot`, `csat.received`, `campaign.finished`, firmados con
+`Parla-Signature: t=…,v1=…`. Cuerpo, reintentos y verificación en
+[contact-centers_es.md](contact-centers_es.md#eventos-del-webhook).
+
 ### Webhooks de WhatsApp y Telegram
 
 Los llaman Meta y Telegram, no vos: no usan login ni claves de API y aceptan cualquier `Host`. Responden 403 sin
@@ -463,6 +479,16 @@ Dueño o editor; analista, solo los `GET`. `{c}` es el id de 12 caracteres de la
 | `POST /api/agents/{id}/campaigns/{c}/start\|pause\|resume\|cancel` | La campaña; 409 si su estado no lo permite. |
 | `GET /api/agents/{id}/campaigns/{c}/export` | Los resultados en CSV. |
 | `GET`, `POST`, `DELETE /api/agents/{id}/optouts` | `{"optouts": [{"address", "channel", "keyword", "at"}]}`; `POST`/`DELETE` con `{"address"}` suman o sacan una baja a mano. |
+
+### Webhooks de la derivación
+
+| Ruta | Respuesta |
+|---|---|
+| `GET /api/agents/{id}/webhooks/deliveries?limit=50` | `{"deliveries": [{"id", "url", "event", "event_id", "sessionId", "status", "attempts", "code", "error", "latency_ms", "next_at", "created", "updated"}], "pending"}` (también el analista). |
+| `POST /api/agents/{id}/webhooks/test` | `{"url"}` de un webhook guardado → la entrega `test`, ya intentada. |
+| `POST /api/agents/{id}/webhooks/deliveries/{n}/retry` | Vuelve a la cola con los intentos en cero. 404 si ya llegó. |
+
+`POST /api/users/{nombre}/keys` acepta `"scope": "integration"`: la clave solo sirve para las rutas del contact center.
 
 ### IA, voz y «Conectar con IA»
 

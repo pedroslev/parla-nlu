@@ -43,9 +43,11 @@ y `_sum`, así que «llamadas por resultado» es `rate(<nombre>_count{outcome="e
 | `parla_function_duration_seconds` | histogram | `language`, `outcome` | Ejecuciones de funciones (pasos y herramientas del paso agente). |
 | `parla_knowledge_search_duration_seconds` | histogram | `outcome` | Búsquedas en la base de conocimiento. |
 | `parla_handoffs_total` | counter | `agent`, `channel` | Conversaciones que el bot pasó a una persona. |
+| `parla_webhook_deliveries_total` | counter | `outcome` | Intentos de los webhooks de la derivación: `delivered`, `retry` (se va a reintentar), `dead` (sin más reintentos). |
+| `parla_webhook_delivery_duration_seconds` | histogram | | Ida y vuelta HTTP del webhook (cada intento que tuvo respuesta o venció). |
 | `parla_csat_score` | histogram | `agent` | Respuestas a la encuesta CSAT, buckets de 1 a 5 (promedio: `_sum / _count`). |
 | `parla_connections` | gauge | `kind` | Conexiones abiertas: `http` (keep-alive), `ws`, `sse`. |
-| `parla_queue_depth` | gauge | `queue` | `executor` (pedidos esperando un hilo), `inflight`, `sessions` (charlas con un turno en curso o en fila), `bus_subscribers`, `db_write`, `embed`. |
+| `parla_queue_depth` | gauge | `queue` | `executor` (pedidos esperando un hilo), `inflight`, `sessions` (charlas con un turno en curso o en fila), `bus_subscribers`, `db_write`, `embed`, `webhooks` (entregas de webhooks de la derivación en cola o saliendo). |
 | `parla_embed_batches_total`, `parla_embed_items_total` | counter | | Llamadas de embeddings a ONNX y textos: textos / llamadas = tamaño medio del lote. |
 | `parla_db_commits_total`, `parla_db_statements_total` | counter | | Group commits de SQLite y sus escrituras: sentencias / commits = tamaño medio del grupo. |
 | `parla_active_sessions` | gauge | `agent` | Conversaciones sin terminar con movimiento en los últimos 30 minutos (se calcula en cada scrape). |

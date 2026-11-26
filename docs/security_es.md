@@ -141,6 +141,7 @@ lado de «Administrar usuarios») o con `GET /api/audit` ([api_es.md](api_es.md)
 - Para la API y el MCP: `Authorization: Bearer parla_...`. Se crean en **Usuarios → un usuario → Claves de API**
   (solo el dueño maneja usuarios y claves, de cualquier usuario).
 - Actúan con el rol y los bots **del usuario al que pertenecen**: una clave de un analista solo puede hacer `GET`.
+  Una clave creada con `"scope": "integration"` solo llega a las rutas del contact center (ver [Webhooks salientes](#webhooks-salientes)).
 - Se muestran una sola vez. Se guardan como hash SHA-256 en `users.json`; borrar la clave (o el usuario) la corta
   al instante.
 - Con una clave válida se puede llamar a `/api/` aunque el `Host` no sea uno conocido (tu backend detrás de un
@@ -352,6 +353,24 @@ entrenamiento, región) y cobrado al dueño de la key:
   devuelve la respuesta a quien la prueba. Lo mismo vale para importar conocimiento desde una URL y para la
   dirección de la IA de un agente. Cualquier editor puede usarlo: revisá los bots que arme una IA o alguien más,
   y en Kubernetes limitá la salida con una `NetworkPolicy` de egress (o el firewall del servidor).
+
+## Webhooks salientes
+
+Los webhooks de la derivación (`agent.webhooks`, [contact-centers_es.md](contact-centers_es.md)):
+
+- **Firmados:** `Parla-Signature: t=<unix>,v1=<HMAC-SHA256 de "t.cuerpo">` con la clave `secret_name` de la bóveda.
+  Sin esa clave no sale nada (se reintenta hasta que la cargues). El que recibe tiene que verificar con el cuerpo
+  crudo, rechazar `t` viejos (repetición) y deduplicar por el `id` del evento (la entrega es al menos una vez).
+- **Datos personales:** con datos tapados, dirección, slots y mensajes van tapados; el `sessionId` de
+  WhatsApp/Telegram (`wa-<teléfono>`) no. Elegí `message.user`/`message.bot` solo si el CC necesita cada mensaje.
+- **SSRF:** mismas reglas de salida que los pasos `http`: Parla le pega a la URL que guarde un editor, también a
+  direcciones internas. No se siguen redirecciones (un 3xx cuenta como falla). Limitá la salida con un firewall o
+  una `NetworkPolicy`. Solo dueño/editor configuran webhooks; los cambios, las pruebas y los reintentos quedan en la
+  auditoría (`handoff.update`, `webhook.test`, `webhook.retry`).
+- **Claves de integración:** `scope: "integration"` limita una clave a `…/handoff`, `…/messages`, `…/lookup` y leer
+  conversaciones (nunca más que el rol del usuario; la de un analista sigue siendo de solo lectura). Usá una por
+  contact center. Los encabezados SIP nunca llevan valores de la bóveda y `X-Parla-Context` es solo una URL: para
+  llamarla hace falta una clave.
 
 ## Herramientas en el paso agente
 

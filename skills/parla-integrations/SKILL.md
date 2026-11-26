@@ -178,6 +178,20 @@ nothing is published). Design notes: WhatsApp runs no `__start__` flow and only 
 placeholder (`[imagen]`), voice notes aren't transcribed. Walk the user through `docs/channels.md`; never ask
 them for the tokens.
 
+## External contact center (handoff)
+
+When the company answers in its own contact center (not Parla's Inbox), see `docs/contact-centers.md`:
+
+- `handoff: {mode: "external", timeout_minutes, on_timeout: "bot"|"close"}` and
+  `webhooks: [{url: "https://…", events: ["handoff.requested", "handoff.released", "conversation.ended"], secret_name}]`.
+  Ask the user to load the signing key in **Claves**; never put it in the JSON.
+- Subscribe only to what the CC needs; `message.user` / `message.bot` send every message.
+- Give the CC an **integration key** (`scope: "integration"`), not an owner key. The receiver verifies
+  `Parla-Signature` on the raw body and deduplicates by `id`.
+- Calls: transfer to a SIP URI with `handoff.phone.headers` (`session`, `intent`, `summary`…); a plain number can't
+  carry headers. Twilio Flex: `handoff.phone.twilio_workflow_sid`.
+- Release with `data` + `flow` to resume where the human left off.
+
 ## Personal data
 
 - `pii_redaction` (`true` or a list of `email phone card id bank`) masks what is **stored** (history, entities,

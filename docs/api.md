@@ -304,6 +304,22 @@ curl -s http://127.0.0.1:8000/api/v1/bots/clinica/outbound \
 - 409: outside the window without a template, the person opted out, or a person is handling the conversation.
   429: more than `agent.outbound.api_per_minute` (default 30) per minute. 502: the channel rejected it.
 
+### Contact center (external handoff)
+
+For a contact center outside Parla ([contact-centers.md](contact-centers.md)). Owner/editor key or an
+`integration`-scoped key.
+
+| Route | Body → response |
+|---|---|
+| `POST /api/v1/bots/{bot}/sessions/{sid}/handoff` | `{"action": "accept", "agent_name"?}` · `{"action": "release", "data"?, "flow"?}` · `{"action": "close", "resolution"?}` → the conversation (like `GET …/sessions/{sid}` without `history`). 400 unknown action/flow, 404, 409 already ended. |
+| `POST /api/v1/bots/{bot}/sessions/{sid}/messages` | `{"text", "from_name"?}` → the conversation plus `delivered`. Delivered through the channel (widget, WhatsApp, Telegram). 409: phone call, ended, or WhatsApp outside 24 h. 502: the provider rejected it. |
+| `GET /api/v1/bots/{bot}/lookup?phone=\|chat=\|sid=` | The latest open conversation of that customer (handed-off first), same body as the webhook (without `id`/`type`). 404 if none. |
+
+**Outbound webhooks** (`agent.webhooks`): events `handoff.requested`, `handoff.released`, `conversation.started`,
+`conversation.ended`, `message.user`, `message.bot`, `csat.received`, `campaign.finished`, signed with
+`Parla-Signature: t=…,v1=…`. Payload, retries and verification in
+[contact-centers.md](contact-centers.md#webhook-events).
+
 ### WhatsApp and Telegram webhooks
 
 Called by Meta and Telegram, not by you: they don't use login or API keys and accept any `Host`. They answer 403
@@ -461,6 +477,16 @@ Owner or editor; analyst only the `GET`s. `{c}` is the campaign's 12-character i
 | `POST /api/agents/{id}/campaigns/{c}/start\|pause\|resume\|cancel` | The campaign; 409 if its status doesn't allow it. |
 | `GET /api/agents/{id}/campaigns/{c}/export` | The results as CSV. |
 | `GET`, `POST`, `DELETE /api/agents/{id}/optouts` | `{"optouts": [{"address", "channel", "keyword", "at"}]}`; `POST`/`DELETE` with `{"address"}` add or remove one by hand. |
+
+### Handoff webhooks
+
+| Route | Response |
+|---|---|
+| `GET /api/agents/{id}/webhooks/deliveries?limit=50` | `{"deliveries": [{"id", "url", "event", "event_id", "sessionId", "status", "attempts", "code", "error", "latency_ms", "next_at", "created", "updated"}], "pending"}` (analyst too). |
+| `POST /api/agents/{id}/webhooks/test` | `{"url"}` of a saved webhook → the `test` delivery, already attempted. |
+| `POST /api/agents/{id}/webhooks/deliveries/{n}/retry` | Back to the queue with attempts at zero. 404 if it was delivered. |
+
+`POST /api/users/{name}/keys` accepts `"scope": "integration"`: the key only works for the contact center routes.
 
 ### AI, voice and “Connect to AI”
 

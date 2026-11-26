@@ -219,6 +219,12 @@ para usar y un botón para probarlas. Ver [security.md](security_es.md): no es u
 El bot se calla y la conversación aparece en la **Bandeja** hasta que una persona la devuelve. Sin `text`, usa el
 de `system.handoff`.
 
+**Modos de derivación** (Canales → Derivación, `agent.handoff.mode`): `inbox` (lo de siempre, arriba), `external`
+(la atiende tu contact center: Parla manda un webhook firmado, la Bandeja la muestra de solo lectura y el CC la
+acepta, le escribe, la devuelve o la cierra por la API; opcionalmente vuelve al bot o se cierra a los
+`timeout_minutes`) y `both`. Cada handoff lleva un `summary` de una o dos líneas (con IA si está prendida; si no,
+intención + slots). Ver [contact-centers_es.md](contact-centers_es.md).
+
 ### `agent`: dejar que la IA converse
 ```json
 {"type": "agent", "instructions": "Ayudá a elegir un gusto y averiguá la dirección.",
