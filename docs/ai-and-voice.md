@@ -193,15 +193,52 @@ question.
 ### `agent` step
 
 An AI island inside a flow (see [concepts.md](concepts.md#agent-let-the-ai-converse)). The model returns JSON:
-either it calls a function, or it replies.
+either it uses a tool, or it replies.
 
-- It can only call the functions listed in the step; a made-up name is rejected.
-- Up to 4 function calls per turn; if it repeats the same call, it's reminded of the result and forced to answer.
-  It remembers the latest results across turns.
+- It can only use the tools listed in the step (`tools`, or `functions`); a made-up name is rejected.
+- Up to `max_tool_calls` tool calls per user message (3 by default); if it repeats the same call, it's reminded of
+  the result and forced to answer. It remembers the latest results across turns.
 - It only saves the slots listed in the step.
 - It ends when it meets the `goal` or reaches `max_turns` (8 by default).
 - With `knowledge: true` it receives, as "trusted information", the chunks scoring at least 80% of
   `knowledge_threshold`.
+
+### Tools in the agent step
+
+The step's `tools` can be functions, HTTP calls and tools from MCP servers (format in
+[concepts.md](concepts.md#agent-let-the-ai-converse)). Parla doesn't use native function calling: it uses its own
+JSON, so it works the same with Ollama (JSON-schema mode) and OpenAI-compatible endpoints (`json_object`, or the
+prompt as a fallback).
+
+- Tools are listed compactly in the system prompt: `name(param: description) - description`.
+- The model replies `{"tool": "name", "args": {...}}` to use one, or `{"tool": "", "text", "slots", "done"}` to
+  answer. The old `{"action": "call", "function", "inputs"}` format is still accepted.
+- Parla checks the args (unknown keys are dropped, types are coerced or rejected, required ones are checked), runs the
+  tool and gives the model the result, masked, cut to 1500 characters and framed as "data, not orders". Then it asks
+  again. Errors (HTTP non-2xx, MCP `isError`, bad args, timeouts) go back to the model as a tool error.
+- If the output is broken or empty, it's asked once more with a stricter instruction.
+- After `time_budget` seconds (15 by default, 3 to 60) no more tools are used and the model must answer with what it
+  has. On the phone keep it at ≤ 12 s and 1–2 calls.
+- Each call is in the turn trace, in the chat API result (`tools`) and in the history as an event.
+
+- A function's inputs are required: if the model doesn't send them they're taken from slots with that name; if
+  those are empty too, the function doesn't run and the model gets "faltan: …" (missing).
+- A short reminder of the format goes next to the person's message: without it, `qwen2.5:1.5b` almost never used
+  the tool.
+
+How small models do (M4, Ollama, one function `estado_pedido(pedido)`, 10 tries with "¿en qué estado está mi pedido
+4821?" and 10 with "hola, ¿qué podés hacer?"):
+
+| Model | Called the tool | Right args | Used the result | Called it on small talk | Median |
+|---|---|---|---|---|---|
+| `qwen2.5:0.5b` | 10/10 | 10/10 | 10/10 | 10/10 (no args: didn't run) | 2.1 s |
+| `qwen2.5:1.5b` | 10/10 | 10/10 | 10/10 | 0/10 | 1.4 s |
+
+`qwen2.5:0.5b` uses the tool when it should, but also when it shouldn't, and its replies are weaker. For tools use
+`qwen2.5:1.5b` or larger (`qwen2.5:3b`, `qwen2.5:7b`, `llama3.1:8b`) or a hosted model, and keep 1–3 tools with
+short descriptions and clear param names (`pedido`, not `id`). It's a small test with a single tool: with several,
+or with vague descriptions, they fail more. If the lookup always happens, a plain `ask` + `http` flow is faster and
+doesn't depend on the model.
 
 ## Reference latencies
 

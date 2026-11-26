@@ -327,10 +327,15 @@ Las acciones que se anotan están en [security_es.md](security_es.md#registro-de
 | `PUT /api/agents/{id}` | El agente entero | El agente guardado. Reemplaza todo (lo que falta vuelve a los valores en blanco); `environments` y `deployments` no se pueden pisar. Incluye los ajustes de operación `retention_days` (días, `0` = para siempre, `null` = `PARLA_RETENTION_DAYS`) y `pii_redaction` (`false`, `true` o una lista de `email`, `phone`, `card`, `id`, `bank`); no se versionan ni se exportan. Ver [concepts_es.md](concepts_es.md#retención-y-datos-personales). Las pruebas de conversación son el campo `tests` (ver [testing-bots_es.md](testing-bots_es.md#formato)). |
 | `DELETE /api/agents/{id}` | — | `{}`. Borra el agente, su modelo, versiones, conversaciones y archivos. |
 | `POST /api/agents/{id}/train` | `{"fingerprint"?}` | `{"at", "fingerprint", "phrases", "marked", "log"}`; `log` trae los pasos, la autoevaluación (`self_check`), el CRF y los consejos (`warnings`). |
-| `POST /api/agents/{id}/chat` | `{"session", "text", "environment"?}` (`draft` por defecto) | Un turno del chat de prueba (canal `prueba`): `messages`, `buttons`, `replies`, `nlu` (`intent`, `confidence`, `ranking`, `entities`), `slots`, `trace`, `answer_to`, `rejected`, `fallback`, `handoff`, `language`, `via`, `sources`. |
+| `POST /api/agents/{id}/chat` | `{"session", "text", "environment"?}` (`draft` por defecto) | Un turno del chat de prueba (canal `prueba`): `messages`, `buttons`, `replies`, `nlu` (`intent`, `confidence`, `ranking`, `entities`), `slots`, `trace`, `answer_to`, `rejected`, `fallback`, `handoff`, `language`, `via`, `sources`, `tools` (las herramientas que usó el paso agente en este turno: `[{"tool", "type", "args", "ok", "result" (hasta 300 caracteres), "ms"}]`, con las claves tapadas). |
 | `POST /api/agents/{id}/reset` | `{"session"}` | `{}`. Termina esa conversación. |
 | `POST /api/agents/{id}/http` | `{"step": paso http, "vars": {slot: valor}}` | `{"status", "body"}`: «Probar consulta» del editor (con las claves del agente). |
 | `POST /api/agents/{id}/functions/test` | `{"function": definición, "inputs": {}}`, con `Content-Type: application/json` (si no, 415) | `{"ok", "result" \| "error", "traceback"?, "logs", "ms"}` |
+| `POST /api/agents/{id}/mcp/tools` | `{"server": "<nombre>"}` (un servidor del agente guardado) o `{"server": {"name", "url", "headers_secret"?}}` (config sin guardar) | `{"tools": [{"name", "description", "inputSchema"}]}`: «Ver herramientas» del editor. 400 si el servidor no existe, 502 si no se puede conectar o responde mal. Owner o editor. |
+
+Las herramientas del paso agente van en el JSON del agente: `mcp_servers` (`[{"name", "url", "headers_secret"?}]`, a
+nivel del agente) y, en cada paso `agent`, `tools`, `max_tool_calls` y `time_budget`. Ver
+[concepts_es.md](concepts_es.md#agent-dejar-que-la-ia-converse).
 
 ### Versiones
 

@@ -19,6 +19,7 @@ An **agent** (or bot) is a JSON file with everything that defines it. The main f
 | `knowledge`, `knowledge_threshold` | Knowledge base (`[{"id", "title", "source", "url", "text"}]`) and its minimum score (`0.75` by default). |
 | `system` | System flows (see below). |
 | `ai` | Local AI (see [ai-and-voice.md](ai-and-voice.md)). |
+| `mcp_servers` | `[{"name", "url", "headers_secret"}]`: MCP servers whose tools an `agent` step can use (see [`agent`](#agent-let-the-ai-converse)). |
 | `widget` | `{"enabled", "origins", "title", "color", "greeting", "position", "voice"}`. |
 | `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id"}, "telegram": {"enabled"}}`. Tokens go in the vault, see [channels.md](channels.md). |
 | `ignored_phrases` | Phrases that **Improve** no longer shows. |
@@ -212,6 +213,33 @@ The bot goes quiet and the conversation appears in the **Inbox** until a person 
 ```
 An AI island inside the flow: it converses, can call only the listed functions, fills the listed slots and finishes
 when it meets the goal or runs out of turns; then it continues with the next step. Requires AI to be enabled.
+
+**Tools.** With `tools` the model can look things up on its own (`functions` still works and is the same as
+`function` tools):
+```json
+"tools": [
+  {"type": "function", "name": "precio"},
+  {"type": "http", "name": "buscar_pedido", "description": "Estado de un pedido por número",
+   "params": {"pedido": "número de pedido"}, "method": "GET",
+   "url": "https://api.ejemplo.com/pedidos/{{ pedido }}",
+   "headers": [{"key": "Authorization", "value": "Bearer {{ secret.API_KEY }}"}], "body": ""},
+  {"type": "mcp", "server": "crm", "tools": ["get_customer"]}
+],
+"max_tool_calls": 2, "time_budget": 12
+```
+- `http` works like an `http` step: the model only fills the `params` (`{name: "description"}` or
+  `{name: {"type": "string|integer|number|boolean", "description", "required"}}`), which are URL-encoded in the URL
+  and JSON-escaped in the body. The host is fixed in `url`; the model never chooses it.
+- `mcp` uses a server from the agent's `mcp_servers` (Streamable HTTP; `headers_secret` is the *name* of a vault
+  secret sent as `Authorization`, `Bearer <value>` if it has no space). `tools` is a mandatory allow-list: the model
+  only sees tools that are both listed and offered by the server. If the server is down, the step runs without them.
+- `max_tool_calls` (1 to 10, default 3 per message) and `time_budget` (3 to 60 s, default 15) cap the lookups; on the
+  phone keep 1–2 calls and ≤ 12 s.
+
+Each call shows in the test chat trace (`IA usó buscar_pedido(...) -> bien: ...`) and in the history, with secrets
+masked. In the flow editor it's the agent step's **Herramientas** section; MCP servers are set up in the **IA**
+screen. If the lookup always happens, prefer a plain `ask` + `http`: faster and testable without AI. Details in
+[ai-and-voice.md](ai-and-voice.md#tools-in-the-agent-step) and [security.md](security.md#tools-in-the-agent-step).
 
 ## `{{ }}` templates and CEL
 

@@ -69,7 +69,8 @@ tema: inicio, menú ⋯ o pantalla de entrada).
   llama.cpp, LM Studio, LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter ([docs/ai-and-voice_es.md](docs/ai-and-voice_es.md#endpoints-compatibles-con-openai)).
 - Rescata intenciones dudosas, completa slots a partir de una descripción, lee una respuesta con la charla
   reciente (contestó, preguntó otra cosa o pidió otra acción), responde desde la base de conocimiento, repregunta
-  cuando no entiende y conversa en un paso `agent` con funciones como herramientas.
+  cuando no entiende y conversa en un paso `agent` que puede usar herramientas: funciones, APIs HTTP y herramientas
+  habilitadas de servidores MCP (Parla como cliente MCP) ([docs/ai-and-voice_es.md](docs/ai-and-voice_es.md#herramientas-en-el-paso-agente)).
 - La IA propone y el motor decide: solo se aceptan intenciones de la lista, valores que están en el texto y
   funciones permitidas. Si la IA está apagada o no responde, el bot sigue funcionando igual.
 - Voz local (opcional): transcripción con faster-whisper y lectura en voz alta con piper (voz `es_AR`). En el

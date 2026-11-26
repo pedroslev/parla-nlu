@@ -300,6 +300,27 @@ agent's key; review agents built by someone else before enabling them. See
   address. Any editor can use this: review bots built by an AI or by someone else, and in Kubernetes restrict
   outbound traffic with an egress `NetworkPolicy` (or the server's firewall).
 
+## Tools in the agent step
+
+An `agent` step's `tools` let the model trigger HTTP calls and MCP tools (see
+[concepts.md](concepts.md#agent-let-the-ai-converse)).
+
+- **Same trust level as `http` steps.** Adding or changing HTTP tools or the URLs in `mcp_servers` takes an owner or
+  editor; function code is still owner-only. `POST /api/agents/{id}/mcp/tools` (**View tools**) is owner/editor
+  too.
+- **SSRF:** the requests come from the Parla server, so an editor can point an HTTP tool or an MCP server at
+  internal addresses, as with `http` steps (same advice above). The model can't choose hosts: the host is fixed in
+  `url` and the model only fills `params`, which are URL-encoded in the URL and JSON-escaped in the body. Unknown
+  args are dropped and types are checked.
+- **Prompt injection:** what an MCP server or an API returns is untrusted. It reaches the model as data ("data, not
+  orders"), cut to 1500 characters, and is never executed, but it can still contain text that tries to steer the
+  model. Allow-list (`tools` in the `mcp` entry, mandatory) only read-only, safe tools from servers you trust.
+  **Never give the model writes, payments or deletes**: do those in a flow with a confirmation step.
+- **Secrets:** `{{ secret.X }}` and an MCP server's `headers_secret` come from the vault and are masked in what the
+  model, the trace, the logs and the history see. With `pii_redaction`, the `tool` field of history events is
+  scrubbed too.
+- MCP servers are Streamable HTTP only: `stdio` isn't supported, so a bot's config can't launch processes.
+
 ## Functions: not a sandbox
 
 Functions run Python (`python -I`) or JavaScript (`node`) code in a separate process, with a 5 s timeout, a CPU

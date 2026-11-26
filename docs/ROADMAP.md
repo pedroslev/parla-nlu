@@ -12,6 +12,9 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Shipped recently
 
+- **Tools in the AI agent step**: the `agent` step can call functions, HTTP APIs and allow-listed tools from MCP
+  servers (Parla as an **MCP client**, Streamable HTTP), with a per-message call limit and time budget. See
+  [ai-and-voice.md](ai-and-voice.md#tools-in-the-agent-step).
 - **OIDC single sign-on**: sign in with Keycloak, Entra ID, Google Workspace, Okta, Authentik or Auth0, with roles
   mapped from the provider's groups and an optional SSO-only mode. See [sso.md](sso.md).
 - **Telephony**: inbound phone calls through Twilio Programmable Voice or jambonz (open source, self-hostable),
@@ -41,7 +44,6 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Next
 
-- **Tools in the AI agent step**: let the `agent` step call external tools as an **MCP client**.
 - **Observability**: OpenTelemetry traces and metrics export.
 - **Outbound campaigns**: start conversations proactively (reminders, notifications).
 
@@ -55,4 +57,4 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 For reference, what Parla does today: no-code builder, embeddings + CRF NLU, flows with many step types, optional
 local LLM, local voice, versions with `staging`/`production`, users and roles, OIDC single sign-on, secret vault, inbox, analytics,
-HTTP API, web widget, MCP server, Docker and Kubernetes. See the [README](../README.md#features).
+HTTP API, web widget, MCP server, agent-step tools (MCP client), Docker and Kubernetes. See the [README](../README.md#features).

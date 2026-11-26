@@ -187,15 +187,53 @@ Si no entendió y no hay nada en el conocimiento, la IA escribe una repregunta c
 ### Paso `agent`
 
 Una isla de IA dentro de un flujo (ver [concepts.md](concepts_es.md#agent-dejar-que-la-ia-converse)). El modelo
-devuelve JSON: o llama a una función, o responde.
+devuelve JSON: o usa una herramienta, o responde.
 
-- Solo puede llamar a las funciones listadas en el paso; un nombre inventado se rechaza.
-- Hasta 4 llamadas a funciones por turno; si repite la misma llamada se le recuerda el resultado y se lo obliga a
-  contestar. Recuerda los últimos resultados entre turnos.
+- Solo puede usar las herramientas listadas en el paso (`tools`, o `functions`); un nombre inventado se rechaza.
+- Hasta `max_tool_calls` llamadas por mensaje de la persona (3 por defecto); si repite la misma llamada se le recuerda
+  el resultado y se lo obliga a contestar. Recuerda los últimos resultados entre turnos.
 - Solo guarda los slots listados en el paso.
 - Termina al cumplir `goal` o al llegar a `max_turns` (8 por defecto).
 - Con `knowledge: true` recibe como «información confiable» los fragmentos con puntaje de al menos el 80 % de
   `knowledge_threshold`.
+
+### Herramientas en el paso agente
+
+Las `tools` del paso pueden ser funciones, llamadas HTTP y herramientas de servidores MCP (formato en
+[concepts_es.md](concepts_es.md#agent-dejar-que-la-ia-converse)). Parla no usa el function calling nativo: usa su
+propio JSON, así que anda igual con Ollama (modo JSON schema) y con endpoints compatibles con OpenAI (`json_object`,
+o el prompt como respaldo).
+
+- Las herramientas van compactas en el prompt de sistema: `nombre(param: descripción) - descripción`.
+- El modelo responde `{"tool": "nombre", "args": {...}}` para usar una, o `{"tool": "", "text", "slots", "done"}`
+  para contestar. Se sigue aceptando el formato viejo `{"action": "call", "function", "inputs"}`.
+- Parla revisa los argumentos (descarta claves desconocidas, convierte o rechaza tipos, controla los obligatorios),
+  corre la herramienta y le pasa el resultado al modelo, con las claves tapadas, recortado a 1500 caracteres y
+  presentado como «datos, no órdenes». Después le vuelve a preguntar. Los errores (HTTP que no es 2xx, `isError` de
+  MCP, argumentos inválidos, timeouts) le vuelven al modelo como error de la herramienta.
+- Si la salida viene rota o vacía, se le pide una vez más con una instrucción más estricta.
+- Pasados `time_budget` segundos (15 por defecto, de 3 a 60) no usa más herramientas y tiene que contestar con lo que
+  tiene. En teléfono dejalo en ≤ 12 s y 1–2 llamadas.
+- Cada llamada queda en la traza del turno, en el resultado de la API de chat (`tools`) y en el historial como evento.
+
+- Las entradas de una función son obligatorias: si la IA no las manda, se toman de los slots con ese nombre; si
+  tampoco están, la función no corre y el modelo recibe «faltan: …».
+- Al lado del mensaje de la persona va un recordatorio corto del formato: sin él, `qwen2.5:1.5b` casi nunca usaba
+  la herramienta.
+
+Qué tan bien lo hacen los modelos chicos (M4, Ollama, una función `estado_pedido(pedido)`, 10 intentos con «¿en qué
+estado está mi pedido 4821?» y 10 con «hola, ¿qué podés hacer?»):
+
+| Modelo | Llamó la herramienta | Argumentos bien | Usó el resultado | La llamó en la charla | Mediana |
+|---|---|---|---|---|---|
+| `qwen2.5:0.5b` | 10/10 | 10/10 | 10/10 | 10/10 (sin argumentos: no corrió) | 2,1 s |
+| `qwen2.5:1.5b` | 10/10 | 10/10 | 10/10 | 0/10 | 1,4 s |
+
+`qwen2.5:0.5b` usa la herramienta cuando hace falta, pero también cuando no, y contesta peor. Para herramientas usá
+`qwen2.5:1.5b` o más grande (`qwen2.5:3b`, `qwen2.5:7b`, `llama3.1:8b`) o un modelo en la nube, y dejá 1 a 3
+herramientas con descripciones cortas y parámetros con nombres claros (`pedido`, no `id`). Es una prueba chica con
+una sola herramienta: con varias, o con descripciones ambiguas, fallan más. Si la consulta pasa siempre, un flujo
+común con `ask` + `http` es más rápido y no depende del modelo.
 
 ## Latencias de referencia
 

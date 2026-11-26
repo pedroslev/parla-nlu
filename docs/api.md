@@ -327,10 +327,15 @@ The actions recorded are listed in [security.md](security.md#audit-log).
 | `PUT /api/agents/{id}` | The whole agent | The saved agent. Replaces everything (anything missing goes back to blank values); `environments` and `deployments` can't be overwritten. Includes the operational settings `retention_days` (days, `0` = forever, `null` = `PARLA_RETENTION_DAYS`) and `pii_redaction` (`false`, `true` or a list of `email`, `phone`, `card`, `id`, `bank`); they aren't versioned or exported. See [concepts.md](concepts.md#retention-and-personal-data). The conversation tests are the `tests` field (see [testing-bots.md](testing-bots.md#format)). |
 | `DELETE /api/agents/{id}` | — | `{}`. Deletes the agent, its model, versions, conversations and files. |
 | `POST /api/agents/{id}/train` | `{"fingerprint"?}` | `{"at", "fingerprint", "phrases", "marked", "log"}`; `log` has the steps, the self-evaluation (`self_check`), the CRF and the tips (`warnings`). |
-| `POST /api/agents/{id}/chat` | `{"session", "text", "environment"?}` (`draft` by default) | One turn of the test chat (channel `prueba`): `messages`, `buttons`, `replies`, `nlu` (`intent`, `confidence`, `ranking`, `entities`), `slots`, `trace`, `answer_to`, `rejected`, `fallback`, `handoff`, `language`, `via`, `sources`. |
+| `POST /api/agents/{id}/chat` | `{"session", "text", "environment"?}` (`draft` by default) | One turn of the test chat (channel `prueba`): `messages`, `buttons`, `replies`, `nlu` (`intent`, `confidence`, `ranking`, `entities`), `slots`, `trace`, `answer_to`, `rejected`, `fallback`, `handoff`, `language`, `via`, `sources`, `tools` (the agent step's tool calls this turn: `[{"tool", "type", "args", "ok", "result" (up to 300 characters), "ms"}]`, secrets masked). |
 | `POST /api/agents/{id}/reset` | `{"session"}` | `{}`. Ends that conversation. |
 | `POST /api/agents/{id}/http` | `{"step": http step, "vars": {slot: value}}` | `{"status", "body"}`: the editor's **Test the call** (with the agent's secrets). |
 | `POST /api/agents/{id}/functions/test` | `{"function": definition, "inputs": {}}`, with `Content-Type: application/json` (otherwise 415) | `{"ok", "result" \| "error", "traceback"?, "logs", "ms"}` |
+| `POST /api/agents/{id}/mcp/tools` | `{"server": "<name>"}` (a server of the saved agent) or `{"server": {"name", "url", "headers_secret"?}}` (config not saved yet) | `{"tools": [{"name", "description", "inputSchema"}]}`: the editor's **View tools**. 400 if the server doesn't exist, 502 if it can't be reached or answers badly. Owner or editor. |
+
+The agent step's tools live in the agent JSON: `mcp_servers` (`[{"name", "url", "headers_secret"?}]`, at the agent
+level) and, in each `agent` step, `tools`, `max_tool_calls` and `time_budget`. See
+[concepts.md](concepts.md#agent-let-the-ai-converse).
 
 ### Versions
 

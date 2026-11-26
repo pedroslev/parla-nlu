@@ -309,6 +309,29 @@ los agentes que arme otra persona antes de prenderlos. Ver
   dirección de la IA de un agente. Cualquier editor puede usarlo: revisá los bots que arme una IA o alguien más,
   y en Kubernetes limitá la salida con una `NetworkPolicy` de egress (o el firewall del servidor).
 
+## Herramientas en el paso agente
+
+Las `tools` de un paso `agent` le permiten al modelo disparar llamadas HTTP y herramientas MCP (ver
+[concepts_es.md](concepts_es.md#agent-dejar-que-la-ia-converse)).
+
+- **Mismo nivel de confianza que los pasos `http`.** Agregar o cambiar herramientas HTTP o las URLs de `mcp_servers`
+  requiere owner o editor; el código de funciones sigue siendo solo del owner. `POST /api/agents/{id}/mcp/tools`
+  («Ver herramientas») también es de owner/editor.
+- **SSRF:** los pedidos salen del servidor de Parla, así que un editor puede apuntar una herramienta HTTP o un
+  servidor MCP a direcciones internas, igual que con los pasos `http` (mismo consejo de arriba). El modelo no elige
+  hosts: el host queda fijo en `url` y el modelo solo completa los `params`, que van codificados en la URL y
+  escapados como JSON en el body. Los argumentos desconocidos se descartan y se controlan los tipos.
+- **Inyección de prompt:** lo que devuelve un servidor MCP o una API no es confiable. Le llega al modelo como dato
+  («datos, no órdenes»), recortado a 1500 caracteres, y nunca se ejecuta, pero igual puede traer texto que intente
+  manejar al modelo. Habilitá en la allow-list (`tools` de la entrada `mcp`, obligatoria) solo herramientas de
+  lectura y seguras, de servidores en los que confiás. **Nunca le des al modelo escrituras, pagos ni borrados**:
+  hacelos en un flujo con un paso de confirmación.
+- **Claves:** `{{ secret.X }}` y el `headers_secret` de un servidor MCP salen de la bóveda y se tapan en lo que ven el
+  modelo, la traza, los logs y el historial. Con `pii_redaction` también se limpia el campo `tool` de los eventos del
+  historial.
+- Los servidores MCP son solo Streamable HTTP: `stdio` no está soportado, así la config de un bot no puede lanzar
+  procesos.
+
 ## Funciones: no son un sandbox
 
 Las funciones corren código Python (`python -I`) o JavaScript (`node`) en un proceso aparte, con tiempo máximo de

@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Tools in the AI `agent` step: `tools` with `function`, `http` (like an http step, typed `params`, fixed host) and
+  `mcp` entries (mandatory allow-list), agent-level `mcp_servers` (Streamable HTTP only, `headers_secret` from the
+  vault, `tools/list` cached 5 minutes), and `max_tool_calls` / `time_budget` limits. Parla's own JSON protocol
+  (`{"tool", "args"}`), so it works with Ollama and OpenAI-compatible endpoints; args are validated, results are
+  masked, truncated and framed as data, broken output is retried once. Calls show in the trace, in the chat result
+  (`tools`) and as history events. **Herramientas** section in the agent step editor, **Servidores MCP** in the
+  **IA** screen, and `POST /api/agents/{id}/mcp/tools` ([docs/ai-and-voice.md](docs/ai-and-voice.md#tools-in-the-agent-step)).
 - Single sign-on with OIDC (Keycloak, Entra ID, Google Workspace, Okta, Authentik, Auth0): authorization code +
   PKCE, ID token signature (RS256/384/512) checked against the provider's JWKS with no new dependency, roles mapped
   from a groups/roles claim (`PARLA_OIDC_ROLE_CLAIM`, `PARLA_OIDC_ROLE_MAP`, `PARLA_OIDC_DEFAULT_ROLE`), an

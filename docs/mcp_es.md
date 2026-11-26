@@ -9,6 +9,11 @@ probar conversaciones, correr suites de pruebas, publicar y revisar conversacion
 
 Parla tiene que estar corriendo mientras lo usás.
 
+Esta página habla de Parla como **servidor** MCP. Parla también es **cliente** MCP: un paso `agent` puede usar
+herramientas de tus propios servidores MCP mientras conversa con la gente (Streamable HTTP, con allow-list). Ver
+[concepts_es.md](concepts_es.md#agent-dejar-que-la-ia-converse) y
+[security_es.md](security_es.md#herramientas-en-el-paso-agente).
+
 ## «Conectar con IA» (un clic)
 
 En la interfaz, **Conectar con IA** muestra Claude Code, Codex, Claude Desktop y Cursor, si están instalados y si
@@ -180,5 +185,5 @@ publica.
 ## Antes de usarlo con datos reales
 
 - Revisá los pasos `http` que arme la IA: un bot puede llamar a cualquier URL desde tu servidor, incluida tu red
-  interna.
+  interna. Lo mismo vale para las herramientas HTTP y los `mcp_servers` de los pasos `agent`.
 - Las funciones corren código en la máquina de Parla. En un Parla compartido, arrancalo con `PARLA_FUNCTIONS=0`.

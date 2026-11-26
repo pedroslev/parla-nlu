@@ -10,6 +10,10 @@ it, tests it and fixes it.
 
 Parla has to be running while you use it.
 
+This page is about Parla as an MCP **server**. Parla is also an MCP **client**: an `agent` step can use tools from
+your own MCP servers while it talks to people (Streamable HTTP, with an allow-list). See
+[concepts.md](concepts.md#agent-let-the-ai-converse) and [security.md](security.md#tools-in-the-agent-step).
+
 ## “Connect to AI” (one click)
 
 In the interface, **Connect to AI** shows Claude Code, Codex, Claude Desktop and Cursor, whether
@@ -180,4 +184,5 @@ see [skills.md](skills.md).
 ## Before using it with real data
 
 - Review the `http` steps the AI builds: a bot can call any URL from your server, including your internal network.
+  The same goes for HTTP tools and `mcp_servers` in `agent` steps.
 - Functions run code on Parla's machine. On a shared Parla, start it with `PARLA_FUNCTIONS=0`.

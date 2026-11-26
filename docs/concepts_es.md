@@ -19,6 +19,7 @@ Un **agente** (o bot) es un archivo JSON con todo lo que lo define. Los campos p
 | `knowledge`, `knowledge_threshold` | Base de conocimiento (`[{"id", "title", "source", "url", "text"}]`) y su puntaje mínimo (`0.75` por defecto). |
 | `system` | Flujos del sistema (ver abajo). |
 | `ai` | IA local (ver [ai-and-voice.md](ai-and-voice_es.md)). |
+| `mcp_servers` | `[{"name", "url", "headers_secret"}]`: servidores MCP cuyas herramientas puede usar un paso `agent` (ver [`agent`](#agent-dejar-que-la-ia-converse)). |
 | `widget` | `{"enabled", "origins", "title", "color", "greeting", "position", "voice"}`. |
 | `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id"}, "telegram": {"enabled"}}`. Los tokens van en la bóveda, ver [channels_es.md](channels_es.md). |
 | `ignored_phrases` | Frases que «Para enseñar» ya no muestra. |
@@ -212,6 +213,35 @@ de `system.handoff`.
 ```
 Una isla de IA dentro del flujo: conversa, puede llamar solo a las funciones listadas, llena los slots listados y
 termina cuando cumple el objetivo o agota los turnos; después sigue con el paso siguiente. Necesita la IA prendida.
+
+**Herramientas.** Con `tools` el modelo puede consultar cosas por su cuenta (`functions` sigue andando y equivale a
+herramientas `function`):
+```json
+"tools": [
+  {"type": "function", "name": "precio"},
+  {"type": "http", "name": "buscar_pedido", "description": "Estado de un pedido por número",
+   "params": {"pedido": "número de pedido"}, "method": "GET",
+   "url": "https://api.ejemplo.com/pedidos/{{ pedido }}",
+   "headers": [{"key": "Authorization", "value": "Bearer {{ secret.API_KEY }}"}], "body": ""},
+  {"type": "mcp", "server": "crm", "tools": ["get_customer"]}
+],
+"max_tool_calls": 2, "time_budget": 12
+```
+- `http` funciona como un paso `http`: el modelo solo completa los `params` (`{nombre: "descripción"}` o
+  `{nombre: {"type": "string|integer|number|boolean", "description", "required"}}`), que van codificados en la URL y
+  escapados como JSON en el body. El servidor queda fijo en `url`; el modelo nunca lo elige.
+- `mcp` usa un servidor de `mcp_servers` del agente (Streamable HTTP; `headers_secret` es el *nombre* de una clave de
+  la bóveda que va como `Authorization`, `Bearer <valor>` si no tiene espacio). `tools` es una allow-list obligatoria:
+  el modelo solo ve las herramientas que están en la lista y que el servidor ofrece. Si el servidor no responde, el
+  paso sigue sin ellas.
+- `max_tool_calls` (1 a 10, 3 por mensaje por defecto) y `time_budget` (3 a 60 s, 15 por defecto) limitan las
+  consultas; en teléfono dejá 1–2 llamadas y ≤ 12 s.
+
+Cada llamada aparece en la traza del chat de prueba (`IA usó buscar_pedido(...) -> bien: ...`) y en el historial, con
+las claves tapadas. En el editor de flujos es la sección **Herramientas** del paso agente; los servidores MCP se
+cargan en la pantalla **IA**. Si la consulta pasa siempre, mejor un `ask` + `http` común: más rápido y se prueba sin
+IA. Detalles en [ai-and-voice_es.md](ai-and-voice_es.md#herramientas-en-el-paso-agente) y
+[security_es.md](security_es.md#herramientas-en-el-paso-agente).
 
 ## Plantillas `{{ }}` y CEL
 

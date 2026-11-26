@@ -72,7 +72,8 @@ The interface is available in English, Spanish and Portuguese (pick it next to t
   LM Studio, LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter ([docs/ai-and-voice.md](docs/ai-and-voice.md#openai-compatible-endpoints)).
 - Rescues uncertain intents, fills slots from a description, reads an answer together with the recent
   conversation (did they answer, ask something else or request a different action), answers from the knowledge
-  base, asks again when it doesn't understand, and converses in an `agent` step with functions as tools.
+  base, asks again when it doesn't understand, and converses in an `agent` step that can use tools: functions, HTTP APIs and allow-listed tools from MCP servers
+  (Parla as an MCP client) ([docs/ai-and-voice.md](docs/ai-and-voice.md#tools-in-the-agent-step)).
 - The AI proposes and the engine decides: only intents from the list, values that appear in the text and allowed
   functions are accepted. If the AI is off or doesn't respond, the bot keeps working the same.
 - Local voice (optional): transcription with faster-whisper and text-to-speech with piper (`es_AR` voice). The test

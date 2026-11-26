@@ -12,6 +12,9 @@ una edición paga que se guarde funciones.
 
 ## Recién salido
 
+- **Herramientas en el paso de agente de IA**: el paso `agent` puede llamar funciones, APIs HTTP y herramientas
+  habilitadas de servidores MCP (Parla como **cliente MCP**, Streamable HTTP), con un límite de llamadas por mensaje
+  y un tiempo máximo. Ver [ai-and-voice_es.md](ai-and-voice_es.md#herramientas-en-el-paso-agente).
 - **Inicio de sesión único con OIDC**: entrar con Keycloak, Entra ID, Google Workspace, Okta, Authentik o Auth0,
   con roles mapeados desde los grupos del proveedor y un modo opcional solo SSO. Ver [sso_es.md](sso_es.md).
 - **Telefonía**: llamadas entrantes por Twilio Programmable Voice o jambonz (código abierto, se puede instalar en
@@ -41,7 +44,6 @@ una edición paga que se guarde funciones.
 
 ## Después
 
-- **Herramientas en el paso de agente de IA**: que el paso `agent` llame herramientas externas como **cliente MCP**.
 - **Observabilidad**: exportar trazas y métricas con OpenTelemetry.
 - **Campañas salientes**: iniciar conversaciones de forma proactiva (recordatorios, avisos).
 
@@ -55,5 +57,5 @@ una edición paga que se guarde funciones.
 
 Como referencia, lo que Parla hace hoy: constructor sin código, NLU con embeddings + CRF, flujos con muchos tipos de
 paso, LLM local opcional, voz local, versiones con `staging`/`production`, usuarios y roles, inicio de sesión único con OIDC, bóveda de secretos,
-bandeja, analíticas, API HTTP, widget web, servidor MCP, Docker y Kubernetes. Ver el
+bandeja, analíticas, API HTTP, widget web, servidor MCP, herramientas en el paso agente (cliente MCP), Docker y Kubernetes. Ver el
 [README](../README_es.md#qué-trae).
