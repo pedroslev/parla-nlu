@@ -162,6 +162,20 @@ function aiToggle(c, key, title, help) {
     h('small', {}, help));
 }
 
+function aiMcp() {                       // agent.mcp_servers: [{name, url, headers_secret?}]; el secreto es el nombre de una clave de «Claves»
+  const list = agent.mcp_servers || [];
+  const upd = () => { touch(); render(); };
+  return h('div', { class: 'panel' }, h('h2', {}, t('Servidores MCP')),
+    h('p', { class: 'help' }, t('Parla se conecta a estos servidores MCP (HTTP) para que el paso «Conversar con IA» use sus herramientas. Solo se llaman las herramientas que habilites en cada paso.')),
+    list.map((x, i) => h('div', { class: 'row' },
+      lab(t('Nombre'), h('input', { ...bind(x, 'name'), placeholder: 'crm', spellcheck: 'false' })),
+      lab(t('Dirección'), h('input', { ...bind(x, 'url'), placeholder: 'https://mcp.example.com/mcp', spellcheck: 'false' }), 'grow'),
+      lab(t('Clave para Authorization (opcional)'), h('input', { value: x.headers_secret || '', placeholder: 'CRM_TOKEN', spellcheck: 'false',
+        oninput: (e) => { const v = e.target.value.trim(); if (v) x.headers_secret = v; else delete x.headers_secret; touch(); } })),
+      iconBtn('x', t('Quitar servidor'), () => { list.splice(i, 1); upd(); }))),
+    h('div', {}, h('button', { class: 'link', onclick: () => { (agent.mcp_servers ||= []).push({ name: '', url: '' }); upd(); } }, t('Agregar servidor MCP'))));
+}
+
 window.aiView = () => {
   const c = aiCfg();
   if (aiKey !== aiWhere(c)) { aiKey = aiWhere(c); aiStatus = null; aiRefresh(); }
@@ -196,6 +210,7 @@ window.aiView = () => {
     h('div', { class: 'panel' }, h('h2', {}, t('Cómo habla')),
       area(persona, 'persona', { placeholder: t('Por ejemplo: Sos Lula, de la Veterinaria Patitas. Hablás de vos, con calidez y frases cortas.'), 'aria-label': t('Cómo habla'),
         oninput: (e) => { agent.ai = { ...aiCfg(), persona: e.target.value }; touch(); grow(e.target); } })),
+    aiMcp(),
     h('div', { class: 'panel' }, h('h2', {}, t('Probar')),
       h('div', { class: 'row' },
         h('input', { class: 'grow', value: aiTest.text, 'aria-label': t('Mensaje de prueba'), oninput: (e) => { aiTest.text = e.target.value; },

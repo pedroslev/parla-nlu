@@ -576,7 +576,7 @@ assert r["messages"] == ["Según las preguntas frecuentes..."] and r["via"] == "
 brain.fallback = lambda agent, st, text: 1 / 0                                       # si la IA explota, sigue el de siempre
 assert say({}, "bla")["messages"] == ["no entendí"]
 calls = []
-def fake_turn(agent, step, st, text, ctx, call_function):
+def fake_turn(agent, step, st, text, ctx, call_function, tools=None):
     calls.append(call_function("cotizar", {"plan": text}))
     if len(calls) == 1:
         return {"messages": ["¿Qué buscás?"], "done": False, "slots": {}, "trace": ["pensó"]}
@@ -588,8 +588,8 @@ helper = dict(BOT, functions=[{"name": "cotizar", "language": "python", "inputs"
 st = {}
 assert say(st, "ver planes", helper)["messages"] == ["¿Qué buscás?"] and st["agent"]["turns"] == 1
 assert say(st, "uno barato", helper)["messages"] == ["Listo", "Plan pro"] and "agent" not in st and st["flow"] is None
-assert calls[0]["ok"] and calls[0]["result"] == {"precio": 10}, calls
-def counting_turn(agent, step, st, text, ctx, call_function):      # como brain.agent_turn: cuenta el turno en st["agent"]
+assert calls[0]["ok"] and json.loads(calls[0]["result"]) == {"precio": 10}, calls   # texto JSON: lo que ve el modelo
+def counting_turn(agent, step, st, text, ctx, call_function, tools=None):      # como brain.agent_turn: cuenta el turno en st["agent"]
     mem = st.setdefault("agent", {})
     mem["turns"] = mem.get("turns", 0) + 1
     return {"messages": ["¿Y?"], "done": False}

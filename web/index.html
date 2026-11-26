@@ -1102,9 +1102,11 @@ function agentStepView(s) {
     h('div', { class: 'stack' }, h('span', { class: 'who' }, t('Datos que tiene que conseguir')),
       agent.slots.length ? pills(agent.slots.map((v) => [v.name, v.name]), s.slots, upd, t('Slots a completar'))
         : h('p', { class: 'help', style: 'font-size:14px' }, t('Todavía no hay slots. Creálos en Slots para que la IA los complete.'))),
-    h('div', { class: 'stack' }, h('span', { class: 'who' }, t('Funciones que puede usar')),
+    h('div', { class: 'stack' }, h('h2', { style: 'font-size:14px' }, t('Herramientas')),
+      h('span', { class: 'who' }, t('Funciones que puede usar')),
       fns.length ? pills(fns, s.functions, upd, t('Funciones que puede usar'))
-        : h('p', { class: 'help', style: 'font-size:14px' }, t('Todavía no hay funciones. '), h('button', { class: 'link', onclick: () => goSection('functions') }, t('Crear una en Funciones')))),
+        : h('p', { class: 'help', style: 'font-size:14px' }, t('Todavía no hay funciones. '), h('button', { class: 'link', onclick: () => goSection('functions') }, t('Crear una en Funciones'))),
+      agentToolsView(s, goSection)),
     h('label', { class: 'toggle' }, h('input', { type: 'checkbox', class: 'switch', role: 'switch', checked: s.knowledge !== false, onchange: (e) => { s.knowledge = e.target.checked; touch(); } }),
       t('Puede responder con lo que cargaste en Conocimiento')),
     h('div', { class: 'row', style: 'align-items:flex-end' },
@@ -1113,6 +1115,71 @@ function agentStepView(s) {
         oninput: (e) => { s.max_turns = Math.max(1, Math.min(50, parseInt(e.target.value) || 8)); touch(); } }))),
     h('p', { class: 'help', style: 'font-size:14px' }, t('La IA charla con la persona hasta cumplir el objetivo (o llegar al máximo de mensajes). Después el flujo sigue con el próximo paso.')),
   ];
+}
+function agentToolsView(s, goSection) {   // s.tools: consultas HTTP y herramientas MCP (las funciones van en s.functions)
+  s.tools ||= [];
+  if (s.tools.some((x) => x.type === 'function')) {   // {type: function} se edita con las pills de s.functions
+    s.tools.forEach((x) => { if (x.type === 'function' && x.name && !s.functions.includes(x.name)) s.functions.push(x.name); });
+    s.tools = s.tools.filter((x) => x.type !== 'function');
+  }
+  const upd = () => { touch(); render(); };
+  const servers = (agent.mcp_servers || []).map((m) => m.name).filter(Boolean);
+  const num = (key, label, min, max, def) => lab(label, h('input', { type: 'number', min, max, value: s[key] ?? def, style: 'width:110px',
+    oninput: (e) => { s[key] = Math.max(min, Math.min(max, parseInt(e.target.value) || def)); touch(); } }));
+  const params = (tool) => {               // {nombre: descripción} (o {nombre: {type, description, required}}: se respeta)
+    const p = tool.params ||= {};
+    const rename = (old, name) => { tool.params = Object.fromEntries(Object.entries(tool.params).map(([k, v]) => [k === old ? name : k, v])); upd(); };
+    return [h('span', { class: 'who' }, t('Datos que la IA tiene que completar')),
+      Object.entries(p).map(([k, v]) => h('div', { class: 'row' },
+        h('input', { value: k, 'aria-label': t('Nombre del dato'), spellcheck: 'false', onchange: (e) => {
+          const n = slug(e.target.value); if (n && n !== k && !(n in tool.params)) rename(k, n); else e.target.value = k; } }),
+        h('input', { class: 'grow', value: v && typeof v === 'object' ? v.description ?? '' : v ?? '', placeholder: t('Qué es, para que la IA sepa qué poner'), 'aria-label': t('Descripción del dato'),
+          oninput: (e) => { const cur = tool.params[k]; if (cur && typeof cur === 'object') cur.description = e.target.value; else tool.params[k] = e.target.value; touch(); } }),
+        iconBtn('x', t('Quitar dato'), () => { delete tool.params[k]; upd(); }))),
+      h('div', {}, h('button', { class: 'link', onclick: () => { let n = 'dato', i = 1; while (n in tool.params) n = 'dato_' + ++i; tool.params[n] = ''; upd(); } }, t('Agregar dato')))];
+  };
+  const httpTool = (tool) => {
+    tool.headers ||= [];
+    const url = h('input', { class: 'grow', ...bind(tool, 'url'), placeholder: 'https://api.mitienda.com/pedidos/{{ pedido }}', 'aria-label': t('Dirección del servicio'), spellcheck: 'false' });
+    return [h('div', { class: 'row' },
+        lab(t('Nombre'), h('input', { value: tool.name ?? '', placeholder: 'buscar_pedido', spellcheck: 'false', onchange: (e) => { tool.name = slug(e.target.value); upd(); } })),
+        lab(t('Para qué sirve'), h('input', { ...bind(tool, 'description'), placeholder: t('Busca un pedido por número') }), 'grow')),
+      params(tool),
+      h('div', { class: 'row' }, pick(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => [m, m]), tool.method || 'GET', (v) => { tool.method = v; touch(); }, t('Método')), url),
+      h('p', { class: 'help', style: 'font-size:14px' }, t('Usá {{ dato }} para lo que completa la IA y {{ secret.NOMBRE }} para una clave de «Claves».')),
+      h('details', { open: tool.headers.length || tool.body ? true : null }, h('summary', {}, t('Encabezados y contenido a enviar (opcional)')), h('div', { class: 'stack' },
+        headersEditor(tool.headers), lab(t('Contenido a enviar'), area(tool, 'body', { placeholder: '{"pedido": "{{ pedido }}"}', spellcheck: 'false' }))))];
+  };
+  const mcpTool = (tool) => {
+    tool.tools ||= [];
+    const u = ui.get(tool) || {}; ui.set(tool, u);
+    const look = async () => {
+      const server = (agent.mcp_servers || []).find((m) => m.name === tool.server);
+      if (!server) return;
+      u.loading = true; u.error = null; render();
+      try { u.list = (await api('POST', '/' + agent.id + '/mcp/tools', { server })).tools || []; } catch (e) { u.error = e.message; u.list = null; }
+      u.loading = false; render();
+    };
+    if (!servers.length) return h('p', { class: 'help', style: 'font-size:14px' }, t('Todavía no hay servidores MCP. '),
+      h('button', { class: 'link', onclick: () => goSection('ai') }, t('Agregar uno en IA')));
+    return [h('div', { class: 'row' },
+        lab(t('Servidor'), pick([['', t('Elegí un servidor…')], ...servers.map((n) => [n, n])], tool.server, (v) => { tool.server = v; u.list = u.error = null; upd(); }, t('Servidor'))),
+        h('button', { class: 'btn quiet small', disabled: !tool.server || u.loading, onclick: look }, u.loading ? t('Consultando…') : t('Ver herramientas'))),
+      tool.server && !servers.includes(tool.server) ? h('p', { class: 'help', style: 'font-size:14px;color:var(--warn)' }, t('«{name}» ya no existe. Elegí otro.', { name: tool.server })) : null,
+      u.error ? h('p', { style: 'color:var(--warn)' }, t('No se pudo consultar: {error}', { error: u.error })) : null,
+      u.list ? (u.list.length ? pills(u.list.map((x) => [x.name, x.name]), tool.tools, upd, t('Herramientas del servidor')) : h('p', { class: 'help' }, t('El servidor no ofrece herramientas.'))) : null,
+      lab(t('Herramientas habilitadas (separadas por coma)'), h('input', { value: tool.tools.join(', '), placeholder: 'get_order, list_orders', spellcheck: 'false',
+        onchange: (e) => { tool.tools = [...new Set(e.target.value.split(',').map((x) => x.trim()).filter(Boolean))]; upd(); } }))];
+  };
+  const titles = { http: t('Consulta HTTP'), mcp: t('Herramientas de un servidor MCP') };
+  return [
+    s.tools.map((tool, i) => tool.type === 'function' ? null : h('div', { class: 'result' },
+      h('div', { class: 'row' }, h('strong', { class: 'grow' }, titles[tool.type] || tool.type), iconBtn('x', t('Quitar herramienta'), () => { s.tools.splice(i, 1); upd(); })),
+      tool.type === 'http' ? httpTool(tool) : tool.type === 'mcp' ? mcpTool(tool) : null)),
+    h('div', { class: 'row' },
+      h('button', { class: 'link', onclick: () => { s.tools.push({ type: 'http', name: '', description: '', params: {}, method: 'GET', url: '', headers: [], body: '' }); upd(); } }, t('Agregar consulta HTTP')),
+      h('button', { class: 'link', onclick: () => { s.tools.push({ type: 'mcp', server: servers[0] || '', tools: [] }); upd(); } }, t('Agregar herramientas de un servidor MCP'))),
+    h('div', { class: 'row' }, num('max_tool_calls', t('Máximo de herramientas por mensaje'), 1, 10, 3), num('time_budget', t('Tiempo máximo (segundos)'), 3, 60, 15))];
 }
 function inserter(list, i, label) {
   return h('div', { class: 'insert-row' }, h('button', { class: 'insert' + (label ? ' labeled' : ''), 'aria-label': t('Agregar un paso acá'), title: t('Agregar un paso acá'),
@@ -1123,6 +1190,11 @@ function inserter(list, i, label) {
 function stepsView(list, emptyLabel) {
   return h('div', { class: 'steps' }, list.map((s, i) => [inserter(list, i), stepView(s, list, i)]),
     inserter(list, list.length, list.length ? t('Agregar un paso') : emptyLabel || t('Agregar el primer paso')));
+}
+function headersEditor(list) {          // encabezados [{key, value}] de una consulta HTTP (paso o herramienta de la IA)
+  return [list.map((x, i) => h('div', { class: 'row' }, h('input', { class: 'grow', ...bind(x, 'key'), placeholder: t('Nombre, por ejemplo: Authorization'), 'aria-label': t('Nombre del encabezado') }),
+      h('input', { class: 'grow', ...bind(x, 'value'), placeholder: t('Valor'), 'aria-label': t('Valor del encabezado') }), iconBtn('x', t('Quitar encabezado'), () => { list.splice(i, 1); touch(); render(); }))),
+    h('div', {}, h('button', { class: 'link', onclick: () => { list.push({ key: '', value: '' }); touch(); render(); } }, t('Agregar encabezado')))];
 }
 function httpView(s) {
   s.headers ||= []; s.saves ||= [];
@@ -1150,10 +1222,7 @@ function httpView(s) {
     h('div', { class: 'row' }, pick(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => [m, m]), s.method, (v) => { s.method = v; touch(); }, t('Método')), url),
     slotChips(url),
     h('details', { open: s.headers.length || s.body ? true : null }, h('summary', {}, t('Encabezados y contenido a enviar (opcional)')), h('div', { class: 'stack' },
-      s.headers.map((x, i) => h('div', { class: 'row' }, h('input', { class: 'grow', ...bind(x, 'key'), placeholder: t('Nombre, por ejemplo: Authorization'), 'aria-label': t('Nombre del encabezado') }),
-        h('input', { class: 'grow', ...bind(x, 'value'), placeholder: t('Valor'), 'aria-label': t('Valor del encabezado') }), iconBtn('x', t('Quitar encabezado'), () => { s.headers.splice(i, 1); touch(); render(); }))),
-      h('div', {}, h('button', { class: 'link', onclick: () => { s.headers.push({ key: '', value: '' }); touch(); render(); } }, t('Agregar encabezado'))),
-      lab(t('Contenido a enviar'), body), slotChips(body))),
+      headersEditor(s.headers), lab(t('Contenido a enviar'), body), slotChips(body))),
     h('div', { class: 'stack' }, h('h2', { style: 'font-size:14px' }, t('Qué guardar de la respuesta')),
       s.saves.map((x, i) => h('div', { class: 'save-row' }, h('input', { ...bind(x, 'expr'), placeholder: 'body.nombre', 'aria-label': t('Dato de la respuesta'), spellcheck: 'false' }), t('en'), slotPicker(x, 'slot'),
         iconBtn('x', t('Quitar'), () => { s.saves.splice(i, 1); touch(); render(); }))),

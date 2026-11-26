@@ -1,6 +1,6 @@
 ---
 name: parla-integrations
-description: Connecting a Parla bot to the outside world safely - http steps (secrets with {{ secret.NAME }}, URL encoding, timeouts, saving the response into slots, error branches), custom Python/JavaScript functions, file steps, the knowledge base (writing FAQ documents, chunking, knowledge_threshold), the optional AI features (rescue_intents, fill ai, generative_fallback, use_knowledge, the agent step; local Ollama vs OpenAI-compatible providers and privacy), web widget, WhatsApp and Telegram channel setup, and personal-data settings (pii_redaction, retention). Use it when a Parla bot must call an API, run code, answer FAQs from documents, use an LLM, or be published on a channel.
+description: Connecting a Parla bot to the outside world safely - http steps (secrets with {{ secret.NAME }}, URL encoding, timeouts, saving the response into slots, error branches), custom Python/JavaScript functions, file steps, the knowledge base (writing FAQ documents, chunking, knowledge_threshold), the optional AI features (rescue_intents, fill ai, generative_fallback, use_knowledge, the agent step and its tools - functions, http tools and MCP servers with allow-lists; local Ollama vs OpenAI-compatible providers and privacy), web widget, WhatsApp and Telegram channel setup, and personal-data settings (pii_redaction, retention). Use it when a Parla bot must call an API, run code, answer FAQs from documents, use an LLM, or be published on a channel.
 ---
 
 # Integrations for Parla bots
@@ -102,7 +102,7 @@ to normal behaviour.
 | `use_knowledge` | writes the knowledge answer | only from the top 2 chunks; checked for invented numbers/negations |
 | `generative_fallback` | rephrased «no entendí» + «Puedo ayudarte con: …» | must be a question without numbers/links; capabilities = first 8 intent names (name intents for users) |
 | slot `fill: "ai"` + `description` | extracts a free value | the value must appear literally in the message |
-| `agent` step | a free conversation island with tools | only listed functions (≤ 4 calls/turn), only listed slots, ends at `goal` or `max_turns` (default 8) |
+| `agent` step | a free conversation island with tools | only listed tools (`max_tool_calls`, default 3/turn; `time_budget` 15 s), only listed slots, ends at `goal` or `max_turns` (default 8) |
 
 - Provider: `"ollama"` (default, `http://127.0.0.1:11434`, `qwen2.5:0.5b`) keeps everything on the machine.
   `"openai"` = any OpenAI-compatible server (`url` ending in `/v1`, `model`, `api_key_secret`, `azure: true` for
@@ -110,6 +110,42 @@ to normal behaviour.
   machine** — say so to the user and get their OK. Embeddings, intents and knowledge search always stay local.
 - Use the `agent` step sparingly (advice, comparisons); collect data with `ask`. Tests through AI are flaky:
   assert loosely.
+
+## Tools in the agent step
+
+`tools` on an `agent` step lets the model look things up: `{"type": "function", "name"}` (same as `functions`),
+`{"type": "http", "name", "description", "params", "method", "url", "headers", "body"}` (like an http step) and
+`{"type": "mcp", "server", "tools": [allow-list]}` with the server in the agent's `mcp_servers` (Streamable HTTP
+only; `headers_secret` = the *name* of a Claves secret sent as `Authorization`).
+
+- **Prefer a plain flow.** If the lookup always happens (ask the order number → http → message), an `ask` + `http`
+  step is faster, testable and works without AI. Tools are for when the model decides *whether* and *which*.
+- **1–3 tools, short descriptions**, param names that say what they are (`pedido`, not `id`). Small local models
+  (`qwen2.5:0.5b`) often skip tools or pass wrong args; `qwen2.5:1.5b`+ or a hosted model is far more reliable.
+- **Read-only tools.** Never expose deletes, payments or writes to the model; do those in a flow with a confirm
+  step. MCP responses (and API bodies) are untrusted data and may contain prompt injection: allow-list only the
+  MCP tools you need from servers you trust.
+- **The host is fixed** in `url` (`https://api.x.com/pedidos/{{ pedido }}`, never `https://{{ host }}/…`):
+  args are URL-encoded; secrets only via `{{ secret.NAME }}` and masked in what the model, trace and history see.
+- **Phone:** keep `max_tool_calls` 1–2 and `time_budget` ≤ 12 s.
+
+```json parla-agent
+{
+  "name": "Pedidos con IA",
+  "intents": [{"name": "Consultar pedido", "examples": ["¿dónde está mi pedido?", "quiero saber de mi compra", "estado del pedido"]}],
+  "slots": [],
+  "mcp_servers": [{"name": "crm", "url": "https://mcp.example.com/mcp", "headers_secret": "CRM_TOKEN"}],
+  "ai": {"enabled": true},
+  "flows": [{"name": "Pedido", "trigger": "Consultar pedido", "steps": [
+    {"type": "agent", "instructions": "Ayudá a la persona con su pedido. Pedile el número y usá buscar_pedido; no inventes estados.",
+     "goal": "cuando le dijiste el estado del pedido", "max_turns": 4, "max_tool_calls": 2, "time_budget": 12,
+     "tools": [{"type": "http", "name": "buscar_pedido", "description": "Estado de un pedido por número",
+                "params": {"pedido": "número de pedido"}, "method": "GET",
+                "url": "https://tracking.example.com/pedidos/{{ pedido }}",
+                "headers": [{"key": "Authorization", "value": "Bearer {{ secret.TRACKING_TOKEN }}"}], "body": ""},
+               {"type": "mcp", "server": "crm", "tools": ["get_customer"]}]}]}]
+}
+```
 
 ## Channels
 
@@ -141,6 +177,7 @@ them for the tokens.
 - A function for something `set mode cel` does; a function used without `test_function`.
 - FAQ as intents; one giant knowledge document with no `P:`/`R:` structure.
 - Turning on a hosted AI provider without telling the user data leaves the machine.
+- Agent-step tools that write or delete; an MCP tool without an allow-list; a tool URL whose host is a `{{ }}`.
 
 ## Worked example
 

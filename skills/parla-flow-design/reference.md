@@ -18,7 +18,7 @@ The authoritative field list is `agent_format_guide`. This is the cheat sheet pl
 | `http` | `method`, `url`, `headers [{key, value}]`, `body`, `saves [{expr, slot}]` | See `parla-integrations`. |
 | `function` | `function`, `auto_save?` (default true), `saves [{expr, slot}]` | See `parla-integrations`. |
 | `file` | `file` (id or name from `list_files`), `text?`, `translations?` | Sends an uploaded file. |
-| `agent` | `instructions`, `goal`, `functions?`, `slots?`, `knowledge?`, `max_turns?` | AI island; needs `ai.enabled`. See `parla-integrations`. |
+| `agent` | `instructions`, `goal`, `functions?`, `tools?`, `slots?`, `knowledge?`, `max_turns?`, `max_tool_calls?`, `time_budget?` | AI island; needs `ai.enabled`. Tools (function / http / mcp): see `parla-integrations`. |
 
 ## Flow fields
 

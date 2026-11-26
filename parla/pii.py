@@ -67,7 +67,7 @@ def record(rec, cats):
     necesitan. Al terminar se borra (y server.cleanup cierra las que quedan quietas PII_IDLE_HOURS)."""
     out = json.loads(json.dumps(rec))
     for entry in out.get("history") or []:
-        for key in ("text", "entities", "data"):
+        for key in ("text", "entities", "data", "tool"):
             if key in entry:
                 entry[key] = scrub(entry[key], cats)
     return out

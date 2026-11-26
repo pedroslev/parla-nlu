@@ -298,6 +298,14 @@ EN = {
     "%s: ruta insegura dentro del zip, la salteo": "%s: unsafe path inside the zip, skipping it",
     "el zip es demasiado grande: hasta %d archivos .yml y %d MB descomprimidos": "the zip is too large: up to %d .yml files and %d MB uncompressed",
     "el zip es demasiado grande o está dañado": "the zip is too large or damaged",
+    # ---------- herramientas del paso de IA (server.py, brain.py, mcp_client.py) ----------
+    "la herramienta no devolvió nada": "the tool returned nothing",
+    "el servidor MCP no devolvió una respuesta válida": "the MCP server didn't return a valid response",
+    "el servidor MCP respondió %s": "the MCP server answered %s",
+    "no pude conectar con el servidor MCP: %s": "couldn't connect to the MCP server: %s",
+    "error del servidor MCP: %s": "MCP server error: %s",
+    "no existe el servidor MCP «%s»": "there's no MCP server “%s”",
+    "la dirección de la herramienta tiene que ser fija (https://servidor/...)": "the tool's address must be fixed (https://server/...)",
 }
 # Portugués de Brasil: mismas claves que EN
 PT = {
@@ -590,6 +598,14 @@ PT = {
     "%s: ruta insegura dentro del zip, la salteo": "%s: caminho inseguro dentro do zip, pulando",
     "el zip es demasiado grande: hasta %d archivos .yml y %d MB descomprimidos": "o zip é grande demais: até %d arquivos .yml e %d MB descompactados",
     "el zip es demasiado grande o está dañado": "o zip é grande demais ou está corrompido",
+    # ---------- herramientas del paso de IA (server.py, brain.py, mcp_client.py) ----------
+    "la herramienta no devolvió nada": "a ferramenta não devolveu nada",
+    "el servidor MCP no devolvió una respuesta válida": "o servidor MCP não devolveu uma resposta válida",
+    "el servidor MCP respondió %s": "o servidor MCP respondeu %s",
+    "no pude conectar con el servidor MCP: %s": "não consegui conectar ao servidor MCP: %s",
+    "error del servidor MCP: %s": "erro do servidor MCP: %s",
+    "no existe el servidor MCP «%s»": "não existe o servidor MCP “%s”",
+    "la dirección de la herramienta tiene que ser fija (https://servidor/...)": "o endereço da ferramenta tem que ser fixo (https://servidor/...)",
 }
 DICTS = {"en": EN, "pt": PT}
 # Los flujos del sistema de un bot en inglés o portugués (languages[0]): textos y frases de fábrica, sobre server.SYSTEM_DEFAULTS.

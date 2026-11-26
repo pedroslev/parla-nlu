@@ -19,7 +19,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import DATA, ROOT, write_json, auth, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, phone, rasa_import, runner, vault, voice
+from . import DATA, ROOT, write_json, auth, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, mcp_client, phone, rasa_import, runner, vault, voice
 
 import celpy
 import pycrfsuite
@@ -689,7 +689,7 @@ def check(cond, slots):
 
 # ---------- Flujos ----------
 
-def http_step(step, ctx):
+def http_step(step, ctx, timeout=10, body_ctx=None):
     """Hace la consulta y devuelve {status, body}. status 0 = no se pudo conectar."""
     url = render(step.get("url"), ctx, url=True).strip()
     if not url.startswith(("http://", "https://")):
@@ -698,12 +698,12 @@ def http_step(step, ctx):
                for h in step.get("headers") or [] if (h.get("key") or "").strip()}
     if any(re.search(r"[\r\n]", k + v) for k, v in headers.items()):
         raise ValueError("un encabezado no puede tener saltos de línea")
-    body = render(step.get("body"), ctx).encode() or None
+    body = render(step.get("body"), body_ctx or ctx).encode() or None
     if body:
         headers.setdefault("Content-Type", "application/json")
     request = urllib.request.Request(url, data=body, headers=headers, method=step.get("method") or "GET")
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
             status, raw = response.status, response.read(1_000_000)
     except urllib.error.HTTPError as error:       # 4xx/5xx: el flujo decide qué hacer con el código
         status, raw = error.code, error.read(1_000_000)
@@ -848,21 +848,139 @@ def start_handoff(st, reason, by=None):
     st["handoff"] = {"active": True, "since": now(), "reason": reason, "by": by}
 
 
-def agent_step(agent, st, step, text, ctx, out, trace):
-    """Paso de IA: conversa (con las funciones del paso a mano) hasta cumplir su objetivo o agotar los turnos.
-    True = sigue esperando a la persona (la charla queda en este paso, st["agent"])."""
-    allowed = step.get("functions")
+# ---------- herramientas del paso de IA: funciones, consultas HTTP y servidores MCP ----------
+TOOL_RESULT_MAX = 1500       # caracteres de resultado que ve el modelo
+TOOL_TYPES = {"string": str, "integer": int, "number": (int, float), "boolean": bool}
+FIXED_HOST = re.compile(r"https?://[^/?#{}\s]+(?:[/?#]|$)")   # la dirección de una herramienta http no sale de la IA
 
-    def call_function(name, inputs):
-        fn = next((f for f in agent.get("functions") or [] if f["name"] == name and (allowed is None or name in allowed)), None)
-        if not fn:
-            return {"ok": False, "error": "no existe la función «%s»" % name, "logs": "", "ms": 0}
-        res = runner.run_function(fn, dict(inputs or {}, **secret_inputs(agent, fn)))
-        trace.append(mask(agent, "la IA usó «%s» → %s" % (name, "bien" if res["ok"] else "error: " + res["error"])))
+
+def http_params(params):
+    """params de una herramienta http ({nombre: "descripción"} o {nombre: {type, description, required}}) -> esquema."""
+    props, required = {}, []
+    for name, spec in (params if isinstance(params, dict) else {}).items():
+        spec = spec if isinstance(spec, dict) else {"description": str(spec or "")}
+        props[name] = {"type": "string", **{k: spec[k] for k in ("type", "description", "enum") if k in spec}}
+        if spec.get("required", True) is not False:
+            required.append(name)
+    return {"type": "object", "properties": props, "required": required}
+
+
+def check_args(schema, args):
+    """Valida lo que mandó la IA contra el esquema (lo de más se descarta). -> (args limpios, error o None)."""
+    if not isinstance(args, dict):
+        return {}, "«args» tiene que ser un objeto"
+    props = schema.get("properties") if isinstance(schema.get("properties"), dict) else {}
+    clean = {}
+    for name, value in args.items():
+        if name not in props or value in (None, ""):
+            continue
+        kind = (props[name] or {}).get("type")
+        if kind in ("integer", "number") and isinstance(value, str):
+            try:
+                value = int(value) if kind == "integer" else float(value.replace(",", "."))
+            except ValueError:
+                return {}, "«%s» tiene que ser un número" % name
+        elif kind == "string" and isinstance(value, (int, float)) and not isinstance(value, bool):
+            value = str(value)
+        if kind in TOOL_TYPES and (not isinstance(value, TOOL_TYPES[kind]) or (kind != "boolean" and isinstance(value, bool))):
+            return {}, "«%s» tiene que ser %s" % (name, kind)
+        if (props[name] or {}).get("enum") and value not in props[name]["enum"]:
+            return {}, "«%s» tiene que ser uno de: %s" % (name, ", ".join(map(str, props[name]["enum"])))
+        if len(json.dumps(value, default=str)) > 2000:
+            return {}, "«%s» es demasiado largo" % name
+        clean[name] = value
+    missing = [n for n in schema.get("required") or [] if n not in clean]
+    return clean, ("faltan: %s" % ", ".join(missing)) if missing else None
+
+
+def mcp_server(agent, name):
+    """(url, Authorization) de un servidor MCP del agente. La dirección sale de la config, nunca de la IA."""
+    server = next((s for s in agent.get("mcp_servers") or [] if isinstance(s, dict) and s.get("name") == name), None)
+    if not server or not re.match(r"https?://", str(server.get("url") or "")):
+        raise ValueError("no existe el servidor MCP «%s»" % name)
+    auth_value = secrets(agent).get(vault._normal(server["headers_secret"])) if server.get("headers_secret") else None
+    return server["url"].strip(), auth_value
+
+
+def agent_tools(agent, step, trace=None):
+    """Las herramientas que puede usar este paso: {nombre: {kind, description, params, schema, ...}}.
+    De un servidor MCP solo las que el paso habilitó (allow-list) y el servidor ofrece."""
+    fns = {f["name"]: f for f in agent.get("functions") or [] if f.get("name")}
+    wanted = [{"type": "function", "name": n} for n in step.get("functions") or []] + [t for t in step.get("tools") or [] if isinstance(t, dict)]
+    out = {}
+    for spec in wanted:
+        kind, name = spec.get("type"), spec.get("name")
+        if kind == "function" and name in fns:
+            inputs = [i for i in fns[name].get("inputs") or [] if not i.startswith("secret.")]
+            out.setdefault(name, {"kind": "function", "fn": fns[name], "description": fns[name].get("description") or "",
+                                  "schema": {"type": "object", "properties": {i: {} for i in inputs}, "required": []}})
+        elif kind == "http" and isinstance(name, str) and re.fullmatch(r"[A-Za-z_][\w-]{0,63}", name):
+            out.setdefault(name, {"kind": "http", "spec": spec, "description": spec.get("description") or "", "schema": http_params(spec.get("params"))})
+        elif kind == "mcp":
+            allowed = [n for n in spec.get("tools") or [] if isinstance(n, str)]
+            try:
+                url, auth_value = mcp_server(agent, spec.get("server"))
+                listed = mcp_client.list_tools(url, auth_value, timeout=5) if allowed else []
+            except (ValueError, mcp_client.MCPError) as error:
+                if trace is not None:
+                    trace.append(mask(agent, "herramientas de «%s» no disponibles: %s" % (spec.get("server"), error)))
+                continue
+            for tool in listed:
+                if tool["name"] in allowed:
+                    out.setdefault(tool["name"], {"kind": "mcp", "server": spec.get("server"), "description": tool["description"],
+                                                  "schema": tool["inputSchema"]})
+    for tool in out.values():
+        props = (tool["schema"] or {}).get("properties") or {}
+        tool["params"] = {p: str((d or {}).get("description") or "") if isinstance(d, dict) else "" for p, d in props.items()}
+    return out
+
+
+def run_tool(agent, tool, args, ctx, timeout=10):
+    """Corre una herramienta con lo que pidió la IA. -> {ok, result: texto} (con las claves tapadas y recortado)."""
+    args, problem = check_args(tool["schema"] or {}, args)
+    if problem:
+        return {"ok": False, "result": problem, "args": args}
+    try:
+        if tool["kind"] == "function":
+            inputs = {k: args.get(k, (ctx or {}).get(k)) for k in tool["schema"]["properties"]}
+            res = runner.run_function(tool["fn"], dict(inputs, **secret_inputs(agent, tool["fn"])))
+            ok, value = res["ok"], res.get("result") if res["ok"] else res.get("error")
+        elif tool["kind"] == "http":
+            spec = tool["spec"]
+            if not FIXED_HOST.match(str(spec.get("url") or "").strip()):
+                raise ValueError("la dirección de la herramienta tiene que ser fija (https://servidor/...)")
+            scope = dict(ctx or {}, **args, secret=secrets(agent))
+            # en el body, los textos van escapados para JSON: lo que manda la IA no puede romper el objeto
+            body_scope = dict(scope, **{k: json.dumps(v, ensure_ascii=False)[1:-1] if isinstance(v, str) else v for k, v in args.items()})
+            res = http_step(spec, scope, timeout=timeout, body_ctx=body_scope)
+            ok, value = 200 <= res["status"] < 300, {"status": res["status"], "body": res["body"]}
+        else:
+            url, auth_value = mcp_server(agent, tool["server"])
+            ok, value = mcp_client.call_tool(url, tool["name"], args, auth_value, timeout=timeout)
+    except (ValueError, mcp_client.MCPError) as error:
+        ok, value = False, str(error)
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
+    return {"ok": ok, "result": mask(agent, text)[:TOOL_RESULT_MAX], "args": args}
+
+
+def agent_step(agent, st, step, text, ctx, out, trace):
+    """Paso de IA: conversa (con las herramientas del paso a mano) hasta cumplir su objetivo o agotar los turnos.
+    True = sigue esperando a la persona (la charla queda en este paso, st["agent"])."""
+    tools = agent_tools(agent, step, trace)
+    _, budget = brain.tool_limits(step)
+    deadline = time.time() + budget
+
+    def call_tool(name, args):
+        tool = dict(tools[name], name=name)
+        started = time.time()
+        res = run_tool(agent, tool, args, ctx, timeout=max(2, min(10, deadline - started)))
+        st.setdefault("tool_log", []).append({"tool": name, "type": tool["kind"], "args": json.loads(mask(agent, json.dumps(res.get("args"), default=str))),
+                                              "ok": res["ok"], "result": res["result"][:300], "ms": int((time.time() - started) * 1000)})
         return res
 
     turns = (st.get("agent") or {}).get("turns", 0)
-    res = hook(brain.agent_turn, agent, step, st, text, ctx, call_function) or {"messages": [], "done": True, "trace": ["la IA falló"]}
+    res = hook(brain.agent_turn, agent, step, st, text, ctx, call_tool, {n: {"description": t["description"], "params": t["params"]} for n, t in tools.items()}) \
+        or {"messages": [], "done": True, "trace": ["la IA falló"]}
     out += [m for m in res.get("messages") or [] if isinstance(m, str)]
     st["slots"].update(res.get("slots") or {})
     trace += [mask(agent, str(t)) for t in res.get("trace") or []]
@@ -1040,7 +1158,7 @@ def turn(agent, st, out, nlu, trace, **extra):
     result = {"messages": [r["text"] for r in replies], "buttons": buttons, "replies": replies, "nlu": nlu,
               "slots": st["slots"], "trace": trace, "answer_to": None, "rejected": False, "fallback": False,
               "handoff": bool((st.get("handoff") or {}).get("active")), "language": st.get("lang") or languages(agent)[0],
-              "via": None, "sources": []}
+              "via": None, "sources": [], "tools": st.pop("tool_log", [])}
     result.update(extra)
     return result
 
@@ -1497,7 +1615,9 @@ def collect(record):
 
 
 def bot_entries(result, at):
-    return [dict({"from": "bot", "text": r["text"], "at": at}, **({"buttons": r["buttons"]} if r["buttons"] else {}),
+    """Lo que dijo el bot, y antes las herramientas que usó la IA (con las claves tapadas; pii_redaction las tapa al guardar)."""
+    return [{"from": "event", "text": "La IA usó «%s» → %s" % (t["tool"], "bien" if t["ok"] else "error"), "at": at, "tool": t}
+            for t in result.get("tools") or []] + [dict({"from": "bot", "text": r["text"], "at": at}, **({"buttons": r["buttons"]} if r["buttons"] else {}),
                  **({"file": r["file"]} if r.get("file") else {})) for r in result["replies"]]
 
 
@@ -1991,7 +2111,7 @@ class Handler(BaseHTTPRequestHandler):
         if url.startswith("/api/v1/"):
             return self.reply(*reversed(api_v1(method, [p for p in url[len("/api/v1/"):].split("/") if p], data, query, self.user, self.public)))
         match = re.fullmatch(r"/api/agents(?:/([0-9a-f]{8})(?:/(chat|reset|http|train|tests/run|versions|deploy|diff|versions/\d+|versions/\d+/restore|functions/test"
-                             r"|knowledge/extract|knowledge/search|voice/transcribe|secrets|files|files/[A-Za-z0-9_-]{22}|insights/unrecognized|insights/analytics"
+                             r"|knowledge/extract|knowledge/search|voice/transcribe|mcp/tools|secrets|files|files/[A-Za-z0-9_-]{22}|insights/unrecognized|insights/analytics"
                              r"|inbox|channels|channels/telegram|sessions/[A-Za-z0-9_.@+-]+/(?:reply|release|take)))?)?", url)
         if not match:
             return self.reply({"error": "no existe"}, 404)
@@ -2110,6 +2230,19 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply({})
         elif action == "http" and method == "POST":   # "Probar consulta" del armador de flujos
             return self.reply(http_step(data.get("step") or {}, dict(data.get("vars") or {}, secret=secrets({"id": agent_id}))))
+        elif action == "mcp/tools" and method == "POST":   # «Ver herramientas»: {"server": nombre | {name, url, headers_secret}}
+            server = data.get("server")
+            agent = load(agent_id)
+            if isinstance(server, dict):        # la config sin guardar de la interfaz
+                agent = dict(agent, mcp_servers=[dict(server, name="_")])
+                server = "_"
+            try:
+                url, auth_value = mcp_server(agent, str(server or ""))
+                return self.reply({"tools": mcp_client.list_tools(url, auth_value, fresh=True)})
+            except ValueError as error:
+                return self.reply({"error": str(error)}, 400)
+            except mcp_client.MCPError as error:
+                return self.reply({"error": mask(agent, str(error))}, 502)
         elif action == "inbox" and method == "GET":
             return self.reply(inbox(agent_id))
         elif action == "channels" and method == "GET":                # pantalla «Canales»: webhooks, claves que faltan, estado

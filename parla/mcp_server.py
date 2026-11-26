@@ -334,6 +334,25 @@ def validate(data, files=None):
     functions = unique("function", agent["functions"])
     function_names = {f["name"] for f in functions}
     used_functions = set()
+    # servidores MCP de los que el paso agent puede usar herramientas (Parla como cliente, solo HTTP)
+    mcp_servers = agent.get("mcp_servers")
+    if mcp_servers is not None and not (isinstance(mcp_servers, list) and all(isinstance(m, dict) for m in mcp_servers)):
+        errors.append("«mcp_servers» tiene que ser una lista [{name, url, headers_secret?}]")
+        mcp_servers = []
+    mcp_names = set()
+    for m in mcp_servers or []:
+        name = m.get("name")
+        if not (isinstance(name, str) and re.fullmatch(r"[A-Za-z_][\w-]{0,63}", name)):
+            errors.append("mcp_servers: «name» tiene que ser un nombre corto (letras, números, _ o -): %r" % (name,))
+        elif name in mcp_names:
+            errors.append("mcp_servers: hay dos servidores «%s»" % name)
+        mcp_names.add(name)
+        if not re.fullmatch(r"https?://[^\s{}]+", str(m.get("url") or "")):
+            errors.append("mcp_servers «%s»: «url» tiene que ser http(s)://… (Streamable HTTP; stdio no se permite)" % name)
+        if m.get("headers_secret") not in (None, "") and not (isinstance(m["headers_secret"], str) and re.fullmatch(r"[A-Za-z_]\w*", m["headers_secret"])):
+            errors.append("mcp_servers «%s»: «headers_secret» es el NOMBRE de una clave de «Claves», no su valor" % name)
+        if any(k.lower() in ("headers", "authorization", "token", "api_key") for k in m):
+            errors.append("mcp_servers «%s»: las credenciales no van en el JSON: cargala en «Claves» y poné su nombre en «headers_secret»" % name)
     for c in classifications:
         color = c.get("color", 0)
         palette = isinstance(color, int) and not isinstance(color, bool) and 0 <= color <= 5
@@ -624,6 +643,60 @@ def validate(data, files=None):
                     if name not in function_names:
                         errors.append("%s: la función «%s» no existe en «functions» (hay: %s)"
                                       % (w, name, ", ".join(sorted(function_names)) or "ninguna"))
+                tools = step.get("tools") or []
+                if not isinstance(tools, list) or not all(isinstance(x, dict) for x in tools):
+                    errors.append("%s: «tools» tiene que ser una lista de herramientas {type: function|http|mcp, ...}" % w)
+                    tools = []
+                tool_names = set(fns)
+                for t in tools:
+                    tk, tn = t.get("type"), t.get("name")
+                    if tk == "function":
+                        used_functions.add(tn)
+                        if tn not in function_names:
+                            errors.append("%s: la herramienta function «%s» no existe en «functions»" % (w, tn))
+                    elif tk == "http":
+                        if not (isinstance(tn, str) and re.fullmatch(r"[A-Za-z_][\w-]{0,63}", tn)):
+                            errors.append("%s: una herramienta http necesita «name» (letras, números, _ o -)" % w)
+                        elif tn in tool_names:
+                            errors.append("%s: hay dos herramientas «%s»" % (w, tn))
+                        tool_names.add(tn)
+                        if not str(t.get("description") or "").strip():
+                            warnings.append("%s: la herramienta «%s» no tiene «description»: la IA no sabe para qué usarla" % (w, tn))
+                        params = t.get("params") or {}
+                        if not isinstance(params, dict) or not all(isinstance(k, str) and re.fullmatch(r"[A-Za-z_]\w*", k) and k != "secret"
+                                                                     and isinstance(v, (str, dict)) for k, v in params.items()):
+                            errors.append("%s: «params» de «%s» tiene que ser {nombre: \"descripción\"} o {nombre: {type, description, required}}" % (w, tn))
+                            params = {}
+                        for k, v in params.items():
+                            if isinstance(v, dict) and v.get("type") not in (None, "string", "integer", "number", "boolean"):
+                                errors.append("%s: el param «%s» de «%s»: «type» tiene que ser string, integer, number o boolean" % (w, k, tn))
+                        url = str(t.get("url") or "").strip()
+                        if not re.match(r"https?://[^/?#{}\s]+(?:[/?#]|$)", url):
+                            errors.append("%s: la url de la herramienta «%s» tiene que tener el servidor fijo (https://api.ejemplo.com/...{{ dato }}): "
+                                          "la IA nunca elige a qué servidor se conecta" % (w, tn))
+                        if (t.get("method") or "GET") not in METHODS:
+                            errors.append("%s: «method» de «%s» tiene que ser %s" % (w, tn, ", ".join(sorted(METHODS))))
+                        extra = tuple(params) + ("secret",)
+                        check_template(w + " url", t.get("url"), extra)
+                        for h in t.get("headers") or [] if isinstance(t.get("headers"), list) else []:
+                            if isinstance(h, dict):
+                                check_template(w + " header", h.get("key"), extra)
+                                check_template(w + " header", h.get("value"), extra)
+                        check_template(w + " body", t.get("body"), extra)
+                    elif tk == "mcp":
+                        if t.get("server") not in mcp_names:
+                            errors.append("%s: el servidor MCP «%s» no está en «mcp_servers» (hay: %s)"
+                                          % (w, t.get("server"), ", ".join(sorted(n for n in mcp_names if isinstance(n, str))) or "ninguno"))
+                        allowed = t.get("tools")
+                        if not (isinstance(allowed, list) and allowed and all(isinstance(x, str) and x for x in allowed)):
+                            errors.append("%s: la herramienta mcp «%s» necesita «tools»: la lista de herramientas permitidas "
+                                          "(allow-list; solo esas se pueden llamar)" % (w, t.get("server")))
+                    else:
+                        errors.append("%s: «type» de una herramienta tiene que ser function, http o mcp (stdio no se permite)" % w)
+                for key, low, high in (("max_tool_calls", 1, 10), ("time_budget", 3, 60)):
+                    value = step.get(key)
+                    if value is not None and (not isinstance(value, int) or isinstance(value, bool) or not low <= value <= high):
+                        errors.append("%s: «%s» tiene que ser un entero de %d a %d" % (w, key, low, high))
                 wanted = step.get("slots") or []
                 if not isinstance(wanted, list) or not all(isinstance(x, str) for x in wanted):
                     errors.append("%s: «slots» tiene que ser una lista de nombres de slots" % w)
@@ -754,7 +827,8 @@ def secret_refs(agent):
     """Nombres de claves que usa el agente ({{ secret.X }} en http, entradas secret.X de funciones)."""
     refs = set(SECRET_REF.findall(json.dumps([agent.get("flows"), agent.get("functions")], ensure_ascii=False)))
     name = (agent.get("ai") or {}).get("api_key_secret") if isinstance(agent.get("ai"), dict) else None
-    return refs | ({name.upper()} if isinstance(name, str) and name else set())
+    mcp = {m["headers_secret"].upper() for m in agent.get("mcp_servers") or [] if isinstance(m, dict) and isinstance(m.get("headers_secret"), str) and m["headers_secret"]}
+    return refs | mcp | ({name.upper()} if isinstance(name, str) and name else set())
 
 
 def secret_warnings(agent_id, agent):
@@ -985,7 +1059,7 @@ GUIDE = """# Formato de un agente de Parla (JSON)
 
 Un agente es un objeto JSON con: name, threshold, fallback, intents, entities, slots, flows.
 Al crear/importar se ignoran "id" y "trained" (los pone Parla). También se acepta el sobre de exportación
-{"parla": 1, "agent": {...}}. También: classifications, functions, languages, knowledge, system, ai, widget
+{"parla": 1, "agent": {...}}. También: classifications, functions, languages, knowledge, system, ai, mcp_servers, widget
 (ver abajo). Todo lo nuevo es opcional: un agente sin esos campos anda igual.
 
 ## Campos de primer nivel
@@ -1099,6 +1173,18 @@ values, la aprende el CRF por contexto de las frases marcadas. "kind" lo usa la 
      una "isla" de IA (necesita ai.enabled): conversa libremente, puede llamar a esas funciones, leer la base de
      conocimiento y completar esos slots; termina al cumplir goal o a los max_turns y sigue con el paso siguiente.
      Usalo poco: para asesorar o negociar, no para pedir datos (para eso: ask).
+     Herramientas (opcional): "tools": [
+       {"type": "function", "name": "cotizar"}   (igual que poner el nombre en "functions")
+       {"type": "http", "name": "buscar_pedido", "description": "Estado de un pedido por número",
+        "params": {"pedido": "número de pedido"}, "method": "GET", "url": "https://api.mitienda.com/pedidos/{{ pedido }}",
+        "headers": [{"key": "Authorization", "value": "Bearer {{ secret.API_TOKEN }}"}], "body": ""}
+        params: {nombre: "descripción"} o {nombre: {type: string|integer|number|boolean, description, required}}.
+        La url tiene el servidor FIJO (la IA solo completa {{ params }}, que van codificados); como un paso http.
+       {"type": "mcp", "server": "crm", "tools": ["get_order"]}   herramientas de un servidor de "mcp_servers";
+        "tools" es la allow-list obligatoria: solo esas se pueden llamar.]
+     "max_tool_calls": 3 (1 a 10, por mensaje) y "time_budget": 15 (segundos, 3 a 60: después no usa más
+     herramientas; en teléfono no pases de ~12). Los resultados (recortados, con claves tapadas) quedan en la traza y
+     en el historial. Descripciones cortas y pocas herramientas (1 a 3): los modelos chicos se confunden con muchas.
   - {"type": "file", "file": "Lista de precios.pdf", "text": "Acá tenés la lista, {{ nombre }}", "translations": {...}}
      manda un archivo que la persona subió a este agente (PDF, imagen, Word/Excel/PowerPoint, CSV, TXT o ZIP; hasta
      10 MB). file = id o nombre de list_files (el id no cambia si renombran). text opcional (plantillas; sin text, el
@@ -1188,9 +1274,15 @@ propias para cancelar o pedir un humano: ya están.
   natural cuando no entiende; use_knowledge: redacta respuestas de la base. persona: cómo habla el bot.
 - La necesitan los pasos agent y los slots fill "ai". Sin IA, el resto del bot anda igual.
 
+## Servidores MCP (Parla como cliente): mcp_servers [{name, url, headers_secret?}]
+- Servidores MCP por Streamable HTTP (stdio no) cuyas herramientas usa el paso agent ("tools" type "mcp").
+  headers_secret = NOMBRE de una clave de «Claves»: su valor va como Authorization (sin espacio: "Bearer <valor>").
+  Lo que devuelve un servidor MCP es dato para la IA (puede traer texto que intente darle órdenes): habilitá solo
+  herramientas de lectura o seguras y de servidores en los que confiás.
+
 ## Claves (credenciales): {{ secret.NOMBRE }}
 - Tokens y API keys NO van en el JSON: se cargan en la sección «Claves» de Parla (la persona, no vos) y se usan como
-  {{ secret.NOMBRE }} SOLO en url/headers/body de un paso http, y como entrada "secret.NOMBRE" de una función (le
+  {{ secret.NOMBRE }} SOLO en url/headers/body de un paso http (o de una herramienta http), y como entrada "secret.NOMBRE" de una función (le
   llega como inputs["secret"]["NOMBRE"]). Nunca en mensajes. Se tapan con •••• en trazas y logs.
 - list_secret_names muestra qué nombres existen (nunca valores). create/update_agent avisan si falta cargar alguna.
 
