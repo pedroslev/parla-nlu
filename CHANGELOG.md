@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+## 0.9.0 — 2026-11-26
+
+First tagged release (`v0.9.0`): images `ghcr.io/pedroslev/parla-nlu:0.9.0` / `:latest`.
+
 ### Added
 
 - Event-driven core ([docs/development.md](docs/development.md#server-architecture)): an asyncio HTTP/1.1 server
@@ -172,7 +176,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The agent step counted each turn twice.
 - The TTS cache key.
 
-## 0.9.0
+## Before 0.9.0 (untagged)
 
 First public version: no-code bot builder with embeddings kNN + CRF NLU, flows, optional local AI (Ollama), local
 voice (faster-whisper + piper), versions and environments, inbox, analytics, HTTP API, web widget and MCP server.
