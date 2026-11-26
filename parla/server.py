@@ -311,6 +311,8 @@ def nlu_index(data):
                 forms.setdefault(other.lower(), value)
     for example in training_phrases(data):
         for value, name in ANNOT.findall(example):
+            if (defs.get(name) or {}).get("kind") == "date":
+                continue     # «[mañana](fecha)» no es un valor: las reglas de fechas lo pasan a AAAA-MM-DD
             known.setdefault(name, {}).setdefault(value.lower(), value)
     return {"defs": defs, "known": known, "lookup": lookup_table(data), "learned": learned(data)}
 
@@ -454,7 +456,7 @@ def entity_report(data):
     for phrase in training_phrases(data):
         for _, name in ANNOT.findall(phrase):
             marks[name] = marks.get(name, 0) + 1
-    kind = lambda e: "aprende de ejemplos" if not e.get("regex") and not e.get("values") else (
+    kind = lambda e: "fecha u hora" if e.get("kind") == "date" else "aprende de ejemplos" if not e.get("regex") and not e.get("values") else (
         "lista de %d opciones" % len(e["values"]) if e.get("values") else "formato fijo")
     return [{"name": e["name"], "kind": kind(e), "marked": marks.get(e["name"], 0)} for e in data["entities"]]
 
