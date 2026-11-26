@@ -1,5 +1,6 @@
-# Parla: a single replica (login sessions in memory, data in files). See docs/deployment.md.
+# Parla: a single replica (SQLite + files on one volume, state in memory). See docs/kubernetes.md.
 # kubectl apply -n parla -k deploy/k8s
+# The Helm chart (deploy/helm/parla) is the full-featured path: SSO, metrics, backups, NetworkPolicy and Ollama as values.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -8,12 +9,26 @@ data:
   PARLA_FUNCTIONS: "0"      # "function" steps = arbitrary code in the pod; 1 only if you trust every editor
   PARLA_WHISPER: "base"
   # PARLA_LANG: "en"         # default interface language: en, es or pt (unset = the browser's)
-  # PARLA_PUBLIC_URL: "https://bots.example.com"   # for the WhatsApp/Telegram webhooks (docs/channels.md)
-  # Observability (docs/observability.md). The scrape token goes in a Secret, not here:
-  #   kubectl -n parla create secret generic parla-metrics --from-literal=PARLA_METRICS_TOKEN=<long random>
+  # PARLA_PUBLIC_URL: "https://bots.example.com"   # webhooks (WhatsApp, Telegram, phone; docs/channels.md) and SSO
+  # PARLA_RETENTION_DAYS: "90"                      # delete idle conversations after N days (unset = keep)
+  # PARLA_AUDIT_DAYS: "365"
+  # Admin UI through the Ingress (publish "/" too; docs/kubernetes.md):
+  # PARLA_HOSTS: "bots.example.com"
+  # PARLA_SECURE_COOKIE: "1"
+  # Observability (docs/observability.md). Tokens and headers go in Secrets (secretRef below), not here:
+  #   kubectl -n parla create secret generic parla-metrics --from-literal=PARLA_METRICS_TOKEN="$(openssl rand -hex 24)"
+  #   kubectl -n parla create secret generic parla-otel --from-literal=OTEL_EXPORTER_OTLP_HEADERS='x-honeycomb-team=<key>'
   # PARLA_METRICS: "1"
   # PARLA_OTEL_ENDPOINT: "http://otel-collector.observability:4318"
+  # OTEL_SERVICE_NAME: "parla"
   # PARLA_LOG_FORMAT: "json"
+  # Single sign-on (docs/sso.md). The client secret is a file from a Secret (volume "oidc" below):
+  #   kubectl -n parla create secret generic parla-oidc --from-literal=client-secret='<the client secret>'
+  # PARLA_OIDC_ISSUER: "https://kc.example.com/realms/acme"
+  # PARLA_OIDC_CLIENT_ID: "parla"
+  # PARLA_OIDC_CLIENT_SECRET_FILE: "/run/secrets/parla-oidc/client-secret"
+  # PARLA_OIDC_ROLE_CLAIM: "groups"
+  # PARLA_OIDC_ROLE_MAP: "parla-owners:owner,parla-editors:editor"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -44,6 +59,7 @@ spec:
       # annotations: {prometheus.io/scrape: "true", prometheus.io/port: "8000", prometheus.io/path: "/metrics"}
     spec:
       automountServiceAccountToken: false
+      enableServiceLinks: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -52,13 +68,14 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: parla
-          image: parla:latest          # change it to your registry: registry.example.com/parla:<version>
+          image: ghcr.io/pedroslev/parla-nlu:edge   # pin a release (0.9.0) or your registry; kustomization.yaml "images:"
           imagePullPolicy: IfNotPresent
           ports:
             - {name: http, containerPort: 8000}
           envFrom:
             - configMapRef: {name: parla}
             # - secretRef: {name: parla-metrics}     # PARLA_METRICS_TOKEN for /metrics
+            # - secretRef: {name: parla-otel}        # OTEL_EXPORTER_OTLP_HEADERS
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -66,6 +83,7 @@ spec:
           volumeMounts:
             - {name: data, mountPath: /data}
             - {name: tmp, mountPath: /tmp}
+            # - {name: oidc, mountPath: /run/secrets/parla-oidc, readOnly: true}
           resources:
             requests: {cpu: 250m, memory: 1536Mi}
             limits: {memory: 3Gi}      # with voice: 4Gi. No CPU limit: training and transcribing use short bursts
@@ -84,6 +102,8 @@ spec:
           persistentVolumeClaim: {claimName: parla-data}
         - name: tmp
           emptyDir: {sizeLimit: 1Gi}
+        # - name: oidc
+        #   secret: {secretName: parla-oidc, defaultMode: 0440}   # group-readable: fsGroup 10001
 ---
 apiVersion: v1
 kind: Service

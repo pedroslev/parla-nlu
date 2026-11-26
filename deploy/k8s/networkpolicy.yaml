@@ -1,0 +1,30 @@
+# Example, not in kustomization.yaml: kubectl apply -n parla -f deploy/k8s/networkpolicy.yaml
+# Needs a CNI that enforces NetworkPolicy (Calico, Cilium, k3s' kube-router…); on others it's silently ignored.
+# Ingress: only the ingress controller and Prometheus namespaces (port-forward isn't affected).
+# Egress: DNS and HTTPS to public addresses only. This is the SSRF mitigation for http steps, MCP tools, knowledge
+# URL fetches and AI/voice providers: no cluster-internal services, no node network, no cloud metadata
+# (169.254.169.254). Add rules for what Parla really needs inside the cluster (an Ollama, an OTel collector…).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: parla
+spec:
+  podSelector:
+    matchLabels: {app: parla}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: kube-system}}   # k3s Traefik
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
+      ports: [{port: 8000, protocol: TCP}]
+  egress:
+    - to: [{namespaceSelector: {}}]
+      ports: [{port: 53, protocol: UDP}, {port: 53, protocol: TCP}]
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 100.64.0.0/10, 127.0.0.0/8]
+      ports: [{port: 443, protocol: TCP}]
+    # - to: [{podSelector: {matchLabels: {app: ollama}}}]
+    #   ports: [{port: 11434, protocol: TCP}]

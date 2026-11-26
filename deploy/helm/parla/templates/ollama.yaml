@@ -1,0 +1,95 @@
+{{- if .Values.ollama.enabled }}
+{{- $o := .Values.ollama }}
+{{- $name := printf "%s-ollama" (include "parla.fullname" .) }}
+{{- $image := printf "%s:%s" $o.image.repository $o.image.tag }}
+{{- if and $o.persistence.enabled (not $o.persistence.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  labels: {{- include "parla.labels" . | nindent 4 }}
+  annotations: {helm.sh/resource-policy: keep}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with $o.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests: {storage: {{ $o.persistence.size }}}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- include "parla.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {{- include "parla.ollamaLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "parla.ollamaLabels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false     # otherwise OLLAMA_PORT=tcp://… from the Service breaks ollama
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with $o.models }}
+      initContainers:
+        - name: pull                # start a private server, pull the list into the volume, stop it
+          image: {{ $image }}
+          imagePullPolicy: {{ $o.image.pullPolicy }}
+          command: [sh, -c]
+          args:
+            - |
+              ollama serve & pid=$!
+              until ollama list >/dev/null 2>&1; do sleep 1; done
+              for m in {{ join " " . }}; do ollama pull "$m" || exit 1; done
+              kill $pid
+          env: {{- include "parla.ollamaEnv" $ | nindent 12 }}
+          securityContext: {{- toYaml $.Values.securityContext | nindent 12 }}
+          volumeMounts: {{- include "parla.ollamaMounts" $ | nindent 12 }}
+      {{- end }}
+      containers:
+        - name: ollama
+          image: {{ $image }}
+          imagePullPolicy: {{ $o.image.pullPolicy }}
+          env: {{- include "parla.ollamaEnv" . | nindent 12 }}
+          ports:
+            - {name: http, containerPort: 11434}
+          securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts: {{- include "parla.ollamaMounts" . | nindent 12 }}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+          resources: {{- toYaml $o.resources | nindent 12 }}
+      volumes:
+        - name: models
+          {{- if $o.persistence.enabled }}
+          persistentVolumeClaim: {claimName: {{ default $name $o.persistence.existingClaim }}}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- with $o.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $o.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $o.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "parla.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "parla.ollamaLabels" . | nindent 4 }}
+  ports:
+    - {name: http, port: 11434, targetPort: http}
+{{- end }}

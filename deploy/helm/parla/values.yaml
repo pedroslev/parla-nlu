@@ -1,0 +1,213 @@
+# Parla Helm chart. Full guide: docs/kubernetes.md. Every value is listed in this chart's README.md.
+
+image:
+  repository: ghcr.io/pedroslev/parla-nlu
+  # Empty = the chart's appVersion (a release tag). "edge" follows main.
+  tag: ""
+  # "" (core) or "voice" (+ ffmpeg, faster-whisper, piper): appended to the tag as "-voice" (edge -> edge-voice).
+  # Images built with INSTALL_PROVIDERS=1 or BAKE_EMBED_DIR aren't published: build them, push them to your
+  # registry and set repository/tag (and variant: "").
+  variant: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Always 1 (0 only to stop it, e.g. to restore a backup). Parla is a single process: conversations, login sessions
+# and the audit log are in SQLite (parla.db) on the volume, agents are files without cross-process locking, and
+# loaded models, rate-limit counters and SSO login state are in memory. Two pods on the same data overwrite each
+# other. That's also why the strategy is Recreate (the old pod stops before the new one starts: a few seconds of
+# downtime per upgrade). High availability comes with the Postgres backend (see docs/ROADMAP.md).
+replicaCount: 1
+
+# Settings that become PARLA_* environment variables (docs/deployment.md#environment-variables).
+config:
+  lang: ""              # PARLA_LANG: default interface language (en, es, pt). Empty = the browser's
+  publicUrl: ""         # PARLA_PUBLIC_URL: https://bots.example.com, for webhooks (WhatsApp, Telegram, phone) and SSO
+  hosts: []             # PARLA_HOSTS: domains that may open the admin UI and /api/. ingress.hosts are added when exposeAdmin
+  functions: false      # PARLA_FUNCTIONS: "function" steps run code inside the pod (not a sandbox, docs/security.md)
+  whisper: base         # PARLA_WHISPER: dictation model (voice image): tiny, base, small…
+  retentionDays: null   # PARLA_RETENTION_DAYS: delete idle conversations after N days (null/0 = keep)
+  auditDays: null       # PARLA_AUDIT_DAYS: audit log retention (null = 365)
+  secureCookie: null    # PARLA_SECURE_COOKIE: null = on when ingress.exposeAdmin with TLS; true/false to force
+  logFormat: ""         # PARLA_LOG_FORMAT: "json" = one JSON line per request with trace_id
+
+# Prometheus metrics at GET /metrics (docs/observability.md). From Prometheus the token is required.
+metrics:
+  enabled: false
+  token: ""             # creates a Secret; better: existingSecret
+  existingSecret: ""    # Secret with the token under secretKey
+  secretKey: PARLA_METRICS_TOKEN
+  serviceMonitor:       # needs the Prometheus Operator CRDs
+    enabled: false
+    interval: 30s
+    labels: {}          # e.g. {release: kube-prometheus-stack}
+
+# OpenTelemetry traces over OTLP/HTTP JSON (docs/observability.md).
+otel:
+  endpoint: ""          # PARLA_OTEL_ENDPOINT, e.g. http://otel-collector.observability:4318
+  serviceName: ""       # OTEL_SERVICE_NAME (default parla)
+  resourceAttributes: ""  # OTEL_RESOURCE_ATTRIBUTES, e.g. deployment.environment=prod
+  content: false        # PARLA_OTEL_CONTENT: add the (masked) turn text to spans
+  headers: ""           # OTEL_EXPORTER_OTLP_HEADERS (API keys): creates a Secret; better: existingSecret
+  existingSecret: ""
+  secretKey: OTEL_EXPORTER_OTLP_HEADERS
+
+# Single sign-on with OIDC (docs/sso.md). Needs the whole UI on your domain: ingress.exposeAdmin and config.publicUrl.
+oidc:
+  issuer: ""            # PARLA_OIDC_ISSUER; issuer + clientId turn SSO on
+  clientId: ""          # PARLA_OIDC_CLIENT_ID
+  clientSecret: ""      # creates a Secret; better: existingSecret. Mounted as a file (PARLA_OIDC_CLIENT_SECRET_FILE)
+  existingSecret: ""
+  secretKey: client-secret
+  scopes: ""            # PARLA_OIDC_SCOPES (default "openid email profile")
+  roleClaim: ""         # PARLA_OIDC_ROLE_CLAIM, e.g. groups or realm_access.roles
+  roleMap: ""           # PARLA_OIDC_ROLE_MAP, e.g. parla-owners:owner,parla-editors:editor
+  defaultRole: ""       # PARLA_OIDC_DEFAULT_ROLE (empty = unmapped users are denied)
+  only: false           # PARLA_OIDC_ONLY: no password login (except the owner over port-forward)
+  label: ""             # PARLA_OIDC_LABEL: "Sign in with {label}"
+  logout: true          # false = PARLA_OIDC_LOGOUT=0 (Okta)
+
+# Anything else (PARLA_<PROVIDER>_BASE_URL, PARLA_USERS, OTEL_*…): plain env entries and envFrom sources.
+extraEnv: []
+#  - {name: PARLA_ANTHROPIC_BASE_URL, value: "https://llm-proxy.internal"}
+extraEnvFrom: []
+#  - secretRef: {name: parla-extra}
+
+# Download the embedding model (~1.2 GB) into the volume before Parla starts, instead of on the first training.
+embeddings:
+  preload: false
+  model: google/embeddinggemma-300m   # must match MODEL in parla/server.py
+
+persistence:
+  enabled: true         # false = emptyDir: everything is lost when the pod goes away (tests only)
+  existingClaim: ""
+  storageClass: ""      # "" = the cluster default (k3s: local-path)
+  accessModes: [ReadWriteOnce]
+  size: 5Gi             # ~1.2 GB embeddings + ~0.3 GB voice + agents and conversations
+  annotations: {}
+
+resources:
+  requests: {cpu: 250m, memory: 1536Mi}
+  limits: {memory: 3Gi}  # 4Gi with voice. No CPU limit on purpose: training and transcribing are short bursts
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile: {type: RuntimeDefault}
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: {drop: [ALL]}
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# GET / serves the static page: it doesn't touch models or disk.
+readinessProbe:
+  httpGet: {path: /, port: http}
+  periodSeconds: 10
+  timeoutSeconds: 3
+livenessProbe:
+  httpGet: {path: /, port: http}
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 4
+
+service:
+  type: ClusterIP
+  port: 8000
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""         # nginx, traefik…
+  annotations: {}
+  #  nginx.ingress.kubernetes.io/proxy-body-size: 25m       # audio and PDFs travel as base64
+  #  nginx.ingress.kubernetes.io/proxy-read-timeout: "120"  # local AI and voice take seconds
+  #  cert-manager.io/cluster-issuer: letsencrypt
+  hosts: [bots.example.com]
+  tls: []
+  #  - {secretName: parla-tls, hosts: [bots.example.com]}
+  # false: only the public routes: /api/v1/ (bots API, widget chat, WhatsApp/Telegram/phone webhooks), /files/ and
+  # /static/widget.js. Administer with kubectl port-forward.
+  # true: the whole site (admin UI too). The hosts are added to PARLA_HOSTS. Create the owner BEFORE enabling it.
+  exposeAdmin: false
+
+# Restricts who can talk to Parla and where Parla can connect to. Needs a CNI that enforces NetworkPolicy
+# (Calico, Cilium, k3s' built-in kube-router…). The egress rules are the SSRF mitigation for http steps, MCP tools,
+# knowledge URL fetches and AI/voice providers: by default only DNS and HTTPS to public addresses.
+networkPolicy:
+  enabled: false
+  ingress:
+    # Namespaces whose pods may reach port 8000 (ingress controller, Prometheus), by kubernetes.io/metadata.name.
+    namespaces: [ingress-nginx, kube-system, monitoring]
+    extra: []           # more NetworkPolicyIngressRule entries
+  egress:
+    dns: true           # UDP/TCP 53 to any namespace (NodeLocal DNSCache on 169.254.20.10: add it to extra)
+    internet:
+      enabled: true
+      ports: [443]
+      except:           # private, link-local (cloud metadata 169.254.169.254) and CGNAT ranges
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+        - 169.254.0.0/16
+        - 100.64.0.0/10
+        - 127.0.0.0/8
+    extra: []           # more NetworkPolicyEgressRule entries, e.g. your OTel collector or an internal API
+    #  - to: [{namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: observability}}}]
+    #    ports: [{port: 4318, protocol: TCP}]
+
+# Nightly snapshot of the data volume: parla.db copied with SQLite's online backup API (consistent while Parla
+# runs) + agents/, users.json and the rest, without models/. Runs with the same image and security context.
+backup:
+  enabled: false
+  schedule: "17 3 * * *"
+  keep: 7               # archives kept in the backup volume
+  # The data PVC is ReadWriteOnce: the job is scheduled on the same node as the Parla pod (pod affinity). With a
+  # ReadWriteMany data volume you can set sameNode: false.
+  sameNode: true
+  persistence:
+    enabled: true       # false = emptyDir (only useful with upload)
+    existingClaim: ""
+    storageClass: ""
+    size: 5Gi
+  # Optional second step that ships /backup/<newest>.tar.gz elsewhere, e.g. amazon/aws-cli with
+  # command: [sh, -c, 'aws s3 cp "$BACKUP_FILE" s3://bucket/parla/']. The image must be able to run as uid 10001.
+  upload:
+    image: ""
+    command: []
+    env: []
+    envFrom: []
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 512Mi}
+
+# Local AI: an Ollama Deployment + Service. In each agent, AI → address: http://<fullname>-ollama:11434
+# (helm install parla … -> http://parla-ollama:11434).
+ollama:
+  enabled: false
+  image:
+    repository: ollama/ollama
+    tag: "0.12.3"
+    pullPolicy: IfNotPresent
+  models: [qwen2.5:0.5b]   # pulled by an init container before Ollama starts (the first time it needs internet)
+  persistence:
+    enabled: true
+    existingClaim: ""
+    storageClass: ""
+    size: 10Gi
+  resources:
+    requests: {cpu: 500m, memory: 1Gi}
+    limits: {memory: 4Gi}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}

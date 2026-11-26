@@ -1,0 +1,74 @@
+# Example, not in kustomization.yaml: kubectl apply -n parla -f deploy/k8s/backup.yaml
+# Every night: parla.db copied with SQLite's online backup API (consistent while Parla runs) + the rest of /data
+# without models/, as /backup/parla-<date>.tar.gz in its own PVC; keeps the newest 7. Same image and security context
+# as Parla. The data PVC is ReadWriteOnce, so the job runs on Parla's node (podAffinity). Restore: docs/kubernetes.md.
+# The Helm chart's backup (deploy/helm/parla, backup.enabled) also has an optional upload step.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: parla-backup
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests: {storage: 5Gi}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: parla-backup
+spec:
+  schedule: "17 3 * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile: {type: RuntimeDefault}
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - {topologyKey: kubernetes.io/hostname, labelSelector: {matchLabels: {app: parla}}}
+          containers:
+            - name: backup
+              image: ghcr.io/pedroslev/parla-nlu:edge     # the same image as the Deployment
+              command:
+                - python
+                - -c
+                - |
+                  import glob, os, sqlite3, tarfile, time
+                  os.umask(0o077)   # snapshot and archive hold users, keys and conversations
+                  name = time.strftime("/backup/parla-%Y%m%d-%H%M%S.tar.gz", time.gmtime())
+                  skip = {"models", "lost+found", "parla.db", "parla.db-wal", "parla.db-shm", "parla.db.backup"}
+                  with tarfile.open(name + ".part", "w:gz") as tar:
+                      if os.path.exists("/data/parla.db"):
+                          sqlite3.connect("/data/parla.db", timeout=30).backup(sqlite3.connect("/tmp/parla.db"))
+                          tar.add("/tmp/parla.db", "parla.db")
+                      for entry in sorted(set(os.listdir("/data")) - skip):
+                          tar.add("/data/" + entry, entry)
+                  os.replace(name + ".part", name)
+                  for old in sorted(glob.glob("/backup/parla-*.tar.gz"))[:-7]:
+                      os.remove(old)
+                  print("wrote", name, os.path.getsize(name), "bytes")
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: ["ALL"]}
+              volumeMounts:
+                - {name: data, mountPath: /data}
+                - {name: backup, mountPath: /backup}
+                - {name: tmp, mountPath: /tmp}
+          volumes:
+            - name: data
+              persistentVolumeClaim: {claimName: parla-data}
+            - name: backup
+              persistentVolumeClaim: {claimName: parla-backup}
+            - name: tmp
+              emptyDir: {}

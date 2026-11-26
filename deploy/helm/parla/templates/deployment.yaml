@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "parla.fullname" . }}
+  labels: {{- include "parla.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}   # 1 at most: see replicaCount in values.yaml
+  strategy: {type: Recreate}             # never two pods on the same data
+  selector:
+    matchLabels: {{- include "parla.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "parla.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}{{ toYaml . | nindent 8 }}{{ end }}
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}{{ toYaml . | nindent 8 }}{{ end }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.embeddings.preload }}
+      initContainers:
+        - name: embeddings
+          image: {{ include "parla.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # no-op when the model is already in the volume (or baked into the image via BAKE_EMBED_DIR)
+          command:
+            - python
+            - -c
+            - import os, sys; from fastembed import TextEmbedding; TextEmbedding(sys.argv[1], cache_dir=os.environ["PARLA_EMBED_CACHE"])
+            - {{ .Values.embeddings.model | quote }}
+          securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+      {{- end }}
+      containers:
+        - name: parla
+          image: {{ include "parla.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - {name: http, containerPort: 8000}   # the image's port; Origin is checked against it: port-forward 8000:8000
+          env: {{- include "parla.env" . | nindent 12 }}
+          {{- with .Values.extraEnvFrom }}
+          envFrom: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext: {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+            {{- if and (include "parla.oidcEnabled" .) (or .Values.oidc.clientSecret .Values.oidc.existingSecret) }}
+            - {name: oidc, mountPath: /run/secrets/parla-oidc, readOnly: true}
+            {{- end }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.livenessProbe }}
+          livenessProbe: {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim: {claimName: {{ include "parla.dataClaim" . }}}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: tmp
+          emptyDir: {sizeLimit: 1Gi}
+        {{- if and (include "parla.oidcEnabled" .) (or .Values.oidc.clientSecret .Values.oidc.existingSecret) }}
+        - name: oidc
+          secret: {secretName: {{ include "parla.oidcSecret" . }}, defaultMode: 0440}   # group-readable: fsGroup
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity: {{- toYaml . | nindent 8 }}
+      {{- end }}

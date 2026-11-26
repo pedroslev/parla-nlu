@@ -1,0 +1,46 @@
+Parla {{ .Chart.AppVersion }} is starting ({{ include "parla.image" . }}).
+
+1. Open the admin UI through a tunnel. Use 8000 on BOTH sides (Parla checks Origin against its own port):
+
+     kubectl -n {{ .Release.Namespace }} port-forward deploy/{{ include "parla.fullname" . }} 8000:8000
+     # then http://127.0.0.1:8000
+
+2. Create the first user right away (Users → New user): it becomes the owner. Until a user exists,
+   anyone who reaches the UI is the owner, with no password. From the API:
+
+     curl -s http://127.0.0.1:8000/api/users -H 'Content-Type: application/json' \
+       -d '{"name":"admin","password":"<a long password>","role":"owner"}'
+{{- if .Values.ingress.enabled }}
+{{- if .Values.ingress.exposeAdmin }}
+
+3. The whole site is published on {{ join ", " .Values.ingress.hosts }} and PARLA_HOSTS={{ include "parla.hosts" . }}.
+   Make sure the owner exists before the DNS points here.{{ if not .Values.ingress.tls }} No ingress.tls: set config.secureCookie=true if TLS ends before the ingress.{{ end }}
+{{- else }}
+
+3. The ingress publishes only /api/v1/ (API, widget chat, WhatsApp/Telegram/phone webhooks), /files/ and
+   /static/widget.js on {{ join ", " .Values.ingress.hosts }}. Widget snippet:
+     <script src="https://{{ first .Values.ingress.hosts }}/static/widget.js" data-bot="<bot>" async></script>
+   To administer through the domain instead of port-forward: ingress.exposeAdmin=true (adds it to PARLA_HOSTS).
+{{- end }}
+{{- if not .Values.config.publicUrl }}
+   Set config.publicUrl=https://{{ first .Values.ingress.hosts }} for the WhatsApp, Telegram and phone webhooks and SSO.
+{{- end }}
+{{- end }}
+{{- if .Values.ollama.enabled }}
+
+Local AI: in each agent, AI → address: http://{{ include "parla.fullname" . }}-ollama:11434
+{{- end }}
+{{- if .Values.backup.enabled }}
+
+Backups: kubectl -n {{ .Release.Namespace }} create job --from=cronjob/{{ include "parla.fullname" . }}-backup backup-now
+{{- end }}
+{{- if and .Values.metrics.enabled (not (or .Values.metrics.token .Values.metrics.existingSecret)) }}
+
+WARNING: metrics.enabled without a token: /metrics only answers loopback, so Prometheus will get 401.
+{{- end }}
+{{- if .Values.networkPolicy.enabled }}
+
+NetworkPolicy on: egress is DNS + TCP {{ join "," .Values.networkPolicy.egress.internet.ports }} to public addresses only (no cluster or
+metadata addresses). Internal APIs, collectors or an outside Ollama need networkPolicy.egress.extra.
+It only takes effect if your CNI enforces NetworkPolicy.
+{{- end }}

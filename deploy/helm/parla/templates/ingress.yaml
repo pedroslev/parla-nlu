@@ -1,0 +1,34 @@
+{{- if .Values.ingress.enabled }}
+{{- $svc := include "parla.fullname" . }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $svc }}
+  labels: {{- include "parla.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          {{- if $.Values.ingress.exposeAdmin }}
+          - {path: /, pathType: Prefix, backend: {service: {name: {{ $svc }}, port: {name: http}}}}
+          {{- else }}
+          # bots API, widget chat and the WhatsApp / Telegram / phone webhooks
+          - {path: /api/v1/, pathType: Prefix, backend: {service: {name: {{ $svc }}, port: {name: http}}}}
+          # files sent by the "Send a file" step
+          - {path: /files/, pathType: Prefix, backend: {service: {name: {{ $svc }}, port: {name: http}}}}
+          # the widget script (it needs nothing else from /static/)
+          - {path: /static/widget.js, pathType: Exact, backend: {service: {name: {{ $svc }}, port: {name: http}}}}
+          {{- end }}
+    {{- end }}
+{{- end }}

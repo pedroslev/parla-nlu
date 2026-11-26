@@ -1,0 +1,9 @@
+apiVersion: v2
+name: parla
+description: Parla, a self-hosted conversational bot builder (NLU, flows, local AI, voice, channels)
+type: application
+version: 0.1.0
+appVersion: "0.9.0"   # keep in sync with __version__ in parla/__init__.py
+home: https://github.com/pedroslev/parla-nlu
+sources: [https://github.com/pedroslev/parla-nlu]
+keywords: [chatbot, nlu, whatsapp, telegram, ollama]

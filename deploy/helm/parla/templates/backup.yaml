@@ -1,0 +1,104 @@
+{{- if .Values.backup.enabled }}
+{{- $b := .Values.backup }}
+{{- $name := printf "%s-backup" (include "parla.fullname" .) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  labels: {{- include "parla.labels" . | nindent 4 }}
+data:
+  backup.py: |- {{- .Files.Get "files/backup.py" | nindent 4 }}
+{{- if and $b.persistence.enabled (not $b.persistence.existingClaim) }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  labels: {{- include "parla.labels" . | nindent 4 }}
+  annotations: {helm.sh/resource-policy: keep}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with $b.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests: {storage: {{ $b.persistence.size }}}
+{{- end }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $name }}
+  labels: {{- include "parla.labels" . | nindent 4 }}
+spec:
+  schedule: {{ $b.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: {{ include "parla.name" . }}-backup
+            app.kubernetes.io/instance: {{ .Release.Name }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext: {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          {{- if $b.sameNode }}
+          affinity:
+            podAffinity:      # the data PVC is ReadWriteOnce: mount it on the node where Parla runs
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - topologyKey: kubernetes.io/hostname
+                  labelSelector:
+                    matchLabels: {{- include "parla.selectorLabels" . | nindent 22 }}
+          {{- end }}
+          {{- with .Values.nodeSelector }}
+          nodeSelector: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- $snapshot := dict "name" "snapshot" "image" (include "parla.image" .) "imagePullPolicy" .Values.image.pullPolicy "command" (list "python" "/scripts/backup.py") "env" (list (dict "name" "BACKUP_KEEP" "value" ($b.keep | toString))) "securityContext" .Values.securityContext "resources" $b.resources "volumeMounts" (list (dict "name" "data" "mountPath" "/data") (dict "name" "backup" "mountPath" "/backup") (dict "name" "scripts" "mountPath" "/scripts") (dict "name" "tmp" "mountPath" "/tmp")) }}
+          {{- if $b.upload.image }}
+          initContainers: [{{ toJson $snapshot }}]
+          containers:
+            - name: upload
+              image: {{ $b.upload.image }}
+              command: {{- toYaml $b.upload.command | nindent 16 }}
+              env: [{name: BACKUP_DIR, value: /backup}{{ range $b.upload.env }}, {{ toJson . }}{{ end }}]
+              {{- with $b.upload.envFrom }}
+              envFrom: {{- toYaml . | nindent 16 }}
+              {{- end }}
+              securityContext: {{- toYaml .Values.securityContext | nindent 16 }}
+              resources: {{- toYaml $b.resources | nindent 16 }}
+              volumeMounts:
+                - {name: backup, mountPath: /backup, readOnly: true}
+                - {name: tmp, mountPath: /tmp}
+          {{- else }}
+          containers: [{{ toJson $snapshot }}]
+          {{- end }}
+          volumes:
+            - name: data
+              {{- if .Values.persistence.enabled }}
+              persistentVolumeClaim: {claimName: {{ include "parla.dataClaim" . }}}
+              {{- else }}
+              emptyDir: {}
+              {{- end }}
+            - name: backup
+              {{- if $b.persistence.enabled }}
+              persistentVolumeClaim: {claimName: {{ default $name $b.persistence.existingClaim }}}
+              {{- else }}
+              emptyDir: {}
+              {{- end }}
+            - name: scripts
+              configMap: {name: {{ $name }}}
+            - name: tmp
+              emptyDir: {}
+{{- end }}

@@ -23,6 +23,20 @@ services:
       PARLA_METRICS: ${PARLA_METRICS:-0}                # 1 = GET /metrics (Prometheus); from another container it needs the token
       PARLA_METRICS_TOKEN: ${PARLA_METRICS_TOKEN:-}
       PARLA_OTEL_ENDPOINT: ${PARLA_OTEL_ENDPOINT:-}     # OTLP/HTTP base URL, e.g. http://jaeger:4318 (empty = no traces)
+      PARLA_LOG_FORMAT: ${PARLA_LOG_FORMAT:-}           # json = one JSON line per request with trace_id
+      # Behind an HTTPS proxy / with webhooks (docs/deployment.md, docs/channels.md):
+      # PARLA_PUBLIC_URL: https://bots.example.com
+      # PARLA_HOSTS: bots.example.com
+      # PARLA_SECURE_COOKIE: "1"
+      # PARLA_RETENTION_DAYS: "90"
+      # OTEL_EXPORTER_OTLP_HEADERS: x-honeycomb-team=<key>
+      # Single sign-on (docs/sso.md); the client secret as a compose secret (see "secrets:" at the bottom):
+      # PARLA_OIDC_ISSUER: https://kc.example.com/realms/acme
+      # PARLA_OIDC_CLIENT_ID: parla
+      # PARLA_OIDC_CLIENT_SECRET_FILE: /run/secrets/parla_oidc
+      # PARLA_OIDC_ROLE_CLAIM: groups
+      # PARLA_OIDC_ROLE_MAP: parla-owners:owner,parla-editors:editor
+    # secrets: [parla_oidc]
     volumes:
       - parla-data:/data
     read_only: true
@@ -67,6 +81,8 @@ services:
 secrets:
   parla_metrics_token:
     environment: PARLA_METRICS_TOKEN
+  # parla_oidc:
+  #   file: ./oidc-client-secret.txt
 
 volumes:
   parla-data:

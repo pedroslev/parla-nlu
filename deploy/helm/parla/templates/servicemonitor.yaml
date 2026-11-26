@@ -1,0 +1,21 @@
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+{{- if not (or .Values.metrics.token .Values.metrics.existingSecret) }}
+{{- fail "metrics.serviceMonitor needs metrics.token or metrics.existingSecret (without a token /metrics only answers loopback)" }}
+{{- end }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "parla.fullname" . }}
+  labels: {{- include "parla.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.labels }}{{ toYaml . | nindent 4 }}{{ end }}
+spec:
+  selector:
+    matchLabels: {{- include "parla.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+      authorization:
+        type: Bearer
+        credentials: {name: {{ include "parla.metricsSecret" . }}, key: {{ .Values.metrics.secretKey }}}
+{{- end }}

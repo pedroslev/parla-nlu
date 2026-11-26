@@ -1,6 +1,7 @@
 # k3s: same as deploy/k8s; the PVC uses the default class (local-path) and the Ingress goes through Traefik.
 # kubectl create namespace parla && kubectl apply -n parla -k deploy/k3s
-# First: edit the host in ingress.yaml and load the image (see docs/deployment.md#k3s).
+# First: edit the host in ingress.yaml. The image comes from ghcr.io (or import your own, docs/kubernetes.md#k3s).
+# Same examples as deploy/k8s (networkpolicy.yaml is enforced by k3s' built-in kube-router), or use deploy/helm/parla.
 resources:
   - ../k8s
   - ingress.yaml

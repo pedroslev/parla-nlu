@@ -1,8 +1,9 @@
 # No fixed namespace: kubectl apply -n <ns> -k deploy/k8s
-# The Ingress (ingress.yaml) is a separate example: edit it and apply it by hand.
+# Examples to edit and apply by hand: ingress.yaml, networkpolicy.yaml, backup.yaml, servicemonitor.yaml.
+# For everything as values (SSO, metrics, backups, NetworkPolicy, Ollama) use the Helm chart: deploy/helm/parla.
 resources:
   - parla.yaml
 # images:
-#   - name: parla
+#   - name: ghcr.io/pedroslev/parla-nlu
 #     newName: registry.example.com/parla
-#     newTag: "1.0.0"
+#     newTag: "0.9.0"

@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "image": {
+      "type": "object",
+      "required": ["repository"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string"},
+        "variant": {"type": "string", "enum": ["", "voice"]},
+        "pullPolicy": {"type": "string", "enum": ["Always", "IfNotPresent", "Never"]}
+      }
+    },
+    "replicaCount": {"type": "integer", "enum": [0, 1], "description": "Parla runs as a single replica (SQLite + in-memory state)"},
+    "config": {
+      "type": "object",
+      "properties": {
+        "lang": {"type": "string", "enum": ["", "en", "es", "pt"]},
+        "publicUrl": {"type": "string", "pattern": "^(https?://.+)?$"},
+        "hosts": {"type": "array", "items": {"type": "string"}},
+        "functions": {"type": "boolean"},
+        "whisper": {"type": "string"},
+        "retentionDays": {"type": ["integer", "null"], "minimum": 0},
+        "auditDays": {"type": ["integer", "null"], "minimum": 0},
+        "secureCookie": {"type": ["boolean", "null"]},
+        "logFormat": {"type": "string", "enum": ["", "json"]}
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "token": {"type": "string"},
+        "existingSecret": {"type": "string"},
+        "serviceMonitor": {"type": "object", "properties": {"enabled": {"type": "boolean"}}}
+      }
+    },
+    "otel": {
+      "type": "object",
+      "properties": {
+        "endpoint": {"type": "string", "pattern": "^(https?://.+)?$"},
+        "content": {"type": "boolean"}
+      }
+    },
+    "oidc": {
+      "type": "object",
+      "properties": {
+        "issuer": {"type": "string", "pattern": "^(https?://.+)?$"},
+        "clientId": {"type": "string"},
+        "defaultRole": {"type": "string", "enum": ["", "owner", "editor", "analyst", "agent"]},
+        "only": {"type": "boolean"},
+        "logout": {"type": "boolean"}
+      }
+    },
+    "extraEnv": {"type": "array"},
+    "extraEnvFrom": {"type": "array"},
+    "embeddings": {"type": "object", "properties": {"preload": {"type": "boolean"}, "model": {"type": "string"}}},
+    "persistence": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "size": {"type": "string"},
+        "accessModes": {"type": "array", "items": {"type": "string", "enum": ["ReadWriteOnce", "ReadWriteMany"]}}
+      }
+    },
+    "service": {"type": "object", "properties": {"port": {"type": "integer"}}},
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "exposeAdmin": {"type": "boolean"},
+        "hosts": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "tls": {"type": "array"}
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "egress": {
+          "type": "object",
+          "properties": {
+            "dns": {"type": "boolean"},
+            "internet": {
+              "type": "object",
+              "properties": {
+                "enabled": {"type": "boolean"},
+                "ports": {"type": "array", "items": {"type": "integer"}},
+                "except": {"type": "array", "items": {"type": "string"}}
+              }
+            },
+            "extra": {"type": "array"}
+          }
+        }
+      }
+    },
+    "backup": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "schedule": {"type": "string"},
+        "keep": {"type": "integer", "minimum": 1},
+        "sameNode": {"type": "boolean"}
+      }
+    },
+    "ollama": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "models": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

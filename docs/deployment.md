@@ -11,6 +11,9 @@ file there (`parla.db`). That shapes how it's deployed:
 - **The admin interface is used from `127.0.0.1` / `localhost`**, or through a domain you add to `PARLA_HOSTS`.
   See [Origin](#the-origin-guard).
 - Read [security.md](security.md#before-exposing-it-to-the-internet) before exposing it.
+- On Kubernetes, see [kubernetes.md](kubernetes.md) (Helm chart, k3s, backups, NetworkPolicy).
+
+## Environment variables
 
 | Variable | In the container | What for |
 |---|---|---|
@@ -26,11 +29,24 @@ file there (`parla.db`). That shapes how it's deployed:
 | `PARLA_USERS` | | A different path for `users.json`. |
 | `PARLA_RETENTION_DAYS` | | Days to keep conversations with no activity, for agents without their own `retention_days`. Unset or `0`: forever. |
 | `PARLA_AUDIT_DAYS` | | Days to keep the audit log. Unset: `365`. |
+| `PARLA_CAMPAIGN_MAX` | | Maximum recipients per campaign ([outbound.md](outbound.md)). Unset: `10000`. |
 | `PARLA_PUBLIC_URL` | | Public address (`https://bots.example.com`): webhooks and the SSO redirect URI. |
 | `PARLA_METRICS`, `PARLA_METRICS_TOKEN` | | `1`: Prometheus metrics at `GET /metrics`, with the token as `Authorization: Bearer` (required from another host or container). See [Observability](#observability). |
-| `PARLA_OTEL_ENDPOINT` | | OTLP/HTTP base URL for OpenTelemetry traces (`http://jaeger:4318`). The standard `OTEL_EXPORTER_OTLP_*` and `OTEL_SERVICE_NAME` work too. |
+| `PARLA_OTEL_ENDPOINT` | | OTLP/HTTP base URL for OpenTelemetry traces (`http://jaeger:4318`). |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | | Standard OpenTelemetry variables, used when `PARLA_OTEL_ENDPOINT` is empty. |
+| `OTEL_EXPORTER_OTLP_HEADERS` (or `..._TRACES_HEADERS`) | | Headers for the collector (`key=value,…`), for example its API key. Keep it in a secret. |
+| `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` | | `service.name` (default `parla`) and extra resource attributes of the spans. |
+| `OTEL_EXPORTER_OTLP_TIMEOUT`, `OTEL_SDK_DISABLED` | | Export timeout in ms (default `5000`); `true` turns traces off. |
+| `PARLA_OTEL_INTERVAL`, `PARLA_OTEL_CONTENT` | | Seconds between span batches (default `2`); `1` adds the masked turn text to spans. See [observability.md](observability.md). |
 | `PARLA_LOG_FORMAT` | | `json`: one JSON line per request on stderr, with `trace_id` and `span_id`. |
-| `PARLA_OIDC_ISSUER`, `PARLA_OIDC_CLIENT_ID` | | Single sign-on with your identity provider. The secret goes in `PARLA_OIDC_CLIENT_SECRET` or, better, a file in `PARLA_OIDC_CLIENT_SECRET_FILE`. The rest (`PARLA_OIDC_ROLE_CLAIM`, `PARLA_OIDC_ROLE_MAP`, `PARLA_OIDC_ONLY`…) in [sso.md](sso.md). |
+| `PARLA_OIDC_ISSUER`, `PARLA_OIDC_CLIENT_ID` | | Single sign-on with your identity provider: both set turn it on. See [sso.md](sso.md). |
+| `PARLA_OIDC_CLIENT_SECRET`, `PARLA_OIDC_CLIENT_SECRET_FILE` | | The client secret, or better a file that holds it (Docker / Kubernetes secrets; the file wins). |
+| `PARLA_OIDC_SCOPES`, `PARLA_OIDC_ROLE_CLAIM`, `PARLA_OIDC_ROLE_MAP`, `PARLA_OIDC_DEFAULT_ROLE` | | Scopes (default `openid email profile`), the claim with the groups, `group:role` pairs and the role for unmapped users (empty: denied). |
+| `PARLA_OIDC_ONLY`, `PARLA_OIDC_LABEL`, `PARLA_OIDC_LOGOUT` | | `1`: no password login except the owner from loopback; the button's label; `0`: don't redirect to the provider's logout (Okta). |
+| `PARLA_ANTHROPIC_BASE_URL`, `PARLA_GEMINI_BASE_URL` | | Another address for those AI providers (your own proxy, tests). The other AI providers take their address per agent. |
+| `PARLA_OPENAI_BASE_URL`, `PARLA_DEEPGRAM_BASE_URL`, `PARLA_ELEVENLABS_BASE_URL`, `PARLA_GOOGLE_SPEECH_BASE_URL`, `PARLA_GOOGLE_TTS_BASE_URL` | | Another address for the hosted voice providers. |
+| `PARLA_WHATSAPP_API`, `PARLA_TELEGRAM_API` | | Another base URL for the WhatsApp Cloud API (default `https://graph.facebook.com/v21.0`) and the Telegram Bot API. |
+| `PARLA_URL`, `PARLA_TOKEN`, `PARLA_MCP_ALLOWED_HOSTS` | | Only for `mcp_server.py`: where Parla is, its API key and extra hosts for `--http`. |
 
 The port is the argument to `app.py` (the image uses `8000`). The Ollama address isn't a variable: it's configured
 per agent in the interface (**IA → dirección**, AI → address).
@@ -107,108 +123,26 @@ uses that address). Ollama doesn't publish ports: only Parla talks to it.
 Data is kept in the `parla-data` and `ollama-models` volumes. `docker compose down` doesn't delete them;
 `down -v` does.
 
-## Kubernetes
+## Kubernetes and k3s
 
-Manifests in `deploy/k8s/` with no fixed namespace: ConfigMap, PVC (5 Gi), Deployment and Service.
-
-```sh
-docker build -t registry.example.com/parla:1.0.0 . && docker push registry.example.com/parla:1.0.0
-# in deploy/k8s/kustomization.yaml uncomment "images:" with that name and version
-# (or use the published ghcr.io/pedroslev/parla-nlu:<version>, see Prebuilt image)
-kubectl create namespace parla
-kubectl apply -n parla -k deploy/k8s
-kubectl -n parla rollout status deploy/parla
-```
-
-What the Deployment includes:
-
-- `replicas: 1` and `strategy: Recreate`: the old pod shuts down before the new one starts (the PVC is
-  `ReadWriteOnce` and there can't be two Parlas on the same data). An upgrade has a few seconds of downtime.
-- Non-root (uid/gid `10001`, `fsGroup` for the volume), `readOnlyRootFilesystem`, no capabilities, no service
-  account token. `/tmp` is an `emptyDir`.
-- Probes on `GET /` (returns the static page, doesn't touch models or disk).
-- Configuration goes in the `parla` ConfigMap. Bot keys and users live in the volume; the only secret Parla reads
-  from outside are the SSO client secret (see [Single sign-on](#single-sign-on)) and, if you scrape metrics, the
-  `PARLA_METRICS_TOKEN` (see [Observability](#observability)).
-
-### Administering
+[kubernetes.md](kubernetes.md) has the full guide: the Helm chart (`deploy/helm/parla`) with an example production
+values file (domain, TLS, SSO, metrics, backups, NetworkPolicy, Ollama), a k3s quickstart, upgrades and
+rollbacks, backup and restore from the CronJob's archives, the Kustomize manifests (`deploy/k8s`, `deploy/k3s`) and a
+production checklist. In short:
 
 ```sh
-kubectl -n parla port-forward deploy/parla 8000:8000     # then open http://127.0.0.1:8000
+helm install parla ./deploy/helm/parla -n parla --create-namespace -f values.yaml
+kubectl -n parla port-forward deploy/parla 8000:8000     # then open http://127.0.0.1:8000 and create the owner
 ```
 
-Use **8000 on both sides** (because of the Origin guard).
-
-### Ingress
-
-`deploy/k8s/ingress.yaml` is an example (ingress-nginx + TLS) that publishes **only** `/api/v1/`, `/files/` and
-`/static/widget.js`, which is what the widget and your integrations need. Edit the host, the class and the
-certificate and apply it separately:
-
-```sh
-kubectl apply -n parla -f deploy/k8s/ingress.yaml
-```
-
-Don't publish `/` or all of `/api/`: with no users created Parla doesn't ask for a login, and the interface over a
-domain needs `PARLA_HOSTS` (see below). If your bots send files (the **Send a file** step), also
-publish `/files/`.
-
-The WhatsApp and Telegram webhooks (`/api/v1/bots/{bot}/whatsapp` and `/telegram`) are under `/api/v1/`, so these
-examples already publish them. Set `PARLA_PUBLIC_URL` to the public address (`https://bots.example.com`) so Parla
-can show the webhook URL and connect Telegram. See [channels.md](channels.md).
-
-### Single sign-on
-
-To sign in with your identity provider ([sso.md](sso.md)) the whole interface has to be reachable on your domain:
-publish `/` and `/api/` too (not only the Ingress example's routes) and set `PARLA_HOSTS`. Keep the client secret
-in a Secret mounted as a file:
-
-```sh
-kubectl -n parla create secret generic parla-oidc --from-literal=client-secret='<the client secret>'
-```
-
-In `deploy/k8s/parla.yaml`, add to the `parla` ConfigMap:
-
-```yaml
-  PARLA_PUBLIC_URL: "https://bots.example.com"
-  PARLA_HOSTS: "bots.example.com"
-  PARLA_SECURE_COOKIE: "1"
-  PARLA_OIDC_ISSUER: "https://kc.example.com/realms/acme"
-  PARLA_OIDC_CLIENT_ID: "parla"
-  PARLA_OIDC_CLIENT_SECRET_FILE: "/run/secrets/parla-oidc/client-secret"
-  PARLA_OIDC_ROLE_CLAIM: "groups"
-  PARLA_OIDC_ROLE_MAP: "parla-owners:owner,parla-editors:editor"
-```
-
-and to the Deployment, next to the existing `volumeMounts` and `volumes`:
-
-```yaml
-          volumeMounts:
-            - {name: oidc, mountPath: /run/secrets/parla-oidc, readOnly: true}
-      volumes:
-        - name: oidc
-          secret: {secretName: parla-oidc, defaultMode: 0440}   # group-readable: the pod's fsGroup 10001
-```
-
-Create the local owner first through `kubectl port-forward` (see [Administering](#administering)): with SSO on, it
-can only be created from the pod's own loopback, and `port-forward` connects there.
-
-## k3s
-
-k3s already ships with Traefik and the `local-path` storage class (the default), so the base works as-is.
-`deploy/k3s/` adds a Traefik Ingress with the same public routes:
-
-```sh
-# image without a registry: import it into k3s's containerd
-docker build -t parla:latest . && docker save parla:latest | sudo k3s ctr images import -
-# edit the host in deploy/k3s/ingress.yaml
-kubectl create namespace parla
-kubectl apply -n parla -k deploy/k3s
-```
-
-- `local-path` stores data on the node's disk (`/var/lib/rancher/k3s/storage/`): if the pod moves to another node,
-  it won't see it. On a single-node cluster it doesn't matter; on several, pin the node or use other storage.
-- The certificate: Traefik uses its own by default; for a real one, use cert-manager or Traefik's ACME resolver.
+- **One replica, `Recreate` strategy**: SQLite, agent files and in-memory state can't be shared between pods; an
+  upgrade has a few seconds of downtime.
+- Non-root (uid/gid `10001`, `fsGroup` for the volume), `readOnlyRootFilesystem`, no capabilities, `RuntimeDefault`
+  seccomp, no service account token. Probes on `GET /` (static page, doesn't touch models or disk).
+- **Ingress publishes only `/api/v1/`, `/files/` and `/static/widget.js`** by default (the API, the widget and the
+  WhatsApp, Telegram and phone webhooks). The whole UI on a domain (needed for SSO) needs `PARLA_HOSTS`; the chart's
+  `ingress.exposeAdmin: true` sets it.
+- Use **8000 on both sides** of `port-forward` (because of the [Origin guard](#the-origin-guard)).
 
 ## The Origin guard
 
@@ -346,7 +280,9 @@ docker compose --profile observability up -d
 # traces: http://127.0.0.1:16686   metrics: http://127.0.0.1:9090
 ```
 
-**Kubernetes.** Put the token in a Secret and uncomment the variables, the `secretRef` and (for annotation-based
+**Kubernetes.** With the Helm chart: `metrics.enabled: true`, `metrics.existingSecret` and, with the Prometheus
+Operator, `metrics.serviceMonitor.enabled: true` ([kubernetes.md](kubernetes.md#metrics-and-traces)). With the
+Kustomize manifests, put the token in a Secret and uncomment the variables, the `secretRef` and (for annotation-based
 discovery) the `prometheus.io/*` annotations in `deploy/k8s/parla.yaml`:
 
 ```sh
@@ -364,6 +300,7 @@ scrape_configs:
     kubernetes_sd_configs: [{role: pod, namespaces: {names: [parla]}}]
     relabel_configs:
       - {source_labels: [__meta_kubernetes_pod_label_app], regex: parla, action: keep}
+      # Helm chart pods: __meta_kubernetes_pod_label_app_kubernetes_io_name
 ```
 
 The Grafana dashboard is in `deploy/observability/grafana-dashboard.json`. Don't publish `/metrics` through the
@@ -404,12 +341,11 @@ docker exec parla python -c "import sqlite3; sqlite3.connect('/data/parla.db').b
 docker run --rm -v parla-data:/data:ro -v "$PWD":/backup python:3.12-slim \
   tar czf /backup/parla-$(date +%F).tar.gz --exclude=models --exclude=parla.db --exclude='parla.db-*' -C /data .
 
-# Kubernetes (the image has no tar: copy with Python)
-kubectl -n parla exec deploy/parla -- python -c "import sqlite3; sqlite3.connect('/data/parla.db').backup(sqlite3.connect('/data/parla.db.backup'))"
-kubectl -n parla exec deploy/parla -- python -c \
-  "import tarfile,sys; t=tarfile.open(fileobj=sys.stdout.buffer,mode='w|gz'); t.add('/data','.',filter=lambda i: None if i.name.startswith('./models') or i.name in ('./parla.db','./parla.db-wal','./parla.db-shm') else i); t.close()" \
-  > parla-$(date +%F).tar.gz
+# Kubernetes: the Helm chart's backup CronJob (backup.enabled) or deploy/k8s/backup.yaml do this every night
+kubectl -n parla create job --from=cronjob/parla-backup backup-now
 ```
+
+On Kubernetes, restoring is in [kubernetes.md](kubernetes.md#restoring).
 
 Restoring: with Parla stopped, extract into the empty folder / volume, rename `parla.db.backup` to `parla.db` and
 start it. In Docker:
@@ -431,8 +367,8 @@ files that can't be read are reported and left there.
 
 ```sh
 docker compose build && docker compose up -d                       # Compose
-docker build -t registry.example.com/parla:1.1.0 . && docker push registry.example.com/parla:1.1.0
-kubectl -n parla set image deploy/parla parla=registry.example.com/parla:1.1.0   # Kubernetes
+helm upgrade parla ./deploy/helm/parla -n parla -f values.yaml --set image.tag=1.1.0   # Helm (rollback: helm rollback)
+kubectl -n parla set image deploy/parla parla=ghcr.io/pedroslev/parla-nlu:1.1.0       # Kustomize manifests
 ```
 
 A restart drops conversations in the middle of a request; login sessions are kept.
