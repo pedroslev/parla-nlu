@@ -627,13 +627,13 @@ def settings(agent, data, base=None):
     if channel not in ("whatsapp", "telegram", "phone"):
         raise OutboundError("«channel» tiene que ser whatsapp, telegram o phone")
     if "flow" in data:
-        if data["flow"] and data["flow"] not in {f["name"] for f in agent["flows"]}:
+        if data["flow"] and data["flow"] not in _production_flows(agent):        # lo que corre es lo publicado
             raise OutboundError("no existe el flujo «%s»" % data["flow"])
         conf["flow"] = data["flow"] or None
     if "template" in data:
         conf["template"] = {k: v for k, v in template_for(agent, data["template"]).items() if k in ("name", "language", "params", "components")} \
             if data["template"] and channel == "whatsapp" else None
-    if channel == "whatsapp" and not conf.get("template") and not conf.get("flow"):
+    if channel == "whatsapp" and not conf.get("template"):
         raise OutboundError("en WhatsApp la campaña necesita una plantilla aprobada (y opcionalmente un flujo para cuando contesten)")
     if "schedule" in data or "schedule" not in conf:
         schedule = data.get("schedule") or {}
@@ -881,7 +881,8 @@ def api_send(agent, data, now=None):
         _finish(row, agent["id"], channel, "failed", message)
         _log(agent["id"], channel, "envío a %s: %s" % (mask(address), message))
         return 502, {"error": message}
-    _finish(row, agent["id"], channel, "sent", None, sent)
+    cats = pii.categories(_app().settings_of(agent["id"]).get("pii_redaction"))
+    _finish(row, agent["id"], channel, "sent", None, sent, dict(spec, data=pii.scrub(spec["data"], cats)) if cats else None)
     return 200, dict(sent, id=row, channel=channel, to=address, status="sent")
 
 
