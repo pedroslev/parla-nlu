@@ -215,6 +215,8 @@ docker run -d -p 127.0.0.1:8000:8000 -v parla-data:/data ghcr.io/pedroslev/parla
 For Kubernetes there is a **Helm chart** in [deploy/helm/parla](deploy/helm/parla) (Ingress with only the public routes, SSO,
 metrics, nightly backups, NetworkPolicy egress lockdown, optional Ollama) and plain Kustomize manifests for k8s and k3s:
 see [docs/kubernetes.md](docs/kubernetes.md). The proxy, variables and backups are in [docs/deployment.md](docs/deployment.md).
+SQLite is the default; with **Postgres** (`PARLA_DATABASE_URL`) several replicas serve the same bots, with failover
+([high availability](docs/deployment.md#postgres-and-high-availability)).
 
 ## Architecture
 
@@ -265,7 +267,7 @@ web/static/*.js         interface sections and the widget
 tests/                  test_*.py and run_all.py
 examples/               sample bots to import: pizzeria.json and turnos-clinica.json (buttons, knowledge, handoff, dates)
 data/                   runtime data (not versioned)
-deploy/                 Helm chart (helm/), Kubernetes (k8s/) and k3s (k3s/) manifests, observability
+deploy/                 Helm chart (helm/), Kubernetes (k8s/, k8s-ha/) and k3s (k3s/) manifests, observability
 Dockerfile, docker-compose.yml
 scripts/setup.sh, Makefile, requirements*.txt, .env.example
 ```
@@ -284,6 +286,7 @@ Everything is optional. Copy `.env.example` to see the values.
 | `PARLA_SECURE_COOKIE` | empty | `1` marks the session cookie as `Secure` (behind HTTPS). |
 | `PARLA_RETENTION_DAYS` | empty | Days to keep conversations with no activity, for agents without their own `retention_days`. Empty or `0`: forever. |
 | `PARLA_AUDIT_DAYS` | `365` | Days to keep the audit log. |
+| `PARLA_DATABASE_URL`, `PARLA_SECRET_KEY` | empty | `postgresql://…`: Postgres instead of SQLite, for several replicas; the secret key (same in every replica) signs call audio URLs. See [docs/deployment.md](docs/deployment.md#postgres-and-high-availability). |
 | `PARLA_CAMPAIGN_MAX` | `10000` | Maximum recipients per campaign, for agents without `outbound.max_recipients` (see [docs/outbound.md](docs/outbound.md)). |
 | `PARLA_PUBLIC_URL` | empty | Public HTTPS address, for the WhatsApp, Telegram and phone webhooks (see [docs/channels.md](docs/channels.md)) and the SSO redirect URI. |
 | `PARLA_METRICS`, `PARLA_METRICS_TOKEN` | empty | `1` serves Prometheus metrics at `/metrics`; the token (`Authorization: Bearer`) is needed from another host. See [docs/observability.md](docs/observability.md). |

@@ -68,7 +68,9 @@ All are optional. Nothing loads `.env` automatically: export them in your shell.
 | `parla/auth.py` | Users, roles, cookies, keys; `handle` (routes `/api/auth`, `/api/users`) and `guard` (before every `/api/`). |
 | `parla/aserver.py` | The asyncio HTTP/1.1 server: keep-alive, per-conversation queues, WebSocket (`/ws`) and SSE (`/stream`). Runs each request through `server.Handler` in a thread pool. |
 | `parla/bus.py` | In-process pub/sub (`publish` from any thread, `subscribe` from the loop): topics `session:`, `inbox:`, `campaign:`. |
-| `parla/db.py` | The SQLite database `parla.db` (WAL): per-thread read connections and one writer thread with group commit; tables `sessions`, `logins`, `audit`, campaigns; `q`, `connect`, `audit`, `audit_list`. |
+| `parla/db.py` | The SQLite database `parla.db` (WAL): per-thread read connections and one writer thread with group commit; tables `sessions`, `logins`, `audit`, campaigns; `q`, `connect`, `audit`, `audit_list`. With `PARLA_DATABASE_URL`, the same functions on Postgres (see [Storage layer](#storage-layer)). |
+| `parla/cluster.py` | Several replicas on Postgres: advisory locks, leader election, the bus over `LISTEN/NOTIFY`, shared counters (`kv`). No-ops with SQLite. |
+| `parla/migrate.py` | `python -m parla.migrate sqlite-to-postgres [parla.db]`: copies every table to Postgres. |
 | `parla/pii.py` | Masking personal data in what is stored (`pii_redaction`): `categories`, the rules and the Luhn / mod-97 checks. |
 | `parla/brain.py` | AI on top of the engine: `rescue_intent`, `fill_slot`, `understand`, `side_question`, `answer`, `fallback`, `agent_turn`. No function raises. |
 | `parla/llm.py` | Ollama / OpenAI-compatible / Anthropic / Gemini client: `chat` (with `stream=` for live tokens), `settle`, `status`, `pull`. |
@@ -114,6 +116,26 @@ socket ─► aserver (event loop) ─► per-conversation queue ─► thread p
   `converse` sets `llm.STREAM.sink` only if someone listens, so streaming costs nothing otherwise.
 - **Measuring**: `tests/perf/load.py` (not in `run_all`; CI runs a 10 s smoke). The embedding model is the
   ceiling; see [deployment.md](deployment.md#performance-and-tuning).
+
+### Storage layer
+
+Modules write plain SQLite SQL through `db.q()`, `db.later()` and `db.connect()`; there is no ORM. With
+`PARLA_DATABASE_URL` those functions go to Postgres instead:
+
+- `_pg()` translates each statement once (cached): `?` to `%s`, `INSERT OR IGNORE/REPLACE` to `ON CONFLICT`,
+  `json_extract(record, '$.k')` to `record->>'k'` (`record`, `config` and `spec` are `JSONB`, returned as text so
+  callers still `json.loads`), `IS ?` to `IS NOT DISTINCT FROM`, `INSERT` into an id table gets `RETURNING id`
+  (`lastrowid`). Booleans are sent as integers. Keep new SQL in that subset, or branch on `db.PG`.
+- A small thread-safe pool (`PARLA_DB_POOL`, autocommit; `connect()` is one transaction on one connection).
+  `later()` still goes through a background writer, and a write through `q()` waits for queued `later()` writes,
+  as with SQLite.
+- Migrations: `db.MIGRATIONS` is a list of `(version, DDL)` applied once each (table `schema_version`) under an
+  advisory lock at startup. Add new ones at the end; never edit a released one. Mirror schema changes in `SCHEMA`
+  (SQLite).
+- Anything that must be shared between replicas goes through `cluster.py` (locks, `kv` counters, leader-only jobs)
+  behind `if db.PG`, so the SQLite path stays exactly as it was.
+- Tests: `PARLA_DATABASE_URL=postgresql://… tests/run_all.py` gives each test process its own schema
+  (`tests/support.py`, dropped at exit); `tests/test_cluster.py` starts two real replicas. CI runs both suites.
 
 ## How the engine works
 

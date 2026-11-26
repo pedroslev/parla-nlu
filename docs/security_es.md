@@ -310,6 +310,20 @@ En **Publicar → Claves** cargás tokens y contraseñas de servicios externos p
   `••••`. **No** se tapa lo que devuelve el servicio o la función: si una respuesta trae la clave y la guardás en
   un slot, queda en la conversación.
 
+## Postgres y varias réplicas
+
+- `PARLA_DATABASE_URL` lleva la contraseña de la base: va en un Secret (en Helm `database.existingSecret`), no en un
+  values ni en un ConfigMap, y con `sslmode=require` (o `verify-full`) si Postgres no está en la misma máquina. El
+  usuario necesita crear tablas en su schema; nada más (ni superusuario ni extensiones).
+- Postgres tiene lo mismo que `parla.db` (conversaciones, hashes de las sesiones de login, auditoría): cifralo en
+  reposo y limitá quién se conecta, como con la carpeta de datos. Los tokens de sesión se guardan hasheados
+  (SHA-256), como antes.
+- `PARLA_SECRET_KEY` firma las direcciones de audio que Parla le da al proveedor de telefonía; todas las réplicas
+  necesitan el mismo valor, y quien lo tenga puede falsificar esas direcciones por 10 minutos. Generalo con
+  `openssl rand -hex 32` y guardalo en un Secret.
+- La bóveda de claves sigue en archivos en el volumen de datos compartido (permisos 600, sin cifrar, como en un
+  servidor): un volumen ReadWriteMany tiene que ser tan privado como la base (storage class cifrada, sin otras cargas).
+
 ## Proveedores de IA y de voz en la nube: los datos salen de la máquina
 
 Por defecto todo corre en tu máquina: la IA con Ollama, el reconocimiento de voz con faster-whisper y la voz del
@@ -493,8 +507,8 @@ Todo apagado por defecto ([observability.md](observability_es.md)).
 
 ## Lo que todavía no hay
 
-- Una sola réplica por carpeta de datos. Los contadores del bloqueo de login viven en memoria: se reinician con el
-  servidor.
+- Con SQLite, una sola réplica por carpeta de datos y los contadores del bloqueo de login en memoria (se reinician
+  con el servidor). Con Postgres los comparten todas las réplicas.
 - Sin un límite de pedidos general: solo el bloqueo de login y los límites de salida (envíos por minuto con la API,
   ritmo de las campañas).
 - Sin registro de accesos con usuarios o IPs: la auditoría anota escrituras, y `PARLA_LOG_FORMAT=json` anota cada

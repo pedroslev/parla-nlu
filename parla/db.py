@@ -186,8 +186,8 @@ def later(sql, args=()):
     if PG:
         _pg_start_writer()
         with _later:
-            _later.n += 1
-        _writes.put((None, sql, args, concurrent.futures.Future()))
+            _later.queued += 1
+            _writes.put((None, sql, args, concurrent.futures.Future()))
         return
     _conn()
     _writes.put((path(), sql, args, concurrent.futures.Future()))
@@ -418,9 +418,10 @@ pool = Pool(POOL_SIZE) if PG else None
 
 
 def _pg_q(sql, args):
-    if _later.n and sql.lstrip()[:6].upper() != "SELECT":     # como en SQLite: una escritura que espera va después de las de later()
-        with _later:
-            _later.wait_for(lambda: not _later.n, 30)
+    if _later.done < _later.queued and sql.lstrip()[:6].upper() != "SELECT":
+        with _later:            # como en SQLite: una escritura que espera va después de las de later() que ya estaban encoladas
+            ticket = _later.queued
+            _later.wait_for(lambda: _later.done >= ticket, 30)
     conn = getattr(_local, "pg", None)
     if conn is not None:            # adentro de connect(): la misma transacción
         return conn.execute(sql, args).fetchall()
@@ -463,7 +464,7 @@ def _pg_writer():
                 except Exception:  # noqa: BLE001
                     pass
         with _later:
-            _later.n -= len(batch)
+            _later.done += len(batch)
             _later.notify_all()
 
 
@@ -477,7 +478,7 @@ def _pg_start_writer():
 
 _writer_started = [False]
 _later = threading.Condition()
-_later.n = 0                # escrituras de later() que todavía no se hicieron
+_later.queued = _later.done = 0     # escrituras de later() encoladas y hechas (en orden: la cola es FIFO)
 
 
 def ping():

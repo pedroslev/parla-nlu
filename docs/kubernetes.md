@@ -9,23 +9,94 @@ Two ways to run Parla on Kubernetes:
 - **Kustomize manifests** (`deploy/k8s`, `deploy/k3s`): a plain Deployment, PVC and Service plus examples to edit
   by hand (Ingress, NetworkPolicy, backup CronJob, ServiceMonitor).
 
-Both use the same image, the same security settings and the same rule: **one replica**. Read
+Both use the same image and the same security settings. With SQLite (the default) the rule is **one replica**;
+with Postgres you can run several ([High availability](#high-availability)). Read
 [deployment.md](deployment.md) for the variables, the Origin guard and the data layout, and
 [security.md](security.md#before-exposing-it-to-the-internet) before exposing anything.
 
-## Why a single replica
+## One replica with SQLite
 
-Parla is one process. Conversations, login sessions and the audit log are in SQLite (`parla.db`) on the data
-volume, agents are files written without cross-process locking, and trained models, login rate-limit counters and
-SSO login state live in memory. Two pods on the same data overwrite each other's files, so:
+With SQLite, conversations, login sessions and the audit log are in `parla.db` on the data volume, and two pods on
+the same file would overwrite each other, so:
 
-- `replicaCount` is `1` (the chart's schema only accepts `0` or `1`; `0` stops Parla, for example to restore a backup).
+- `replicaCount` is `1` (`0` stops Parla, for example to restore a backup). The chart refuses more than 1 without
+  Postgres.
 - The strategy is `Recreate`: the old pod stops before the new one starts. An upgrade or a config change has a
   few seconds of downtime, and a request in flight is dropped. Login sessions survive.
 - The data volume is `ReadWriteOnce`. Anything else that mounts it (the backup job) has to run on the same node.
 
-Horizontal scaling comes with the Postgres backend ([ROADMAP.md](ROADMAP.md)). Until then, size the pod instead
-of adding pods.
+For no downtime on upgrades and node failures, move to Postgres and several replicas (next section).
+
+## High availability
+
+Several Parla pods behind the same Service, sharing a Postgres database and a ReadWriteMany data volume. How the
+replicas cooperate (per-conversation locks, the bus over `LISTEN/NOTIFY`, queues, the leader) is in
+[deployment.md](deployment.md#postgres-and-high-availability).
+
+Requirements:
+
+- **Postgres 13+** you run: a managed service (RDS, Cloud SQL, Azure Database, Neon…) or an operator such as
+  CloudNativePG. Each pod opens up to `PARLA_DB_POOL` (20) + `PARLA_DB_LOCKS` (32) + 3 connections; with 3 pods
+  keep `max_connections` ≥ 200 or lower the pools (`database.pool`). A PgBouncer in **session** mode works;
+  transaction mode doesn't (advisory locks and `LISTEN` need a session).
+- **A ReadWriteMany volume** for `/data` (agents, versions, trained models, users, secrets, uploaded files): EFS,
+  Filestore, Azure Files, NFS, CephFS, Longhorn RWX. The chart mounts `/data/models` (embeddings, voice) as a per-pod
+  `emptyDir`, so bake the embedding model into the image (`BAKE_EMBED_DIR`) or each new pod downloads 1.2 GB.
+- **`secretKey`**: the same `PARLA_SECRET_KEY` in every pod (signs phone audio URLs).
+
+```yaml
+# values-ha.yaml
+replicaCount: 3
+database:
+  existingSecret: parla-db          # key PARLA_DATABASE_URL: postgresql://parla:…@pg.internal:5432/parla?sslmode=require
+secretKey:
+  existingSecret: parla-secret-key  # key PARLA_SECRET_KEY: openssl rand -hex 32
+persistence:
+  accessModes: [ReadWriteMany]
+  storageClass: efs-sc              # your RWX class (or existingClaim)
+# autoscaling: {enabled: true, minReplicas: 2, maxReplicas: 6, targetCPUUtilizationPercentage: 70}
+```
+
+With CloudNativePG:
+
+```yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata: {name: parla-pg, namespace: parla}
+spec:
+  instances: 2                      # a primary and a hot standby: the operator fails over
+  storage: {size: 10Gi}
+  bootstrap: {initdb: {database: parla, owner: parla}}
+```
+
+and `database.existingSecret: parla-pg-app`, `database.secretKey: uri` (the operator's app secret points at the
+read-write service).
+
+What the chart does when `replicaCount > 1` or `autoscaling.enabled`: it refuses to render without
+`database.url`/`existingSecret`, `secretKey` and a ReadWriteMany volume; uses `RollingUpdate` (`maxUnavailable: 0`);
+creates a PodDisruptionBudget (`podDisruptionBudget.maxUnavailable: 1`) and, with `autoscaling.enabled`, an HPA on
+CPU. The readiness probe is `/readyz`, which fails when the pod can't reach the database.
+
+Sizing: each pod needs the embedding model in memory (~1 GB; requests 1.5 Gi, limit 3 Gi as with one replica);
+throughput is CPU-bound by the embeddings, so it grows with CPU per pod and with pods, while Postgres stays light (a
+few small queries per turn). Measured on one 8-CPU laptop VM (k3d, Postgres in the same VM, `PARLA_EMBED_WORKERS=1`,
+`tests/perf/load.py` through the Service at 50 concurrent conversations): 57 turns/s with 1 pod, 97 with 3, 0 errors.
+
+Failover, measured with the leader pod force-deleted in the middle of a 60 s load test at 30 concurrent
+conversations: 14 failed requests of ~5,500 (the ones in flight on that pod or sent to it before the Service dropped
+it; clients retry), a new leader within 5 s, the replacement pod serving 5 s later, no lost or duplicated turns.
+
+Stays per pod: loaded models and caches, metrics (scrape every pod; `parla_cluster_leader` sums to 1), the channel
+status shown on the Agent page, and a phone call's media WebSocket (if that pod dies, the call drops).
+
+Moving an existing install: scale to 0, run `python -m parla.migrate sqlite-to-postgres /data/parla.db` once in a
+pod that mounts the old volume with `PARLA_DATABASE_URL` set, copy the rest of `/data` (without `models/` and
+`parla.db*`) to the RWX volume, then install with the HA values. Backups: `pg_dump` (or the operator's backups) for
+the database plus the data volume; the chart's `backup` CronJob still archives `/data` but only snapshots `parla.db`
+with SQLite.
+
+Kustomize: `deploy/k8s-ha` is the same as `deploy/k8s` with 3 replicas, RollingUpdate, a PDB, `/readyz`, a per-pod
+`models` volume and a `parla-ha` Secret with the two variables (see its `kustomization.yaml`).
 
 ## Helm
 

@@ -1,6 +1,6 @@
 # Parla Helm chart
 
-Runs [Parla](https://github.com/pedroslev/parla-nlu) on Kubernetes: one replica on a persistent volume, hardened pod,
+Runs [Parla](https://github.com/pedroslev/parla-nlu) on Kubernetes: one replica on a persistent volume (or several on Postgres), hardened pod,
 an Ingress with only the public routes, and optional SSO, metrics, traces, nightly backups, NetworkPolicy and Ollama.
 The full guide (production values, k3s, backup/restore, upgrades, checklist) is in
 [docs/kubernetes.md](../../../docs/kubernetes.md) ([español](../../../docs/kubernetes_es.md)).
@@ -22,7 +22,12 @@ Until the first tagged release is on ghcr.io, set `image.tag: edge`.
 | `image.pullPolicy` | `IfNotPresent` | |
 | `imagePullSecrets` | `[]` | |
 | `nameOverride`, `fullnameOverride` | `""` | |
-| `replicaCount` | `1` | `0` or `1` only: SQLite + in-memory state. `0` stops Parla (restores). Strategy is always `Recreate`. |
+| `replicaCount` | `1` | With SQLite `0` or `1` (`Recreate`; `0` stops Parla, restores). More than 1 needs `database`, `secretKey` and a ReadWriteMany volume: `RollingUpdate` + PDB ([high availability](../../../docs/kubernetes.md#high-availability)). |
+| `database.url` / `database.existingSecret` / `database.secretKey` | `""` / `""` / `PARLA_DATABASE_URL` | Postgres (`postgresql://…`) instead of SQLite. `url` creates a Secret; better an existing one (CloudNativePG: `<cluster>-app`, key `uri`). |
+| `database.pool` | `null` | `PARLA_DB_POOL`: query connections per pod (default 20). |
+| `secretKey.value` / `secretKey.existingSecret` / `secretKey.secretKey` | `""` / `""` / `PARLA_SECRET_KEY` | Same random value in every replica (signs phone audio URLs). Required with more than 1 replica. |
+| `autoscaling.enabled`, `minReplicas`, `maxReplicas`, `targetCPUUtilizationPercentage` | `false`, `2`, `6`, `70` | HPA on CPU (needs Postgres, like `replicaCount > 1`). |
+| `podDisruptionBudget.maxUnavailable` | `1` | PDB created with more than one replica. |
 | `config.lang` | `""` | `PARLA_LANG`: `en`, `es` or `pt`. |
 | `config.publicUrl` | `""` | `PARLA_PUBLIC_URL`: public `https://` address (webhooks, SSO). |
 | `config.hosts` | `[]` | `PARLA_HOSTS`. `ingress.hosts` are added when `ingress.exposeAdmin`. |
@@ -63,7 +68,7 @@ Until the first tagged release is on ghcr.io, set `image.tag: edge`.
 | `podSecurityContext` | uid/gid/fsGroup `10001`, non-root, seccomp `RuntimeDefault` | |
 | `securityContext` | read-only root, no privilege escalation, drop `ALL` | |
 | `podAnnotations`, `podLabels`, `nodeSelector`, `tolerations`, `affinity` | `{}` / `[]` | |
-| `readinessProbe`, `livenessProbe` | `GET /` | |
+| `readinessProbe`, `livenessProbe` | `GET /readyz`, `GET /` | `/readyz` fails (503) when the database doesn't answer. |
 | `service.type`, `service.port`, `service.annotations` | `ClusterIP`, `8000`, `{}` | |
 | `ingress.enabled` | `false` | |
 | `ingress.className` | `""` | |

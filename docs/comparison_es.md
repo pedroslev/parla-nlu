@@ -137,7 +137,9 @@ Ser honestos con lo que falta importa más que una lista larga de funciones. Est
 - **Telefonía:** llamadas entrantes y salientes por Twilio o jambonz (la voz la reconoce el proveedor, turnos
   pedido/respuesta, sin audio en streaming ni detección de contestadores); sin conectores de AudioCodes ni de centros
   de contacto (CCaaS).
-- **Escalado horizontal:** Parla es un solo proceso con archivos en disco; está pensado para un servidor chico.
+- **Gran escala:** varias réplicas necesitan Postgres y un volumen de datos compartido (ReadWriteMany), y el modelo
+  de embeddings corre en cada réplica; está pensado para despliegues chicos y medianos, no para un servicio gestionado
+  multi-región.
 - **Inicio de sesión único con SAML** (el SSO es solo OIDC, ver [sso_es.md](sso_es.md)).
 
 Si alguna de estas es un requisito excluyente hoy, probablemente te convenga una de las plataformas de arriba.

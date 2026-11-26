@@ -54,7 +54,10 @@ y `_sum`, así que «llamadas por resultado» es `rate(<nombre>_count{outcome="e
 | `parla_connections` | gauge | `kind` | Conexiones abiertas: `http` (keep-alive), `ws`, `sse`, `voice` (WebSockets de voz en tiempo real). |
 | `parla_queue_depth` | gauge | `queue` | `executor` (pedidos esperando un hilo), `inflight`, `sessions` (charlas con un turno en curso o en fila), `bus_subscribers`, `db_write`, `embed`, `webhooks` (entregas de webhooks de la derivación en cola o saliendo). |
 | `parla_embed_batches_total`, `parla_embed_items_total` | counter | | Llamadas de embeddings a ONNX y textos: textos / llamadas = tamaño medio del lote. |
-| `parla_db_commits_total`, `parla_db_statements_total` | counter | | Group commits de SQLite y sus escrituras: sentencias / commits = tamaño medio del grupo. |
+| `parla_db_commits_total`, `parla_db_statements_total` | counter | | Group commits de SQLite y sus escrituras: sentencias / commits = tamaño medio del grupo. Con Postgres: transacciones y escrituras de fondo (`later`). |
+| `parla_db_pool_connections` | gauge | `pool`, `state` | Solo Postgres: conexiones por pool (`queries`, `locks`) abiertas (`open`) y libres (`idle`); `open - idle` están en uso. Cerca de `PARLA_DB_POOL` / `PARLA_DB_LOCKS` = subilos (y el `max_connections` de Postgres). |
+| `parla_cluster_leader` | gauge | | `1` en la réplica que corre campañas, retención y tiempos máximos (con SQLite siempre `1`). La suma entre pods tiene que dar 1. |
+| `parla_cluster_events_total` | counter | `direction` | Eventos del bus mandados (`sent`) y recibidos (`received`) de otras réplicas (`LISTEN/NOTIFY`). |
 | `parla_active_sessions` | gauge | `agent` | Conversaciones sin terminar con movimiento en los últimos 30 minutos (se calcula en cada scrape). |
 | `parla_test_runs_total` | counter | `agent`, `outcome` | Corridas de las pruebas (`passed`, `failed`): interfaz, API, MCP y el control antes de publicar. |
 | `parla_outbound_messages_total` | counter | `channel`, `outcome` | Mensajes y llamadas salientes (API, campañas, recordatorios): `sent`, `retry` (falló y se va a reintentar), `failed`, `opted_out` (rechazado porque la persona se dio de baja, o una baja nueva). |
@@ -83,6 +86,13 @@ sum by (agent, currency) (increase(parla_cost_total[1d]))
 # CSAT promedio de hoy
 sum(increase(parla_csat_score_sum[1d])) / sum(increase(parla_csat_score_count[1d]))
 ```
+
+### Disponibilidad y líder
+
+`GET /readyz` (sin token) responde `{"ok": true, "database": "sqlite"|"postgres", "leader": true|false}` con 200, o
+503 si la base no contesta: el chart de Helm lo usa como readiness probe, así un pod que pierde Postgres sale del
+Service hasta que se reconecta. Con varias réplicas, `leader` (y `parla_cluster_leader`) dice qué pod corre las
+tareas de una sola vez; si la líder se muere, otra dice `true` en `PARLA_LEADER_CHECK` segundos.
 
 ### Acceso a /metrics
 

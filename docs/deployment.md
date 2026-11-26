@@ -53,6 +53,10 @@ file there (`parla.db`). That shapes how it's deployed:
 | `PARLA_VOICE_WORKERS` | | Local Whisper/Piper model sets that work at the same time (default `min(2, cores / 4)`; each one uses its own RAM). |
 | `PARLA_VOICE_MAX_SECONDS` | | Longest real-time voice stream (call, browser or widget) before Parla closes it (default `3600`). |
 | `PARLA_IDLE_TIMEOUT`, `PARLA_WS_MAX_MESSAGE` | | Seconds without data before a connection is closed (default `30`) and the largest WebSocket message (default `1000000` bytes). |
+| `PARLA_DATABASE_URL` | | `postgresql://user:password@host:5432/db`: Postgres instead of SQLite, needed for several replicas. See [Postgres and high availability](#postgres-and-high-availability). |
+| `PARLA_SECRET_KEY` | | A long random value, the same in every replica: signs the audio URLs of phone calls. Required with several replicas. |
+| `PARLA_DB_POOL`, `PARLA_DB_LOCKS` | | Postgres connections per process for queries (default `20`) and for per-conversation locks (default `32`). |
+| `PARLA_DATABASE_SCHEMA`, `PARLA_LOCK_TIMEOUT`, `PARLA_LEADER_CHECK` | | Postgres schema (default: the user's `search_path`), seconds to wait for a conversation lock (default `30`) and between leader checks (default `2`). |
 
 The port is the argument to `app.py` (the image uses `8000`). The Ollama address isn't a variable: it's configured
 per agent in the interface (**IA → dirección**, AI → address).
@@ -141,14 +145,59 @@ helm install parla ./deploy/helm/parla -n parla --create-namespace -f values.yam
 kubectl -n parla port-forward deploy/parla 8000:8000     # then open http://127.0.0.1:8000 and create the owner
 ```
 
-- **One replica, `Recreate` strategy**: SQLite, agent files and in-memory state can't be shared between pods; an
-  upgrade has a few seconds of downtime.
+- **One replica, `Recreate` strategy** with SQLite (the default): an upgrade has a few seconds of downtime. Several
+  replicas with `RollingUpdate` need Postgres: see [below](#postgres-and-high-availability).
 - Non-root (uid/gid `10001`, `fsGroup` for the volume), `readOnlyRootFilesystem`, no capabilities, `RuntimeDefault`
-  seccomp, no service account token. Probes on `GET /` (static page, doesn't touch models or disk).
+  seccomp, no service account token. Liveness on `GET /` (static page), readiness on `GET /readyz` (checks the database).
 - **Ingress publishes only `/api/v1/`, `/files/` and `/static/widget.js`** by default (the API, the widget and the
   WhatsApp, Telegram and phone webhooks). The whole UI on a domain (needed for SSO) needs `PARLA_HOSTS`; the chart's
   `ingress.exposeAdmin: true` sets it.
 - Use **8000 on both sides** of `port-forward` (because of the [Origin guard](#the-origin-guard)).
+
+## Postgres and high availability
+
+By default everything is in SQLite and Parla is one process. With `PARLA_DATABASE_URL=postgresql://…` the same
+tables go to Postgres (13 or newer) and **several Parla processes or pods can serve the same bots at once**:
+
+```sh
+.venv/bin/pip install -r requirements-postgres.txt       # or scripts/setup.sh --postgres (the Docker image has it)
+export PARLA_DATABASE_URL=postgresql://parla:<password>@db.internal:5432/parla?sslmode=require
+export PARLA_SECRET_KEY=$(openssl rand -hex 32)          # the same value in every replica
+python -m parla.migrate sqlite-to-postgres              # once, to bring an existing data/parla.db (Parla stopped)
+.venv/bin/python app.py 8000
+```
+
+The schema is created and migrated on startup (versioned, under an advisory lock, so replicas starting together
+don't race). Compose: `docker compose --profile postgres up -d` with the two variables above (see
+`docker-compose.yml`). Kubernetes: [kubernetes.md](kubernetes.md#high-availability).
+
+| Where | What |
+|---|---|
+| Postgres | Conversations, login sessions, audit log, usage, campaigns and their queue, opt-outs, webhook queue, SSO login state; shared counters (login lockout, API sends per minute), WhatsApp/Telegram message ids already handled, phone silence counters and the plan for a call's `/after`. |
+| Shared data folder (`PARLA_DATA`, ReadWriteMany) | Agents, versions, environments, trained models, `users.json` and API keys, secrets (`<id>.secrets.json`, mode 600), prices, uploaded files. Every replica re-reads a file when it changes (mtime), as it already did for hand edits. |
+| Each replica | Embedding and voice models (`/data/models`: mount it per pod), loaded models and caches, metrics, channel status in the Agent page, the voice WebSocket of a call (it stays on the replica that holds it). |
+
+How replicas cooperate:
+
+- **Conversation order**: turns of the same conversation take a Postgres advisory lock
+  (`pg_advisory_lock(hashtext(bot/session))`, waits up to `PARLA_LOCK_TIMEOUT`), so they run one at a time whatever
+  replica each request reaches. WhatsApp, Telegram and phone webhooks use the same kind of lock.
+- **Live events**: what one replica publishes (a saved conversation, an operator reply, campaign progress) reaches
+  WebSocket and SSE clients on the others through `LISTEN/NOTIFY` (conversations travel as an id and are re-read).
+  The AI's streamed tokens are only sent by the replica that runs the turn, which is the one the client talks to.
+- **Queues**: API sends, reminders and webhook deliveries are claimed with `FOR UPDATE SKIP LOCKED` by any replica
+  (webhooks keep their per-conversation order).
+- **Leader**: one replica holds the `parla:leader` advisory lock and runs what must run once: campaign pacing,
+  retention cleanup, external handoff timeouts and requeuing rows stuck in "sending" (5 min for webhooks, 10 for
+  messages). If it dies, Postgres releases the lock with its connection and another replica takes over within
+  `PARLA_LEADER_CHECK` seconds. `GET /readyz` says which one is the leader.
+- **Training and publishing** take a per-agent advisory lock; the other replicas load the new model on their next
+  turn (the trained file changed).
+
+Backups: `pg_dump` for the database (`pg_dump -Fc "$PARLA_DATABASE_URL" > parla-$(date +%F).dump`, restore with
+`pg_restore -d …`) plus the data folder without `models/`. Limits: an in-flight request is lost when its pod is killed
+(the client retries); campaign pacing restarts with up to 1 s of burst after a failover; channel status and metrics
+are per replica.
 
 ## The Origin guard
 
@@ -350,7 +399,7 @@ Ingress: only `/api/v1/`, `/static/widget.js` and `/files/` need to be public.
     <id>.versions/<n>.json  published versions (+ <n>.crfsuite)
     <id>.files/             files uploaded for the `file` step
     <id>.sessions.migrated/ old conversation files, already imported into parla.db (can be deleted)
-  parla.db                  conversations, login sessions and audit log (SQLite, permissions 600)
+  parla.db                  conversations, login sessions and audit log (SQLite, permissions 600; not with Postgres)
   parla.db-wal, -shm        parla.db's journal while it runs (part of the database)
   users.json                users (permissions 600)
   models/                   embeddings, voice and audio cache (can be downloaded again)

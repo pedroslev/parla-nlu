@@ -54,7 +54,10 @@ so "calls by outcome" is `rate(<name>_count{outcome="error"}[5m])`. `outcome` is
 | `parla_connections` | gauge | `kind` | Open connections: `http` (keep-alive), `ws`, `sse`, `voice` (real-time voice WebSockets). |
 | `parla_queue_depth` | gauge | `queue` | `executor` (requests waiting for a thread), `inflight`, `sessions` (conversations with a turn running or queued), `bus_subscribers`, `db_write`, `embed`, `webhooks` (handoff webhook deliveries queued or sending). |
 | `parla_embed_batches_total`, `parla_embed_items_total` | counter | | ONNX embedding calls and texts: items / batches = mean batch size. |
-| `parla_db_commits_total`, `parla_db_statements_total` | counter | | SQLite group commits and the writes in them: statements / commits = mean group size. |
+| `parla_db_commits_total`, `parla_db_statements_total` | counter | | SQLite group commits and the writes in them: statements / commits = mean group size. With Postgres: transactions and background (`later`) writes. |
+| `parla_db_pool_connections` | gauge | `pool`, `state` | Postgres only: connections per pool (`queries`, `locks`) that are `open` and `idle`; `open - idle` are in use. Near `PARLA_DB_POOL` / `PARLA_DB_LOCKS` = raise them (and Postgres' `max_connections`). |
+| `parla_cluster_leader` | gauge | | `1` on the replica that runs campaigns, retention and timeouts (always `1` with SQLite). The sum over pods should be 1. |
+| `parla_cluster_events_total` | counter | `direction` | Bus events `sent` to and `received` from other replicas (`LISTEN/NOTIFY`). |
 | `parla_active_sessions` | gauge | `agent` | Conversations not ended with activity in the last 30 minutes (computed on each scrape). |
 | `parla_test_runs_total` | counter | `agent`, `outcome` | Test suite runs (`passed`, `failed`): UI, API, MCP and the publish gate. |
 | `parla_outbound_messages_total` | counter | `channel`, `outcome` | Outbound messages and calls (API, campaigns, reminders): `sent`, `retry` (failed, will be retried), `failed`, `opted_out` (refused because the person opted out, or a new opt-out). |
@@ -83,6 +86,13 @@ sum by (agent, currency) (increase(parla_cost_total[1d]))
 # average CSAT today
 sum(increase(parla_csat_score_sum[1d])) / sum(increase(parla_csat_score_count[1d]))
 ```
+
+### Readiness and the leader
+
+`GET /readyz` (no token) answers `{"ok": true, "database": "sqlite"|"postgres", "leader": true|false}` with 200, or
+503 when the database doesn't answer: the Helm chart uses it as the readiness probe, so a pod that loses Postgres
+leaves the Service until it reconnects. With several replicas, `leader` (and `parla_cluster_leader`) tells which
+pod runs the singleton jobs; after the leader dies another one reports `true` within `PARLA_LEADER_CHECK` seconds.
 
 ### Access to /metrics
 

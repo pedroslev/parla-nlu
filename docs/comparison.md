@@ -128,7 +128,8 @@ Being honest about gaps matters more than a long feature list. These are on the 
 - **Telephony:** inbound and outbound calls through Twilio or jambonz (speech recognized by the provider,
   request/response turns, no audio streaming or answering machine detection); no AudioCodes or contact-center (CCaaS)
   connectors.
-- **Horizontal scaling:** Parla is a single process with files on disk; it is designed for a small server.
+- **Large scale:** several replicas need Postgres plus a shared (ReadWriteMany) data volume, and the embedding model
+  runs in each replica; it is designed for small to medium deployments, not for a managed multi-region service.
 - **SAML single sign-on** (SSO is OIDC only, see [sso.md](sso.md)).
 
 If any of these is a hard requirement today, one of the platforms above is probably a better fit.

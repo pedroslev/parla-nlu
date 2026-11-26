@@ -31,6 +31,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Postgres and several replicas (high availability).** `PARLA_DATABASE_URL=postgresql://…` (psycopg 3,
+  `requirements-postgres.txt`, `scripts/setup.sh --postgres`, included in the Docker image) moves conversations,
+  logins, audit, usage, campaigns, queues and SSO state to Postgres, with a connection pool and versioned migrations
+  run at startup under an advisory lock; SQLite stays the default and unchanged. With several replicas: turns of a
+  conversation are serialized with advisory locks, live events cross replicas over `LISTEN/NOTIFY`, API sends,
+  reminders and webhooks are claimed with `FOR UPDATE SKIP LOCKED`, a leader (advisory lock, automatic failover)
+  runs campaigns, retention and timeouts, and login lockout, API rate limits, WhatsApp/Telegram dedupe, phone
+  silence counters and `/after` plans are shared. `PARLA_SECRET_KEY` signs audio URLs for every replica. Training and
+  publishing lock per agent; other replicas reload the new model. `python -m parla.migrate sqlite-to-postgres`
+  copies an existing `parla.db`. `GET /readyz` (database check, leader). Metrics `parla_db_pool_connections`,
+  `parla_cluster_leader`, `parla_cluster_events_total`. Helm: `replicaCount > 1`/HPA with `database`, `secretKey` and
+  a ReadWriteMany volume (enforced), RollingUpdate, PodDisruptionBudget, per-pod models volume; Kustomize overlay
+  `deploy/k8s-ha`; Compose `postgres` profile; CI runs the whole suite on Postgres plus a two-replica test
+  ([docs/deployment.md](docs/deployment.md#postgres-and-high-availability), [docs/kubernetes.md](docs/kubernetes.md#high-availability)).
+
 - Inbound media on WhatsApp and Telegram: files are downloaded (16 MB, allowed types only), stored per conversation
   (served only to users who can see the agent's conversations, deleted with the conversation), voice notes are
   transcribed with the agent's ASR and answered, locations/contacts arrive as slot-friendly text, `media` is available

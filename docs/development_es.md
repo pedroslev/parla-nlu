@@ -69,7 +69,9 @@ Todas son opcionales. Nada carga `.env` solo: exportalas en tu shell.
 | `parla/auth.py` | Usuarios, roles, cookies, claves; `handle` (rutas `/api/auth`, `/api/users`) y `guard` (antes de cada `/api/`). |
 | `parla/aserver.py` | El servidor HTTP/1.1 con asyncio: keep-alive, una fila por conversación, WebSocket (`/ws`) y SSE (`/stream`). Corre cada pedido por `server.Handler` en un pool de hilos. |
 | `parla/bus.py` | Pub/sub en el proceso (`publish` desde cualquier hilo, `subscribe` desde el loop): temas `session:`, `inbox:`, `campaign:`. |
-| `parla/db.py` | La base SQLite `parla.db` (WAL): una conexión de lectura por hilo y un hilo escritor con group commit; tablas `sessions`, `logins`, `audit`, campañas; `q`, `connect`, `audit`, `audit_list`. |
+| `parla/db.py` | La base SQLite `parla.db` (WAL): una conexión de lectura por hilo y un hilo escritor con group commit; tablas `sessions`, `logins`, `audit`, campañas; `q`, `connect`, `audit`, `audit_list`. Con `PARLA_DATABASE_URL`, las mismas funciones sobre Postgres (ver [Capa de almacenamiento](#capa-de-almacenamiento)). |
+| `parla/cluster.py` | Varias réplicas sobre Postgres: advisory locks, elección de líder, el bus por `LISTEN/NOTIFY`, contadores compartidos (`kv`). Con SQLite no hacen nada. |
+| `parla/migrate.py` | `python -m parla.migrate sqlite-to-postgres [parla.db]`: copia todas las tablas a Postgres. |
 | `parla/pii.py` | Tapar datos personales en lo que se guarda (`pii_redaction`): `categories`, las reglas y los controles de Luhn y módulo 97. |
 | `parla/brain.py` | IA encima del motor: `rescue_intent`, `fill_slot`, `understand`, `side_question`, `answer`, `fallback`, `agent_turn`. Ninguna función lanza. |
 | `parla/llm.py` | Cliente de Ollama / compatible OpenAI / Anthropic / Gemini: `chat` (con `stream=` para tokens en vivo), `settle`, `status`, `pull`. |
@@ -115,6 +117,27 @@ socket ─► aserver (loop de eventos) ─► fila por conversación ─► poo
   Durante un turno `converse` pone `llm.STREAM.sink` solo si alguien escucha: si no, el streaming no cuesta nada.
 - **Medir**: `tests/perf/load.py` (no está en `run_all`; CI corre un smoke de 10 s). El techo es el modelo de
   embeddings; ver [deployment_es.md](deployment_es.md#rendimiento-y-ajustes).
+
+### Capa de almacenamiento
+
+Los módulos escriben SQL de SQLite común por `db.q()`, `db.later()` y `db.connect()`; no hay ORM. Con
+`PARLA_DATABASE_URL` esas funciones van a Postgres:
+
+- `_pg()` traduce cada sentencia una vez (con caché): `?` a `%s`, `INSERT OR IGNORE/REPLACE` a `ON CONFLICT`,
+  `json_extract(record, '$.k')` a `record->>'k'` (`record`, `config` y `spec` son `JSONB` y vuelven como texto, así
+  los módulos siguen haciendo `json.loads`), `IS ?` a `IS NOT DISTINCT FROM`, un `INSERT` en una tabla con id lleva
+  `RETURNING id` (`lastrowid`). Los booleanos van como enteros. Mantené el SQL nuevo en ese subconjunto, o separá con
+  `db.PG`.
+- Un pool chico y seguro entre hilos (`PARLA_DB_POOL`, autocommit; `connect()` es una transacción en una conexión).
+  `later()` sigue yendo por un escritor de fondo, y una escritura por `q()` espera a las de `later()` encoladas,
+  como con SQLite.
+- Migraciones: `db.MIGRATIONS` es una lista de `(versión, DDL)` que se aplican una vez cada una (tabla
+  `schema_version`) con un advisory lock al arrancar. Las nuevas van al final; nunca se cambia una ya publicada.
+  Los cambios de esquema van también en `SCHEMA` (SQLite).
+- Lo que tiene que compartirse entre réplicas va por `cluster.py` (locks, contadores `kv`, tareas de la líder)
+  detrás de `if db.PG`, así el camino de SQLite queda igual que antes.
+- Pruebas: `PARLA_DATABASE_URL=postgresql://… tests/run_all.py` le da a cada proceso de prueba su propio schema
+  (`tests/support.py`, se borra al salir); `tests/test_cluster.py` levanta dos réplicas de verdad. CI corre las dos.
 
 ## Cómo funciona el motor
 

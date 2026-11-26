@@ -12,6 +12,11 @@ una edición paga que se guarde funciones.
 
 ## Recién salido
 
+- **Escalado horizontal y Postgres**: `PARLA_DATABASE_URL` lleva conversaciones, logins, auditoría, colas y contadores
+  compartidos a Postgres; varias réplicas mantienen el orden de cada conversación (advisory locks), comparten los
+  eventos en vivo (`LISTEN/NOTIFY`), reservan filas de las colas con `SKIP LOCKED` y eligen una líder para las
+  tareas únicas. Helm `replicaCount > 1` con RollingUpdate, PDB y HPA, `python -m parla.migrate sqlite-to-postgres`
+  ([deployment_es.md](deployment_es.md#postgres-y-alta-disponibilidad)).
 - **Archivos entrantes**: las fotos, documentos y notas de voz de WhatsApp/Telegram se descargan y quedan con la
   conversación; las notas de voz se transcriben y se contestan; ubicaciones y contactos llegan como texto; descripción
   opcional de imágenes para la IA (`ai.vision`). Plantillas desde la Bandeja y la API del contact center después de
@@ -54,8 +59,8 @@ una edición paga que se guarde funciones.
 - **Voz en tiempo real**: audio por WebSocket para el teléfono (Twilio Media Streams, jambonz `listen`), la llamada del
   navegador y el widget: ASR en streaming (Deepgram live, o VAD + ASR por frase), TTS desde la primera oración,
   barge-in de verdad y métricas de latencia. Ver [ai-and-voice.md](ai-and-voice_es.md#voz-en-tiempo-real). Después:
-  adaptadores de OpenAI Realtime / STT realtime de ElevenLabs, un VAD entrenado (silero), estado de la llamada
-  compartido entre réplicas.
+  adaptadores de OpenAI Realtime / STT realtime de ElevenLabs, un VAD entrenado (silero), sockets de audio de una
+  llamada que pasen de una réplica a otra.
 - **Interfaz en inglés y portugués**: toda la interfaz, los mensajes del servidor y el widget web en español, inglés
   o portugués (pt-BR), a elección de cada usuario (al lado del selector de tema: inicio, menú ⋯ o pantalla de
   entrada), con un idioma por defecto de la instalación en `PARLA_LANG` (`scripts/setup.sh --lang en|es|pt`); los bots con inglés como idioma principal traen en
@@ -84,8 +89,6 @@ una edición paga que se guarde funciones.
 
 ## Más adelante
 
-- **Escalado horizontal y Postgres** (el chart de Helm mantiene `replicaCount` en 1 hasta entonces): varias réplicas sobre almacenamiento compartido, con Postgres como
-  alternativa a SQLite.
 - **Experimentos A/B** entre versiones de flujos o de bots.
 
 ## Lo que ya está

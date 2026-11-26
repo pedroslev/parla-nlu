@@ -213,6 +213,8 @@ docker run -d -p 127.0.0.1:8000:8000 -v parla-data:/data ghcr.io/pedroslev/parla
 Para Kubernetes hay un **chart de Helm** en [deploy/helm/parla](deploy/helm/parla) (Ingress solo con las rutas públicas, SSO,
 métricas, copias nocturnas, NetworkPolicy que limita las salidas, Ollama opcional) y manifiestos de Kustomize para k8s y k3s:
 ver [docs/kubernetes_es.md](docs/kubernetes_es.md). El proxy, las variables y las copias están en [docs/deployment_es.md](docs/deployment_es.md).
+SQLite es lo de siempre; con **Postgres** (`PARLA_DATABASE_URL`) varias réplicas atienden los mismos bots y se
+reemplazan si una se cae ([alta disponibilidad](docs/deployment_es.md#postgres-y-alta-disponibilidad)).
 
 ## Arquitectura
 
@@ -263,7 +265,7 @@ web/static/*.js         secciones de la interfaz y el widget
 tests/                  test_*.py y run_all.py
 examples/               bots de ejemplo para importar: pizzeria.json y turnos-clinica.json (botones, conocimiento, pase a persona, fechas)
 data/                   datos en tiempo de ejecución (no se versiona)
-deploy/                 chart de Helm (helm/), manifiestos de Kubernetes (k8s/) y k3s (k3s/), observabilidad
+deploy/                 chart de Helm (helm/), manifiestos de Kubernetes (k8s/, k8s-ha/) y k3s (k3s/), observabilidad
 Dockerfile, docker-compose.yml
 scripts/setup.sh, Makefile, requirements*.txt, .env.example
 ```
@@ -282,6 +284,7 @@ Todo es opcional. Copiá `.env.example` para ver los valores.
 | `PARLA_SECURE_COOKIE` | vacío | `1` marca la cookie de sesión como `Secure` (detrás de HTTPS). |
 | `PARLA_RETENTION_DAYS` | vacío | Días que se guardan las conversaciones sin movimiento, para los agentes sin `retention_days` propio. Vacío o `0`: para siempre. |
 | `PARLA_AUDIT_DAYS` | `365` | Días que se guarda la auditoría. |
+| `PARLA_DATABASE_URL`, `PARLA_SECRET_KEY` | vacío | `postgresql://…`: Postgres en vez de SQLite, para varias réplicas; la clave secreta (la misma en todas) firma las direcciones de audio de las llamadas. Ver [docs/deployment_es.md](docs/deployment_es.md#postgres-y-alta-disponibilidad). |
 | `PARLA_CAMPAIGN_MAX` | `10000` | Máximo de destinatarios por campaña, para los agentes sin `outbound.max_recipients` (ver [docs/outbound_es.md](docs/outbound_es.md)). |
 | `PARLA_PUBLIC_URL` | vacío | Dirección pública con HTTPS, para los webhooks de WhatsApp, Telegram y teléfono (ver [docs/channels_es.md](docs/channels_es.md)) y la redirect URI del SSO. |
 | `PARLA_METRICS`, `PARLA_METRICS_TOKEN` | vacío | `1` sirve métricas de Prometheus en `/metrics`; desde otra máquina hace falta el token (`Authorization: Bearer`). Ver [docs/observability_es.md](docs/observability_es.md). |

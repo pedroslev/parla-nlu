@@ -54,6 +54,10 @@ auditoría van en un archivo SQLite ahí mismo (`parla.db`). Eso define cómo se
 | `PARLA_VOICE_WORKERS` | | Juegos de modelos locales Whisper/Piper que trabajan a la vez (por defecto `min(2, núcleos / 4)`; cada uno usa su RAM). |
 | `PARLA_VOICE_MAX_SECONDS` | | El stream de voz en tiempo real más largo (llamada, navegador o widget) antes de que Parla lo cierre (por defecto `3600`). |
 | `PARLA_IDLE_TIMEOUT`, `PARLA_WS_MAX_MESSAGE` | | Segundos sin datos antes de cerrar una conexión (por defecto `30`) y el mensaje de WebSocket más grande (por defecto `1000000` bytes). |
+| `PARLA_DATABASE_URL` | | `postgresql://usuario:clave@host:5432/base`: Postgres en vez de SQLite, hace falta para varias réplicas. Ver [Postgres y alta disponibilidad](#postgres-y-alta-disponibilidad). |
+| `PARLA_SECRET_KEY` | | Un valor largo al azar, el mismo en todas las réplicas: firma las direcciones de audio de las llamadas. Obligatorio con varias réplicas. |
+| `PARLA_DB_POOL`, `PARLA_DB_LOCKS` | | Conexiones a Postgres por proceso para consultas (por defecto `20`) y para los locks por conversación (por defecto `32`). |
+| `PARLA_DATABASE_SCHEMA`, `PARLA_LOCK_TIMEOUT`, `PARLA_LEADER_CHECK` | | Schema de Postgres (por defecto: el `search_path` del usuario), segundos de espera por el lock de una conversación (por defecto `30`) y entre chequeos de líder (por defecto `2`). |
 
 El puerto es el argumento de `app.py` (la imagen usa `8000`). La dirección de Ollama no es una variable: se
 configura por agente en la interfaz (**IA → dirección**).
@@ -142,14 +146,60 @@ helm install parla ./deploy/helm/parla -n parla --create-namespace -f values.yam
 kubectl -n parla port-forward deploy/parla 8000:8000     # y abrís http://127.0.0.1:8000 para crear el dueño
 ```
 
-- **Una réplica, estrategia `Recreate`**: SQLite, los archivos de agentes y el estado en memoria no se comparten
-  entre pods; un upgrade tiene unos segundos de corte.
+- **Una réplica, estrategia `Recreate`** con SQLite (lo de siempre): un upgrade tiene unos segundos de corte.
+  Varias réplicas con `RollingUpdate` necesitan Postgres: ver [más abajo](#postgres-y-alta-disponibilidad).
 - No root (uid/gid `10001`, `fsGroup` para el volumen), `readOnlyRootFilesystem`, sin capabilities, seccomp
-  `RuntimeDefault`, sin token de service account. Probes en `GET /` (página estática, no toca modelos ni disco).
+  `RuntimeDefault`, sin token de service account. Liveness en `GET /` (página estática), readiness en `GET /readyz` (prueba la base).
 - **El Ingress publica solo `/api/v1/`, `/files/` y `/static/widget.js`** por defecto (la API, el widget y los
   webhooks de WhatsApp, Telegram y teléfono). La interfaz completa por un dominio (hace falta para SSO) necesita
   `PARLA_HOSTS`; `ingress.exposeAdmin: true` del chart lo define.
 - Usá **8000 a los dos lados** del `port-forward` (por la [guarda de Origin](#la-guarda-de-origin)).
+
+## Postgres y alta disponibilidad
+
+Por defecto todo está en SQLite y Parla es un proceso. Con `PARLA_DATABASE_URL=postgresql://…` las mismas tablas
+van a Postgres (13 o más nuevo) y **varios procesos o pods de Parla pueden atender los mismos bots a la vez**:
+
+```sh
+.venv/bin/pip install -r requirements-postgres.txt       # o scripts/setup.sh --postgres (la imagen de Docker ya lo trae)
+export PARLA_DATABASE_URL=postgresql://parla:<clave>@db.interna:5432/parla?sslmode=require
+export PARLA_SECRET_KEY=$(openssl rand -hex 32)          # el mismo valor en todas las réplicas
+python -m parla.migrate sqlite-to-postgres              # una vez, para traer un data/parla.db existente (con Parla apagado)
+.venv/bin/python app.py 8000
+```
+
+El esquema se crea y se migra al arrancar (versionado, con un advisory lock: réplicas que arrancan juntas no se
+pisan). Compose: `docker compose --profile postgres up -d` con las dos variables de arriba (ver
+`docker-compose.yml`). Kubernetes: [kubernetes_es.md](kubernetes_es.md#alta-disponibilidad).
+
+| Dónde | Qué |
+|---|---|
+| Postgres | Conversaciones, sesiones de login, auditoría, uso, campañas y su cola, bajas, cola de webhooks, estado de los logins SSO; contadores compartidos (bloqueo de login, envíos por minuto de la API), ids de mensajes de WhatsApp/Telegram ya atendidos, silencios de las llamadas y el plan del `/after` de una llamada. |
+| Carpeta de datos compartida (`PARLA_DATA`, ReadWriteMany) | Agentes, versiones, entornos, modelos entrenados, `users.json` y API keys, claves (`<id>.secrets.json`, permisos 600), precios, archivos subidos. Cada réplica vuelve a leer un archivo cuando cambia (mtime), como ya hacía con las ediciones a mano. |
+| Cada réplica | Modelos de embeddings y voz (`/data/models`: montalo por pod), modelos cargados y cachés, métricas, el estado de los canales en la página del agente, el WebSocket de voz de una llamada (queda en la réplica que lo tiene). |
+
+Cómo se coordinan:
+
+- **Orden de la conversación**: los turnos de una misma conversación toman un advisory lock de Postgres
+  (`pg_advisory_lock(hashtext(bot/sesión))`, espera hasta `PARLA_LOCK_TIMEOUT`): van de a uno llegue cada pedido a
+  la réplica que llegue. Los webhooks de WhatsApp, Telegram y teléfono usan el mismo tipo de lock.
+- **Eventos en vivo**: lo que publica una réplica (una conversación guardada, la respuesta de una persona, el avance
+  de una campaña) llega a los clientes WebSocket y SSE de las otras por `LISTEN/NOTIFY` (las conversaciones viajan
+  como id y se vuelven a leer). Los tokens de la IA en vivo los manda solo la réplica que corre el turno, que es la
+  que habla con el cliente.
+- **Colas**: envíos por la API, recordatorios y entregas de webhooks los reserva cualquier réplica con
+  `FOR UPDATE SKIP LOCKED` (los webhooks mantienen el orden por conversación).
+- **Líder**: una réplica tiene el advisory lock `parla:leader` y corre lo que tiene que correr una sola vez: el
+  ritmo de las campañas, la retención, el tiempo máximo de los handoffs externos y volver a encolar filas trabadas
+  en «enviando» (5 min para webhooks, 10 para mensajes). Si se muere, Postgres suelta el lock con su conexión y
+  otra réplica la reemplaza en `PARLA_LEADER_CHECK` segundos. `GET /readyz` dice cuál es la líder.
+- **Entrenar y publicar** toman un advisory lock por agente; las otras réplicas cargan el modelo nuevo en su
+  próximo turno (cambió el archivo entrenado).
+
+Copias: `pg_dump` para la base (`pg_dump -Fc "$PARLA_DATABASE_URL" > parla-$(date +%F).dump`, se restaura con
+`pg_restore -d …`) más la carpeta de datos sin `models/`. Límites: un pedido en curso se pierde si matan su pod (el
+cliente reintenta); el ritmo de una campaña arranca con hasta 1 s de ráfaga después de cambiar de líder; el estado
+de los canales y las métricas son por réplica.
 
 ## La guarda de Origin
 
@@ -352,7 +402,7 @@ solo `/api/v1/`, `/static/widget.js` y `/files/` necesitan ser públicos.
     <id>.versions/<n>.json  versiones publicadas (+ <n>.crfsuite)
     <id>.files/             archivos subidos para el paso `file`
     <id>.sessions.migrated/ archivos viejos de conversaciones, ya importados a parla.db (se pueden borrar)
-  parla.db                  conversaciones, sesiones de login y auditoría (SQLite, permisos 600)
+  parla.db                  conversaciones, sesiones de login y auditoría (SQLite, permisos 600; no con Postgres)
   parla.db-wal, -shm        el diario de parla.db mientras corre (son parte de la base)
   users.json                usuarios (permisos 600)
   models/                   vectores, voz y caché de audios (se pueden volver a bajar)

@@ -12,6 +12,10 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Shipped recently
 
+- **Horizontal scaling and Postgres**: `PARLA_DATABASE_URL` moves conversations, logins, audit, queues and shared
+  counters to Postgres; several replicas keep per-conversation order (advisory locks), share live events
+  (`LISTEN/NOTIFY`), claim queue rows with `SKIP LOCKED` and elect a leader for singleton jobs. Helm `replicaCount > 1`
+  with RollingUpdate, PDB and HPA, `python -m parla.migrate sqlite-to-postgres` ([deployment.md](deployment.md#postgres-and-high-availability)).
 - **Inbound media**: WhatsApp/Telegram photos, documents and voice notes are downloaded and stored with the
   conversation; voice notes are transcribed and answered; locations and contacts arrive as text; optional image
   description for the AI (`ai.vision`). Templates from the Inbox and the contact-center API after 24 hours, and a
@@ -53,7 +57,7 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 - **Real-time voice**: WebSocket audio for the phone (Twilio Media Streams, jambonz `listen`), the browser call and
   the widget: streaming ASR (Deepgram live, or VAD + per-utterance ASR), TTS from the first sentence, true barge-in
   and latency metrics. See [ai-and-voice.md](ai-and-voice.md#real-time-voice). Next: OpenAI Realtime / ElevenLabs
-  realtime STT adapters, a trained VAD (silero), shared call state for several replicas.
+  realtime STT adapters, a trained VAD (silero), voice media sockets that move between replicas.
 - **English and Portuguese UI**: the whole interface, server messages and the web widget in English, Spanish or
   Portuguese (pt-BR), chosen per user (next to the theme picker: home screen, ⋯ menu or sign-in screen), with an
   install default in `PARLA_LANG` (`scripts/setup.sh --lang en|es|pt`); bots whose main language is English get
@@ -82,8 +86,6 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Later
 
-- **Horizontal scaling and Postgres** (the Helm chart keeps `replicaCount` at 1 until then): several replicas on shared storage, with Postgres as an alternative to
-  SQLite.
 - **A/B experiments** between flow or bot versions.
 
 ## Already there

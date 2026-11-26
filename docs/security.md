@@ -303,6 +303,18 @@ In **Publish → Secrets** you store tokens and passwords for external services,
   What the service or function returns is **not** masked: if a response contains the key and you save it in a
   slot, it stays in the conversation.
 
+## Postgres and several replicas
+
+- `PARLA_DATABASE_URL` holds the database password: put it in a Secret (Helm `database.existingSecret`), not in a
+  values file or a ConfigMap, and use `sslmode=require` (or `verify-full`) when Postgres isn't on the same host. The
+  user needs to create tables in its schema; nothing else (no superuser, no extensions).
+- Postgres holds the same data as `parla.db` (conversations, login session hashes, audit log): encrypt it at rest and
+  restrict who can connect, as you would the data folder. Session tokens are stored hashed (SHA-256), as before.
+- `PARLA_SECRET_KEY` signs the audio URLs Parla gives the phone provider; every replica needs the same value, and
+  anyone who has it can forge those URLs for 10 minutes. Generate it with `openssl rand -hex 32` and keep it in a Secret.
+- The secrets vault stays in files on the shared data volume (mode 600, unencrypted, as on one server): a
+  ReadWriteMany volume must be as private as the database (an encrypted storage class, no other workloads).
+
 ## Hosted AI and voice providers: data leaves the machine
 
 By default everything runs on your machine: the AI on Ollama, speech recognition on faster-whisper and the bot's
@@ -478,7 +490,8 @@ All off by default ([observability.md](observability.md)).
 
 ## Not there yet
 
-- One replica per data folder. Login lockout counters are in memory: they reset on restart.
+- With SQLite, one replica per data folder and login lockout counters in memory (they reset on restart). With
+  Postgres they're shared by every replica.
 - No general rate limiting: only the login lockout and the outbound limits (API sends per minute, campaign rate).
 - No access log with users or IPs: the audit log records writes, and `PARLA_LOG_FORMAT=json` logs every request
   with its route template, status and duration but not who made it.
