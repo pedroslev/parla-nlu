@@ -1,10 +1,12 @@
-# IA local y voz
+# IA y voz
 
 [English](ai-and-voice.md) · **Español**
 
 Todo es opcional y, por defecto, todo corre en tu compu. Sin IA, Parla funciona igual: el NLU (embeddings + CRF +
-reglas) no necesita un modelo de lenguaje. Si querés, las funciones de IA también pueden usar cualquier
-[endpoint compatible con OpenAI](#endpoints-compatibles-con-openai) (vLLM, llama.cpp, LM Studio, OpenAI, Azure OpenAI, …).
+reglas) no necesita un modelo de lenguaje. Si querés, podés usar tu propia API key: la IA puede ir con OpenAI,
+Anthropic (Claude), Google Gemini o cualquier [endpoint compatible con OpenAI](#endpoints-compatibles-con-openai)
+(vLLM, llama.cpp, LM Studio, Azure OpenAI, …), y la voz con OpenAI, Deepgram, ElevenLabs o Google Cloud. Mirá
+[Proveedores](#proveedores-con-tu-propia-key).
 
 ## El modelo de vectores (siempre)
 
@@ -29,7 +31,7 @@ No es opcional ni es «IA generativa»: es lo que usa el NLU para comparar frase
 3. En el agente, **Inteligencia → IA**: prendela y probá la conexión.
 
 Parla habla con Ollama en `http://127.0.0.1:11434`. Ollama es lo que viene por defecto y nada sale de tu máquina.
-Para usar otro servidor, mirá [Endpoints compatibles con OpenAI](#endpoints-compatibles-con-openai).
+Para usar un proveedor en la nube u otro servidor, mirá [Proveedores](#proveedores-con-tu-propia-key).
 
 ## Modelos sugeridos
 
@@ -55,9 +57,104 @@ Los valores por defecto:
 
 `persona` es cómo habla el bot («Hablás de vos, sos amable y breve.»); se suma a los pedidos que redactan texto.
 
+`provider` es `ollama` (por defecto), `openai`, `anthropic`, `gemini` u `openai_compatible`. Otros campos: `url`,
+`model`, `api_key_secret`, `azure`.
+
+## Proveedores con tu propia key
+
+Lo local sigue siendo lo que viene por defecto. Cada agente elige sus proveedores, y el proveedor le cobra el uso a
+quien sea dueño de la key.
+
+| Parte | Proveedor (`provider`) | Dónde corre | Qué sale de la máquina |
+|---|---|---|---|
+| IA (LLM) | Ollama (`ollama`, por defecto) | tu compu | nada |
+| IA | OpenAI (`openai`) | nube | el texto de la charla, los turnos recientes, la persona, los fragmentos de conocimiento usados, los resultados de herramientas del paso `agent` |
+| IA | Anthropic Claude (`anthropic`) | nube | lo mismo |
+| IA | Google Gemini (`gemini`) | nube | lo mismo |
+| IA | Compatible con OpenAI (`openai_compatible`) | donde apunte la URL | lo mismo, salvo que el servidor sea tuyo |
+| Transcripción (ASR) | `local` (faster-whisper, por defecto) | tu compu | nada |
+| ASR | `openai`, `deepgram`, `elevenlabs`, `google` | nube | el audio de la persona y las pistas de vocabulario del bot |
+| Voz del bot (TTS) | `local` (piper, por defecto) | tu compu | nada |
+| TTS | `openai`, `deepgram`, `elevenlabs`, `google` | nube | el texto de la respuesta del bot |
+
+El modelo de vectores (intenciones, significado, búsqueda en el conocimiento) es siempre local.
+
+### Claves
+
+Las keys viven solo en la sección **Claves** del agente, por nombre: el JSON del agente tiene `api_key_secret` (un
+nombre), nunca la key (el `validate` de MCP rechaza un `api_key`). El campo de la key en la pantalla **IA** la guarda
+en Claves por vos. Las keys se tapan (`••••`) en todos los errores, logs y trazas, también cuando el proveedor la
+repite. Crear y borrar una clave queda en la auditoría. Si no ponés `api_key_secret`, se usan estos nombres:
+
+| Proveedor | Clave por defecto | Dónde sacar la key |
+|---|---|---|
+| OpenAI (IA y voz) | `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) → API keys |
+| Anthropic | `ANTHROPIC_API_KEY` | [Claude Console](https://console.anthropic.com) → API keys |
+| Google Gemini | `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com) → Get API key |
+| Deepgram | `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com) → API keys |
+| ElevenLabs | `ELEVENLABS_API_KEY` | [elevenlabs.io](https://elevenlabs.io) → API keys |
+| Google Cloud (voz) | `GOOGLE_API_KEY` | consola de Google Cloud → habilitá Speech-to-Text / Text-to-Speech → Credenciales → una API key restringida a esas APIs. Las cuentas de servicio todavía no se soportan. |
+
+### Proveedores de IA
+
+En la interfaz: **IA → Programa**: Local (Ollama) / OpenAI / Anthropic (Claude) / Google Gemini / Compatible con
+OpenAI. Cada opción completa la dirección, el modelo y el nombre de la key; **Probar conexión** manda un mensaje; el
+campo del modelo sugiere ids; un aviso te dice cuando el proveedor no es local.
+
+| Proveedor | Modelo por defecto | Otras sugerencias |
+|---|---|---|
+| `openai` (sin `url` = `https://api.openai.com/v1`) | `gpt-6-luna` | `gpt-6.1-terra`, `gpt-6.2-sol` |
+| `anthropic` | `claude-opus-5-5` | `claude-sonnet-5-5`, `claude-haiku-5-5` |
+| `gemini` | `gemini-3.8-flash` | `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview` |
+
+```jsonc
+// OpenAI
+{"enabled": true, "provider": "openai", "model": "gpt-6-luna"}
+// Claude
+{"enabled": true, "provider": "anthropic", "model": "claude-sonnet-5-5"}
+// Gemini, con la key guardada con otro nombre
+{"enabled": true, "provider": "gemini", "model": "gemini-3.8-flash", "api_key_secret": "MI_KEY_GEMINI"}
+```
+
+`"provider": "openai"` **con** `url` mantiene el significado de antes (cualquier servidor compatible con OpenAI), así
+que los agentes que ya tenías no cambian.
+
+**Gemini** usa la API REST nativa `generateContent` (key en `x-goog-api-key`). Las respuestas JSON van con
+`responseMimeType: "application/json"` + `responseJsonSchema`; si Gemini lo rechaza con un 400, Parla pide el JSON
+solo en el prompt.
+
+### Detalles de Claude
+
+- Usa el SDK oficial de Python `anthropic` (API Messages nativa). Es una dependencia opcional, solo para Claude:
+  `pip install -r requirements-providers.txt` (fija `anthropic==1.17.0`), o `scripts/setup.sh --providers`,
+  `make setup-providers`, o el build arg de Docker `INSTALL_PROVIDERS=1` (`make docker-build PROVIDERS=1`). Si falta,
+  el error lo dice. Los demás proveedores usan solo la biblioteca estándar.
+- El esfuerzo (effort) es `low`: Opus 5.5 siempre piensa, y en low la charla sigue rápida. `max_tokens` es de al menos
+  2048 (el pensamiento cuenta).
+- Las respuestas JSON usan structured outputs (`output_config.format` con un JSON schema) cuando el esquema no tiene
+  objetos libres; si no, el esquema va en el prompt y el JSON se saca de la respuesta.
+- En Opus 5.5 y Sonnet 5.5 está prendido el respaldo ante rechazos del lado del servidor (`fallbacks: "default"`). Un
+  rechazo o una respuesta cortada por `max_tokens` se vuelven un error claro (y el bot sigue como si la IA estuviera
+  apagada).
+- 1 reintento del SDK y timeout por pedido. La dirección es fija (`api.anthropic.com`).
+
+### Combinaciones recomendadas
+
+| Para | IA | ASR | TTS |
+|---|---|---|---|
+| Todo local, gratis y privado (por defecto) | Ollama | `local` | `local` |
+| Teléfono con poca latencia | cualquiera | Twilio/jambonz (siempre) | `channels.phone.tts: "parla"` + Deepgram Aura-2 o ElevenLabs Flash |
+| Modo llamada del navegador / widget | cualquiera | Deepgram `nova-3` | ElevenLabs `eleven_flash_v2_5` |
+| Lo más barato en la nube | `gemini-3.5-flash-lite`, `claude-haiku-5-5` o `gpt-6-luna` | | |
+| La mejor calidad | `claude-opus-5-5` o `gemini-3.1-pro-preview` | | |
+
+Mirá la página de precios de cada proveedor: los costos cambian y se le cobran al dueño de la key. En el teléfono las
+frases fijas pregeneradas suenan al instante; ver [Proveedores de voz en la nube](#proveedores-de-voz-en-la-nube).
+
 ## Endpoints compatibles con OpenAI
 
-Con `"provider": "openai"` (en la interfaz: **Programa → Compatible con OpenAI**) cada función de IA llama a
+Con `"provider": "openai_compatible"` (o el viejo `"provider": "openai"` con `url`; en la interfaz: **Programa →
+Compatible con OpenAI**) cada función de IA llama a
 `POST {url}/chat/completions` (`model`, `messages`, `temperature`, `max_tokens`, `stream: false`). Sirve para vLLM,
 llama.cpp server, LM Studio, LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter y cualquier otro que hable esa API.
 
@@ -77,8 +174,6 @@ Ejemplos (`agent.ai`; sin `api_key_secret` si el servidor no pide key):
 {"enabled": true, "provider": "openai", "url": "http://localhost:8080/v1", "model": "local"}
 // LM Studio (pestaña del servidor local)
 {"enabled": true, "provider": "openai", "url": "http://127.0.0.1:1234/v1", "model": "qwen2.5-1.5b-instruct"}
-// OpenAI
-{"enabled": true, "provider": "openai", "url": "https://api.openai.com/v1", "model": "gpt-4o-mini", "api_key_secret": "OPENAI_KEY"}
 // Azure OpenAI: la URL incluye tu deployment; Azure ignora "model"
 {"enabled": true, "provider": "openai", "url": "https://mi-recurso.openai.azure.com/openai/deployments/mi-gpt4o-mini",
  "model": "gpt-4o-mini", "api_key_secret": "AZURE_OPENAI_KEY", "azure": true}
@@ -103,9 +198,11 @@ Cómo se comporta:
 - **Los embeddings siguen siendo locales** (fastembed): las intenciones, el significado y la búsqueda en la base de
   conocimiento nunca llaman al proveedor.
 
-**Privacidad:** con un proveedor en la nube (OpenAI, Azure, Groq, OpenRouter, …) el texto de las conversaciones,
-los turnos recientes, la persona y los fragmentos de la base de conocimiento que se usan para responder se mandan
-a ese proveedor y quedan sujetos a sus condiciones. La pantalla IA avisa cuando la dirección no es de esta compu ni
+Esto (errores, key tapada, embeddings locales, seguir si falla) vale también para OpenAI, Claude y Gemini.
+
+**Privacidad:** con un proveedor en la nube (OpenAI, Anthropic, Gemini, Azure, Groq, OpenRouter, …) el texto de las
+conversaciones, los turnos recientes, la persona, los fragmentos de la base de conocimiento que se usan para responder
+y los resultados de herramientas del paso `agent` se mandan a ese proveedor y quedan sujetos a sus condiciones. La pantalla IA avisa cuando la dirección no es de esta compu ni
 de tu red privada. Si eso no sirve, usá Ollama o un servidor propio (vLLM, llama.cpp, LM Studio).
 
 ## Qué hace cada función y sus guardas
@@ -201,8 +298,8 @@ devuelve JSON: o usa una herramienta, o responde.
 
 Las `tools` del paso pueden ser funciones, llamadas HTTP y herramientas de servidores MCP (formato en
 [concepts_es.md](concepts_es.md#agent-dejar-que-la-ia-converse)). Parla no usa el function calling nativo: usa su
-propio JSON, así que anda igual con Ollama (modo JSON schema) y con endpoints compatibles con OpenAI (`json_object`,
-o el prompt como respaldo).
+propio JSON, así que anda igual con Ollama (modo JSON schema), con OpenAI y endpoints compatibles (`json_object`, o el
+prompt como respaldo), con Claude (structured outputs, o el prompt) y con Gemini (`responseJsonSchema`, o el prompt).
 
 - Las herramientas van compactas en el prompt de sistema: `nombre(param: descripción) - descripción`.
 - El modelo responde `{"tool": "nombre", "args": {...}}` para usar una, o `{"tool": "", "text", "slots", "done"}`
@@ -250,7 +347,9 @@ Medidas en una Mac con M4 y `qwen2.5:0.5b`, con el modelo ya cargado. En otra m�
 
 ## Voz
 
-Instalá los extras:
+Por defecto la voz es local (faster-whisper + piper). Cada agente puede pasar la transcripción y/o la voz del bot a
+un proveedor en la nube: mirá [Proveedores de voz en la nube](#proveedores-de-voz-en-la-nube). Para la voz local,
+instalá los extras:
 
 ```sh
 scripts/setup.sh --voice
@@ -288,3 +387,53 @@ Dónde se usa:
 - **Widget** con `data-voice="true"`: un botón de micrófono que graba, manda a
   `POST /api/v1/bots/{bot}/audio` con `speak: true` y reproduce la respuesta.
 - **API**: `POST /api/v1/bots/{bot}/audio` (ver [api.md](api_es.md#post-apiv1botsbotaudio)).
+
+Todos estos (y el teléfono con `tts: "parla"`) usan la configuración `voice` del agente.
+
+### Proveedores de voz en la nube
+
+Se configuran por agente en la clave `voice` de primer nivel (en la interfaz: **IA → Voz**, con **Transcripción (lo
+que dice la persona)** y **Voz del bot**):
+
+```jsonc
+"voice": {
+  "asr": {"provider": "deepgram", "model": "nova-3"},
+  "tts": {"provider": "elevenlabs", "model": "eleven_flash_v2_5", "voice": "<voice_id>"}
+}
+// cada parte: provider "local" (por defecto) | "openai" | "deepgram" | "elevenlabs" | "google";
+// "api_key_secret" opcional (los nombres por defecto están en la tabla de Claves de arriba)
+```
+
+**Transcripción (ASR).** El vocabulario del bot (valores y sinónimos de entidades, como los hotwords de Whisper) se
+manda como pistas. Los idiomas `es`/`en`/`pt` se traducen para cada proveedor.
+
+| Proveedor | Modelo | Pistas de vocabulario |
+|---|---|---|
+| `openai` | `gpt-4o-mini-transcribe` (por defecto), `gpt-4o-transcribe`, `gpt-transcribe`, `whisper-1` | `prompt` |
+| `deepgram` | `nova-3` (por defecto) | `keyterm` (solo Nova-3) |
+| `elevenlabs` | Scribe `scribe_v3` (por defecto) | `keyterms` (ElevenLabs cobra ~20 % más cuando se mandan) |
+| `google` | Speech-to-Text v1 | `speechContexts`; `es-US`, `en-US`, `pt-BR` salvo que indiques una región. El audio que no es Opus ni LINEAR16 se pasa a WAV con ffmpeg. |
+
+**Voz del bot (TTS).** Todos devuelven WAV, como piper, así que el modo llamada, el widget y el `<Play>` del teléfono
+andan igual.
+
+| Proveedor | Modelo / voz |
+|---|---|
+| `openai` | `gpt-4o-mini-tts-2025-12-15`; voces `alloy`, `ash`, `ballad`, `coral` (por defecto), `echo`, `fable`, `onyx`, `nova`, `sage`, `shimmer`, `verse`, `marin`, `cedar`. (OpenAI marcó como obsoletos `gpt-4o-mini-tts` y `tts-1`, con cierre anunciado para el 2027-01-06.) |
+| `deepgram` | Aura-2: la voz es el id del modelo, por ejemplo `aura-2-celeste-es` (por defecto en español), `aura-2-thalia-en` (por defecto en inglés). No hay voces en portugués. |
+| `elevenlabs` | `eleven_flash_v2_5` (por defecto, ~100 ms, la menor latencia), `eleven_v4_turbo`, `eleven_multilingual_v2`; el id de voz sale de tus voces de ElevenLabs. |
+| `google` | Cloud Text-to-Speech, nombre de voz opcional (por ejemplo `es-US-Neural2-A`). |
+
+- **Probalo** en el panel Voz: **Probar voz** reproduce una muestra; **Grabar 3 s y transcribir** / **Subir un audio**
+  muestra la transcripción. La lista de voces viene del proveedor (ElevenLabs y Google desde sus APIs, OpenAI y
+  Deepgram listas fijas, local = voces de piper). El panel avisa cuando el audio o el texto salen de la máquina.
+- **Las frases pregeneradas** también funcionan con TTS en la nube (cada frase se genera una sola vez). La clave de la
+  caché incluye proveedor, modelo y voz, así que al cambiar nunca suena un audio viejo.
+- Cada llamada de voz tiene un timeout de 30 s. Las keys y cómo se tapan, igual que en [Claves](#claves).
+- **Teléfono:** `channels.phone.tts: "parla"` usa el `voice.tts` del agente (piper o un proveedor en la nube);
+  `"provider"` sigue siendo la voz propia de Twilio/jambonz. El reconocimiento de voz en el teléfono lo hace siempre
+  Twilio/jambonz.
+- **Privacidad y costo:** el ASR en la nube recibe el audio de la persona y las pistas de vocabulario; el TTS en la
+  nube recibe el texto de la respuesta del bot. El proveedor le cobra el uso al dueño de la key.
+- API: `POST /api/voice/speak` y `POST /api/voice/voices` aceptan un `agent` (o un `voice` sin guardar para probar);
+  `POST /api/agents/{id}/voice/transcribe` usa el ASR del agente. Ver [api.md](api_es.md).

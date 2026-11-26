@@ -10,7 +10,7 @@
 **Armá chatbots y bots de voz que corren en tus propios servidores, en una CPU común, sin depender de la nube.**
 
 Parla es una plataforma de IA conversacional y constructor de chatbots gratuita y open source (Apache-2.0). Junta
-un editor de flujos sin código, un NLU rápido con embeddings + CRF, un LLM local opcional con Ollama y voz on-premise
+un editor de flujos sin código, un NLU rápido con embeddings + CRF, un LLM opcional (local con Ollama por defecto) y voz on-premise
 (dictado y voz sintetizada) en un solo proceso Python. Está pensada como alternativa autoalojada a plataformas cerradas
 como Rasa Pro, Dialogflow CX, Cognigy, Kore.ai o Copilot Studio: las conversaciones, los modelos y los datos quedan
 en tu infraestructura. Está pensado primero para bots en español y entiende también portugués e inglés. Ver la
@@ -67,6 +67,9 @@ tema: inicio, menú ⋯ o pantalla de entrada).
 ### IA local (opcional)
 - Con Ollama por defecto (modelo `qwen2.5:0.5b`, ~400 MB), o cualquier endpoint compatible con OpenAI: vLLM,
   llama.cpp, LM Studio, LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter ([docs/ai-and-voice_es.md](docs/ai-and-voice_es.md#endpoints-compatibles-con-openai)).
+- Con tu propia API key (opcional): la IA puede usar OpenAI, Claude (Anthropic), Google Gemini o cualquier
+  endpoint compatible con OpenAI, y la voz puede usar OpenAI, Deepgram, ElevenLabs o Google Cloud para transcribir
+  y sintetizar. Las keys van en las Claves del agente; lo local sigue siendo lo que viene por defecto ([docs/ai-and-voice_es.md](docs/ai-and-voice_es.md)).
 - Rescata intenciones dudosas, completa slots a partir de una descripción, lee una respuesta con la charla
   reciente (contestó, preguntó otra cosa o pidió otra acción), responde desde la base de conocimiento, repregunta
   cuando no entiende y conversa en un paso `agent` que puede usar herramientas: funciones, APIs HTTP y herramientas
@@ -138,12 +141,14 @@ Requisitos:
 - Node.js (opcional): solo para funciones escritas en JavaScript.
 - [Ollama](https://ollama.com) (opcional): para las funciones de IA local.
 - Extras de voz (opcional): `requirements-voice.txt` y `ffmpeg` en el sistema.
+- Extras de proveedores (opcional, solo hace falta para Claude): `requirements-providers.txt`.
 
 Con el script (recomendado):
 
 ```sh
 scripts/setup.sh            # crea .venv e instala las dependencias
 scripts/setup.sh --voice    # además instala la voz local
+scripts/setup.sh --providers  # además instala el SDK de Claude (opcional)
 make run                    # abre Parla en http://127.0.0.1:8000
 ```
 
@@ -160,6 +165,7 @@ A mano:
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/pip install -r requirements-voice.txt     # opcional
+.venv/bin/pip install -r requirements-providers.txt # opcional, solo para Claude
 .venv/bin/python app.py                              # o: .venv/bin/python app.py 8080
 ```
 
@@ -226,14 +232,14 @@ parla/
   db.py                 base SQLite (parla.db): conversaciones, logins y auditoría
   pii.py                tapado de datos personales en lo guardado
   brain.py              IA encima del motor (rescate, slots, leer respuestas, fallback, paso agent)
-  llm.py                cliente de modelos (Ollama local / cualquier endpoint compatible con OpenAI)
+  llm.py                cliente de modelos (Ollama local / OpenAI / Claude / Gemini / cualquier endpoint compatible con OpenAI)
   knowledge.py          base de conocimiento: extraer texto y buscar
   files.py              archivos que manda el paso «Enviar un archivo»
   dates.py              fechas en lenguaje natural, por reglas
   insights.py           «para enseñar» y analítica
   runner.py             funciones en un proceso aparte
   vault.py              claves secretas por agente
-  voice.py              voz local (y caché de frases pregeneradas)
+  voice.py              voz: local o proveedores con tu key (y caché de frases pregeneradas)
   phone.py              llamadas telefónicas (Twilio, jambonz)
   connect.py            «Conectar con IA»
   mcp_server.py         servidor MCP
@@ -305,7 +311,7 @@ Botpress y Voiceflow, incluido lo que a Parla todavía le falta, está en [docs/
 | Dónde corre | Tu compu (o un contenedor), un proceso Python | Self-hosted | Nube de Google | Nube (también tuvo versión self-hosted) |
 | Interfaz sin código | Sí, incluida | Principalmente archivos YAML y CLI; interfaces visuales en la edición comercial | Sí (consola; flujos visuales en CX) | Sí, editor visual |
 | NLU | Embeddings + kNN, CRF, reglas | Pipeline de ML configurable y enfoques con LLM | Gestionado por Google | Basado en LLM en las versiones actuales |
-| LLM | Opcional: local (Ollama) o cualquier endpoint compatible con OpenAI | Opcional, configurable | Integrado con modelos de Google | Central en la plataforma |
+| LLM | Opcional: local (Ollama) por defecto, o tu propia key de OpenAI, Claude, Gemini o cualquier endpoint compatible con OpenAI | Opcional, configurable | Integrado con modelos de Google | Central en la plataforma |
 | Escala y ecosistema | Pensado para un servidor chico | Maduro, producción a gran escala | Gestionado, escala de Google | Gran ecosistema de integraciones |
 | Canales | API HTTP, widget web, WhatsApp, Telegram y teléfono (Twilio, jambonz) | Muchos conectores | Muchas integraciones | Muchos canales |
 | Costo | Gratis, local | Open source + edición paga | Pago por uso | Plan gratis + planes pagos |

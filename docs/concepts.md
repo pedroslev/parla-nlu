@@ -18,7 +18,8 @@ An **agent** (or bot) is a JSON file with everything that defines it. The main f
 | `functions` | Python or JavaScript code run by a `function` step. |
 | `knowledge`, `knowledge_threshold` | Knowledge base (`[{"id", "title", "source", "url", "text"}]`) and its minimum score (`0.75` by default). |
 | `system` | System flows (see below). |
-| `ai` | Local AI (see [ai-and-voice.md](ai-and-voice.md)). |
+| `ai` | AI, local by default (see [ai-and-voice.md](ai-and-voice.md)). `provider`: `"ollama"` (default), `"openai"` (without `url`, `https://api.openai.com/v1`; with a `url`, any OpenAI-compatible server, as before), `"openai_compatible"` (same protocol, your own `url`: vLLM, llama.cpp, LM Studio, LocalAI, Azure OpenAI, Groq, OpenRouter), `"anthropic"` (Claude) or `"gemini"`. `api_key_secret` is the **name** of a vault key; if absent, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` or `GEMINI_API_KEY`. |
+| `voice` | `{"asr": {"provider", "model"?, "api_key_secret"?}, "tts": {"provider", "voice"?, "model"?, "api_key_secret"?}}`: speech recognition and the bot's voice. `provider`: `"local"` (default: faster-whisper / piper, nothing leaves the machine), `"openai"`, `"deepgram"`, `"elevenlabs"` or `"google"`. Default key names: `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `GOOGLE_API_KEY`. |
 | `mcp_servers` | `[{"name", "url", "headers_secret"}]`: MCP servers whose tools an `agent` step can use (see [`agent`](#agent-let-the-ai-converse)). |
 | `widget` | `{"enabled", "origins", "title", "color", "greeting", "position", "voice"}`. |
 | `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id"}, "telegram": {"enabled"}}`. Tokens go in the vault, see [channels.md](channels.md). |

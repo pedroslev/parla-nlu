@@ -12,6 +12,10 @@ una edición paga que se guarde funciones.
 
 ## Recién salido
 
+- **Proveedores con tu propia key**: la IA puede usar OpenAI, Claude (Anthropic), Google Gemini o cualquier endpoint
+  compatible con OpenAI, y la voz puede usar OpenAI, Deepgram, ElevenLabs o Google Cloud para transcribir y
+  sintetizar (también para la voz de Parla en el teléfono). Las keys quedan en Claves; lo local sigue siendo lo que
+  viene por defecto. Ver [ai-and-voice_es.md](ai-and-voice_es.md).
 - **Herramientas en el paso de agente de IA**: el paso `agent` puede llamar funciones, APIs HTTP y herramientas
   habilitadas de servidores MCP (Parla como **cliente MCP**, Streamable HTTP), con un límite de llamadas por mensaje
   y un tiempo máximo. Ver [ai-and-voice_es.md](ai-and-voice_es.md#herramientas-en-el-paso-agente).
@@ -56,6 +60,6 @@ una edición paga que se guarde funciones.
 ## Lo que ya está
 
 Como referencia, lo que Parla hace hoy: constructor sin código, NLU con embeddings + CRF, flujos con muchos tipos de
-paso, LLM local opcional, voz local, versiones con `staging`/`production`, usuarios y roles, inicio de sesión único con OIDC, bóveda de secretos,
+paso, LLM opcional (local o con tu propia key), voz (local o con tu propia key), versiones con `staging`/`production`, usuarios y roles, inicio de sesión único con OIDC, bóveda de secretos,
 bandeja, analíticas, API HTTP, widget web, servidor MCP, herramientas en el paso agente (cliente MCP), Docker y Kubernetes. Ver el
 [README](../README_es.md#qué-trae).

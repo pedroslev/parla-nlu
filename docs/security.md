@@ -269,21 +269,36 @@ In **Publish → Secrets** you store tokens and passwords for external services,
 - The interface, the API and MCP only see the **names**; values never come back through the API, and MCP can't
   read or set them.
 - They're only resolved in the URL, headers and body of an `http` step (`{{ secret.NOMBRE }}`), as the
-  `secret.NOMBRE` input of a function and as the AI provider's API key (`ai.api_key_secret`). They aren't resolved
-  in messages. The AI key is never returned by `/api/ai/status` and is masked in its errors.
+  `secret.NOMBRE` input of a function and as the AI and voice providers' API keys (`ai.api_key_secret`, and
+  `api_key_secret` in `voice.asr` / `voice.tts`). They aren't resolved in messages. The AI key is never returned by `/api/ai/status` and is masked in its errors.
 - Any value of 4 or more characters that shows up in a trace or in a flow error message is masked with `••••`.
   What the service or function returns is **not** masked: if a response contains the key and you save it in a
   slot, it stays in the conversation.
 
-## Hosted AI providers: data leaves the machine
+## Hosted AI and voice providers: data leaves the machine
 
-By default the AI runs on Ollama on your own machine. If an agent uses an OpenAI-compatible endpoint that is not
-yours (OpenAI, Azure OpenAI, Groq, OpenRouter, …), **the conversation text, the recent turns, the persona and the
-knowledge-base snippets used for an answer are sent to that provider** and handled under its terms (retention,
-training, region). The AI screen warns when the URL is not on this machine or a private network. Embeddings,
-intents and knowledge search stay local. Only owners and editors can change an agent's AI URL or test it with the
-agent's key; review agents built by someone else before enabling them. See
-[ai-and-voice.md](ai-and-voice.md#openai-compatible-endpoints).
+By default everything runs on your machine: the AI on Ollama, speech recognition on faster-whisper and the bot's
+voice on piper. If an agent uses a hosted provider (its own key, see [ai-and-voice.md](ai-and-voice.md)), this is
+what goes to it, handled under its terms (retention, training, region) and billed to the key owner:
+
+| Provider | What leaves the machine |
+|---|---|
+| AI `ollama` | Nothing. |
+| AI `openai`, `openai_compatible` (when the URL is not yours), `anthropic`, `gemini` | The conversation text and recent turns, the persona, the knowledge-base snippets used for an answer and the tool results in the agent step. |
+| Speech recognition (`voice.asr`: OpenAI, Deepgram, ElevenLabs, Google) | The user's audio and the vocabulary hints (the bot's entity values and synonyms). |
+| Bot voice (`voice.tts`: OpenAI, Deepgram, ElevenLabs, Google) | The text of the bot's replies. |
+
+- Embeddings, intents and knowledge search stay local. The AI and voice screens warn when data leaves the machine.
+- **Keys** come only from the agent's vault (**Secrets**) by name (`api_key_secret`), never from the agent's JSON
+  (MCP `validate` rejects an `api_key`). They're masked (`••••`) in every error, log and trace, also when a provider
+  echoes the key in its error body.
+- **Fixed hosts:** each provider's address is fixed in the code (only `openai_compatible` and `openai` with a `url`
+  use the URL you set), so there's no SSRF surface from these calls. The `PARLA_*_BASE_URL` overrides (tests,
+  proxies) are environment variables: only whoever runs the server can set them.
+- Every provider call has a timeout (30 s for voice; the AI uses the caller's time budget).
+- Setting and deleting a secret is already in the [audit log](#audit-log).
+- Only owners and editors can change an agent's AI or voice provider or test it with the agent's key; review agents
+  built by someone else before enabling them.
 
 ## HTTP steps
 

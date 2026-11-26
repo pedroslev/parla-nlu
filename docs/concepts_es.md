@@ -18,7 +18,8 @@ Un **agente** (o bot) es un archivo JSON con todo lo que lo define. Los campos p
 | `functions` | Código Python o JavaScript que corre un paso `function`. |
 | `knowledge`, `knowledge_threshold` | Base de conocimiento (`[{"id", "title", "source", "url", "text"}]`) y su puntaje mínimo (`0.75` por defecto). |
 | `system` | Flujos del sistema (ver abajo). |
-| `ai` | IA local (ver [ai-and-voice.md](ai-and-voice_es.md)). |
+| `ai` | IA, local por defecto (ver [ai-and-voice.md](ai-and-voice_es.md)). `provider`: `"ollama"` (por defecto), `"openai"` (sin `url`, `https://api.openai.com/v1`; con `url`, cualquier servidor compatible con OpenAI, como antes), `"openai_compatible"` (mismo protocolo, con tu `url`: vLLM, llama.cpp, LM Studio, LocalAI, Azure OpenAI, Groq, OpenRouter), `"anthropic"` (Claude) o `"gemini"`. `api_key_secret` es el **nombre** de una clave de la bóveda; si no está, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` o `GEMINI_API_KEY`. |
+| `voice` | `{"asr": {"provider", "model"?, "api_key_secret"?}, "tts": {"provider", "voice"?, "model"?, "api_key_secret"?}}`: reconocimiento de voz y la voz del bot. `provider`: `"local"` (por defecto: faster-whisper / piper, nada sale de la máquina), `"openai"`, `"deepgram"`, `"elevenlabs"` o `"google"`. Nombres de clave por defecto: `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `GOOGLE_API_KEY`. |
 | `mcp_servers` | `[{"name", "url", "headers_secret"}]`: servidores MCP cuyas herramientas puede usar un paso `agent` (ver [`agent`](#agent-dejar-que-la-ia-converse)). |
 | `widget` | `{"enabled", "origins", "title", "color", "greeting", "position", "voice"}`. |
 | `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id"}, "telegram": {"enabled"}}`. Los tokens van en la bóveda, ver [channels_es.md](channels_es.md). |

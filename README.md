@@ -10,7 +10,7 @@
 **Build chatbots and voice bots that run on your own servers, on a plain CPU, with no cloud required.**
 
 Parla is a free, open-source chatbot builder and conversational AI platform (Apache-2.0). It combines a no-code
-flow editor, a fast embeddings + CRF NLU, an optional local LLM through Ollama and on-premise voice
+flow editor, a fast embeddings + CRF NLU, an optional LLM (local through Ollama by default) and on-premise voice
 (speech-to-text and text-to-speech) in a single Python process. It is designed as a self-hosted alternative to
 closed platforms such as Rasa Pro, Dialogflow CX, Cognigy, Kore.ai or Copilot Studio: your conversations, models
 and data stay on your infrastructure. It is built Spanish-first and also understands Portuguese and English. See
@@ -70,6 +70,9 @@ The interface is available in English, Spanish and Portuguese (pick it next to t
 ### Local AI (optional)
 - With Ollama by default (model `qwen2.5:0.5b`, ~400 MB), or any OpenAI-compatible endpoint: vLLM, llama.cpp,
   LM Studio, LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter ([docs/ai-and-voice.md](docs/ai-and-voice.md#openai-compatible-endpoints)).
+- Bring your own API key (optional): the AI can use OpenAI, Claude (Anthropic), Google Gemini or any
+  OpenAI-compatible endpoint, and voice can use OpenAI, Deepgram, ElevenLabs or Google Cloud for transcription and
+  text-to-speech. Keys live in the agent's vault; local stays the default ([docs/ai-and-voice.md](docs/ai-and-voice.md)).
 - Rescues uncertain intents, fills slots from a description, reads an answer together with the recent
   conversation (did they answer, ask something else or request a different action), answers from the knowledge
   base, asks again when it doesn't understand, and converses in an `agent` step that can use tools: functions, HTTP APIs and allow-listed tools from MCP servers
@@ -140,12 +143,14 @@ Requirements:
 - Node.js (optional): only for functions written in JavaScript.
 - [Ollama](https://ollama.com) (optional): for the local AI features.
 - Voice extras (optional): `requirements-voice.txt` and `ffmpeg` on the system.
+- Provider extras (optional, only needed for Claude): `requirements-providers.txt`.
 
 With the script (recommended):
 
 ```sh
 scripts/setup.sh            # creates .venv and installs the dependencies
 scripts/setup.sh --voice    # also installs local voice
+scripts/setup.sh --providers  # also installs the Claude SDK (optional)
 make run                    # opens Parla at http://127.0.0.1:8000
 ```
 
@@ -162,6 +167,7 @@ By hand:
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/pip install -r requirements-voice.txt     # optional
+.venv/bin/pip install -r requirements-providers.txt # optional, only for Claude
 .venv/bin/python app.py                              # or: .venv/bin/python app.py 8080
 ```
 
@@ -228,14 +234,14 @@ parla/
   db.py                 SQLite database (parla.db): conversations, logins and audit log
   pii.py                masking of personal data in what is stored
   brain.py              AI on top of the engine (rescue, slots, reading answers, fallback, agent step)
-  llm.py                LLM client (local Ollama / any OpenAI-compatible endpoint)
+  llm.py                LLM client (local Ollama / OpenAI / Claude / Gemini / any OpenAI-compatible endpoint)
   knowledge.py          knowledge base: text extraction and search
   files.py              files sent by the “Send a file” step
   dates.py              rule-based natural-language dates
   insights.py           “Improve” and analytics
   runner.py             functions in a separate process
   vault.py              per-agent secrets
-  voice.py              local voice (and cache of pre-generated phrases)
+  voice.py              voice: local or BYOK providers (and cache of pre-generated phrases)
   phone.py              phone calls (Twilio, jambonz)
   connect.py            “Connect to AI”
   mcp_server.py         MCP server
@@ -306,7 +312,7 @@ Parla doesn't have yet, is in [docs/comparison.md](docs/comparison.md).
 | Where it runs | Your computer (or a container), one Python process | Self-hosted | Google Cloud | Cloud (it also had a self-hosted version) |
 | No-code interface | Yes, included | Mainly YAML files and CLI; visual interfaces in the commercial edition | Yes (console; visual flows in CX) | Yes, visual editor |
 | NLU | Embeddings + kNN, CRF, rules | Configurable ML pipeline and LLM-based approaches | Managed by Google | LLM-based in current versions |
-| LLM | Optional: local (Ollama) or any OpenAI-compatible endpoint | Optional, configurable | Integrated with Google models | Central to the platform |
+| LLM | Optional: local (Ollama) by default, or your own key for OpenAI, Claude, Gemini or any OpenAI-compatible endpoint | Optional, configurable | Integrated with Google models | Central to the platform |
 | Scale and ecosystem | Designed for a small server | Mature, large-scale production | Managed, Google scale | Large integration ecosystem |
 | Channels | HTTP API, web widget, WhatsApp, Telegram and phone (Twilio, jambonz) | Many connectors | Many integrations | Many channels |
 | Cost | Free, local | Open source + paid edition | Pay per use | Free plan + paid plans |

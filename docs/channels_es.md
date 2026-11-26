@@ -167,7 +167,7 @@ cortar (`<Hangup>` / `hangup`).
 | `enabled` | Atender llamadas. Apagado, los webhooks responden 403. |
 | `provider` | `twilio` (por defecto) o `jambonz`. Solo se aceptan los webhooks del proveedor elegido. |
 | `language` | Variante de idioma para reconocer y hablar, por ejemplo `es-AR`, `en-US`, `pt-BR`. Si la charla pasa a otro idioma del bot, Parla usa `es-US`, `en-US` o `pt-BR`. |
-| `tts` | `provider` (por defecto): la voz del proveedor (`<Say>` / `say`). `parla`: la voz piper de Parla, que se reproduce desde direcciones firmadas (`<Play>` / `play`): la misma voz que la llamada de prueba y sin TTS del proveedor. |
+| `tts` | `provider` (por defecto): la voz del proveedor (`<Say>` / `say`). `parla`: la voz del agente (`voice.tts`: piper local o un proveedor con tu key, como Deepgram Aura-2, ElevenLabs, OpenAI o Google), que se reproduce desde direcciones firmadas (`<Play>` / `play`): la misma voz que la llamada de prueba y sin TTS del proveedor. |
 | `voice` | Nombre de la voz del proveedor (opcional): `Polly.Mia-Neural` en Twilio, la voz del sintetizador configurado en jambonz. |
 | `handoff_to` | A dónde transferir cuando la charla pasa a una persona: un número (`+5491112345678`) o una dirección SIP (`sip:mesa@pbx.midominio.com`). |
 | `finish_on_key` | Tecla que termina un número escrito con el teclado. Por defecto `#`. |
@@ -191,7 +191,8 @@ La dirección pública es la misma que la de los otros canales (`PARLA_PUBLIC_UR
 **Costos y privacidad con Twilio:** Twilio cobra por minuto de llamada, y aparte el reconocimiento de voz
 (`<Gather input="speech">`) y sus voces; mirá sus precios actuales. **La voz de quien llama la transcribe Twilio**
 (y los proveedores de voz que usa), no Parla: el audio y la transcripción salen de tu servidor. A Parla solo llega
-el texto. Con `tts: "parla"` las respuestas del bot se generan acá, pero el reconocimiento sigue en Twilio. Si el
+el texto. Con `tts: "parla"` las respuestas del bot las genera la voz del agente (acá con piper, o en el proveedor que
+use), pero el reconocimiento sigue en Twilio. Si el
 audio no puede salir de tu infraestructura, usá jambonz con un reconocedor propio.
 
 ### jambonz paso a paso
@@ -235,9 +236,11 @@ audio no puede salir de tu infraestructura, usá jambonz con un reconocedor prop
   última pregunta; después de 3 silencios seguidos se despide y corta.
 - **Cortar:** un paso `end` corta después de decir lo anterior. Cuando la persona corta, el webhook de estado
   termina la conversación.
-- **Voces:** con `tts: "provider"` habla la voz del proveedor (`voice`); con `tts: "parla"` habla piper con las
-  mismas frases pregeneradas que la llamada de prueba (las fijas suenan al instante; las que tienen `{{ }}` se
-  generan cuando el proveedor las baja, con algo de demora).
+- **Voces:** con `tts: "provider"` habla la voz del proveedor (`voice`); con `tts: "parla"` habla la voz del
+  agente (`voice.tts`) con las mismas frases pregeneradas que la llamada de prueba (las fijas se preparan antes y
+  suenan al instante; las que tienen `{{ }}` se generan cuando el proveedor las baja, con algo de demora).
+- **Menor demora:** `tts: "parla"` con Deepgram Aura-2 o ElevenLabs Flash como voz del agente. Configuración, keys y
+  qué sale de la máquina en [ai-and-voice_es.md](ai-and-voice_es.md).
 
 ### Pasar con una persona en una llamada
 
@@ -250,16 +253,16 @@ deje de hablar.
 ### Límites del teléfono
 
 - Solo llamadas entrantes: no hay llamadas salientes ni campañas.
-- El reconocimiento de voz lo hace el proveedor (Twilio, o lo que tenga configurado jambonz), no el faster-whisper
-  local de Parla. Los turnos son pedido/respuesta (sin audio en streaming): cada respuesta espera a que la persona
-  termine la frase.
+- El reconocimiento de voz lo hace el proveedor (Twilio, o lo que tenga configurado jambonz), no Parla (ni el
+  faster-whisper local ni el `voice.asr` del agente). Los turnos son pedido/respuesta (sin audio en streaming): cada
+  respuesta espera a que la persona termine la frase.
 - El proveedor espera unos 15 segundos cada respuesta: pasos de IA o consultas HTTP lentas pueden hacerla fallar.
   Que sean rápidos.
 - Tomar una llamada desde la Bandeja transfiere en el próximo turno (o silencio) de la persona, no al instante.
 - El contador de silencios y la clave que firma los audios viven en memoria: un reinicio invalida los audios que se
   están reproduciendo (igual duran 10 minutos), y varias réplicas necesitan una sola instancia (corré una).
-- `tts: "parla"` necesita los extras de voz en el servidor, y el proveedor tiene que llegar a las direcciones de los
-  audios (están bajo `/api/v1/`, como los webhooks).
+- `tts: "parla"` necesita los extras de voz en el servidor (con piper) o la key del proveedor de voz en **Claves**,
+  y el proveedor tiene que llegar a las direcciones de los audios (están bajo `/api/v1/`, como los webhooks).
 
 ## Probar sin cuentas reales
 

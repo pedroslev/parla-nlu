@@ -1,10 +1,12 @@
-# Local AI and voice
+# AI and voice
 
 **English** · [Español](ai-and-voice_es.md)
 
 All of this is optional and, by default, all of it runs on your computer. Without AI, Parla works the same: the NLU
-(embeddings + CRF + rules) doesn't need a language model. If you want, the AI features can also use any
-[OpenAI-compatible endpoint](#openai-compatible-endpoints) (vLLM, llama.cpp, LM Studio, OpenAI, Azure OpenAI, …).
+(embeddings + CRF + rules) doesn't need a language model. If you want, you can bring your own API key: the AI can use
+OpenAI, Anthropic (Claude), Google Gemini or any [OpenAI-compatible endpoint](#openai-compatible-endpoints) (vLLM,
+llama.cpp, LM Studio, Azure OpenAI, …), and the voice can use OpenAI, Deepgram, ElevenLabs or Google Cloud. See
+[Providers](#providers-bring-your-own-key).
 
 ## The embedding model (always)
 
@@ -30,7 +32,7 @@ It isn't optional and it isn't "generative AI": it's what the NLU uses to compar
 3. In the agent, **Intelligence → AI**: turn it on and test the connection.
 
 Parla talks to Ollama at `http://127.0.0.1:11434`. Ollama is the default and nothing leaves your machine. To use
-another server, see [OpenAI-compatible endpoints](#openai-compatible-endpoints).
+a cloud provider or another server, see [Providers](#providers-bring-your-own-key).
 
 ## Suggested models
 
@@ -56,9 +58,101 @@ The defaults:
 
 `persona` is how the bot talks («Hablás de vos, sos amable y breve.»); it's added to the requests that write text.
 
+`provider` is `ollama` (default), `openai`, `anthropic`, `gemini` or `openai_compatible`. Other fields: `url`,
+`model`, `api_key_secret`, `azure`.
+
+## Providers (bring your own key)
+
+Local stays the default. Each agent picks its own providers, and the key is billed by the provider to whoever owns it.
+
+| Part | Provider (`provider`) | Runs on | What leaves the machine |
+|---|---|---|---|
+| AI (LLM) | Ollama (`ollama`, default) | your computer | nothing |
+| AI | OpenAI (`openai`) | cloud | conversation text, recent turns, persona, knowledge snippets used, tool results in the `agent` step |
+| AI | Anthropic Claude (`anthropic`) | cloud | same as above |
+| AI | Google Gemini (`gemini`) | cloud | same as above |
+| AI | OpenAI-compatible (`openai_compatible`) | wherever the URL points | same as above, unless the server is yours |
+| Transcription (ASR) | `local` (faster-whisper, default) | your computer | nothing |
+| ASR | `openai`, `deepgram`, `elevenlabs`, `google` | cloud | the person's audio and the bot's vocabulary hints |
+| Bot voice (TTS) | `local` (piper, default) | your computer | nothing |
+| TTS | `openai`, `deepgram`, `elevenlabs`, `google` | cloud | the bot's reply text |
+
+The embedding model (intents, meaning matching, knowledge search) is always local.
+
+### Keys
+
+Keys live only in the agent's **Secrets** vault, by name: the agent JSON has `api_key_secret` (a name), never the key
+(`validate` in MCP rejects an `api_key`). The key field in the **AI** screen writes to Secrets for you. Keys are masked
+(`••••`) in every error, log and trace, also when a provider echoes the key back. Setting and deleting a secret is
+audited. If `api_key_secret` is not set, these names are used:
+
+| Provider | Default secret | Where to get the key |
+|---|---|---|
+| OpenAI (AI and voice) | `OPENAI_API_KEY` | [platform.openai.com](https://platform.openai.com) → API keys |
+| Anthropic | `ANTHROPIC_API_KEY` | [Claude Console](https://console.anthropic.com) → API keys |
+| Google Gemini | `GEMINI_API_KEY` | [Google AI Studio](https://aistudio.google.com) → Get API key |
+| Deepgram | `DEEPGRAM_API_KEY` | [console.deepgram.com](https://console.deepgram.com) → API keys |
+| ElevenLabs | `ELEVENLABS_API_KEY` | [elevenlabs.io](https://elevenlabs.io) → API keys |
+| Google Cloud (voice) | `GOOGLE_API_KEY` | Google Cloud console → enable Speech-to-Text / Text-to-Speech → Credentials → an API key restricted to those APIs. Service accounts aren't supported yet. |
+
+### AI providers
+
+In the UI: **AI → Program**: Local (Ollama) / OpenAI / Anthropic (Claude) / Google Gemini / OpenAI-compatible. Each
+preset fills the URL, model and key name; **Test connection** sends one message; the model field suggests ids; a
+notice warns when the provider isn't local.
+
+| Provider | Default model | Other suggestions |
+|---|---|---|
+| `openai` (no `url` = `https://api.openai.com/v1`) | `gpt-6-luna` | `gpt-6.1-terra`, `gpt-6.2-sol` |
+| `anthropic` | `claude-opus-5-5` | `claude-sonnet-5-5`, `claude-haiku-5-5` |
+| `gemini` | `gemini-3.8-flash` | `gemini-3.5-flash-lite`, `gemini-3.1-pro-preview` |
+
+```jsonc
+// OpenAI
+{"enabled": true, "provider": "openai", "model": "gpt-6-luna"}
+// Claude
+{"enabled": true, "provider": "anthropic", "model": "claude-sonnet-5-5"}
+// Gemini, with a key under another name
+{"enabled": true, "provider": "gemini", "model": "gemini-3.8-flash", "api_key_secret": "MY_GEMINI_KEY"}
+```
+
+`"provider": "openai"` **with** a `url` keeps its old meaning (any OpenAI-compatible server), so existing agents don't
+change.
+
+**Gemini** uses the native REST `generateContent` API (key in `x-goog-api-key`). JSON replies go through
+`responseMimeType: "application/json"` + `responseJsonSchema`; if Gemini rejects that with a 400, Parla asks for JSON
+in the prompt only.
+
+### Claude specifics
+
+- Uses the official `anthropic` Python SDK (native Messages API). It's an optional dependency, only needed for
+  Claude: `pip install -r requirements-providers.txt` (pins `anthropic==1.17.0`), or `scripts/setup.sh --providers`,
+  `make setup-providers`, or the Docker build arg `INSTALL_PROVIDERS=1` (`make docker-build PROVIDERS=1`). If it's
+  missing, the error says so. Every other provider uses only the standard library.
+- Effort is `low`: Opus 5.5 always thinks, and low keeps chat fast. `max_tokens` is at least 2048 (thinking counts).
+- JSON replies use structured outputs (`output_config.format` with a JSON schema) when the schema has no free-form
+  objects; otherwise the schema goes in the prompt and the JSON is pulled out of the reply.
+- On Opus 5.5 and Sonnet 5.5 the server-side refusal fallback is on (`fallbacks: "default"`). A refusal or a reply cut
+  by `max_tokens` becomes a clear error (and the bot carries on as if the AI were off).
+- 1 SDK retry and a per-request timeout. The URL is fixed (`api.anthropic.com`).
+
+### Recommended combos
+
+| Goal | AI | ASR | TTS |
+|---|---|---|---|
+| Fully local, free, private (default) | Ollama | `local` | `local` |
+| Phone with low latency | any | Twilio/jambonz (always) | `channels.phone.tts: "parla"` + Deepgram Aura-2 or ElevenLabs Flash |
+| Browser call mode / widget | any | Deepgram `nova-3` | ElevenLabs `eleven_flash_v2_5` |
+| Lowest cloud cost | `gemini-3.5-flash-lite`, `claude-haiku-5-5` or `gpt-6-luna` | | |
+| Best quality | `claude-opus-5-5` or `gemini-3.1-pro-preview` | | |
+
+Check each provider's pricing page: costs change and are billed to the key owner. On the phone, prewarmed fixed
+phrases play instantly; see [Cloud voice providers](#cloud-voice-providers).
+
 ## OpenAI-compatible endpoints
 
-With `"provider": "openai"` (in the UI: **Program → OpenAI-compatible**) every AI feature calls
+With `"provider": "openai_compatible"` (or the older `"provider": "openai"` with a `url`; in the UI: **Program →
+OpenAI-compatible**) every AI feature calls
 `POST {url}/chat/completions` (`model`, `messages`, `temperature`, `max_tokens`, `stream: false`). That covers vLLM,
 llama.cpp server, LM Studio, LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter and anything else that speaks that API.
 
@@ -78,8 +172,6 @@ Examples (`agent.ai`; leave `api_key_secret` out when the server has no key):
 {"enabled": true, "provider": "openai", "url": "http://localhost:8080/v1", "model": "local"}
 // LM Studio (local server tab)
 {"enabled": true, "provider": "openai", "url": "http://127.0.0.1:1234/v1", "model": "qwen2.5-1.5b-instruct"}
-// OpenAI
-{"enabled": true, "provider": "openai", "url": "https://api.openai.com/v1", "model": "gpt-4o-mini", "api_key_secret": "OPENAI_KEY"}
 // Azure OpenAI: the URL includes your deployment; "model" is ignored by Azure
 {"enabled": true, "provider": "openai", "url": "https://my-resource.openai.azure.com/openai/deployments/my-gpt4o-mini",
  "model": "gpt-4o-mini", "api_key_secret": "AZURE_OPENAI_KEY", "azure": true}
@@ -105,8 +197,11 @@ How it behaves:
 - **Embeddings stay local** (fastembed): intents, meaning matching and the knowledge base search never call the
   provider.
 
-**Privacy:** with a hosted provider (OpenAI, Azure, Groq, OpenRouter, …) the text of the conversations, the recent
-turns, your persona and the knowledge base snippets used for an answer are sent to that provider and handled
+These behaviors (errors, masked key, local embeddings, carry on when it fails) apply to OpenAI, Claude and Gemini too.
+
+**Privacy:** with a hosted provider (OpenAI, Anthropic, Gemini, Azure, Groq, OpenRouter, …) the text of the
+conversations, the recent turns, your persona, the knowledge base snippets used for an answer and the tool results of
+the `agent` step are sent to that provider and handled
 under its terms. The AI screen warns when the URL isn't on this machine or your private network. If that's not
 acceptable, use Ollama or a server you run yourself (vLLM, llama.cpp, LM Studio).
 
@@ -207,8 +302,8 @@ either it uses a tool, or it replies.
 
 The step's `tools` can be functions, HTTP calls and tools from MCP servers (format in
 [concepts.md](concepts.md#agent-let-the-ai-converse)). Parla doesn't use native function calling: it uses its own
-JSON, so it works the same with Ollama (JSON-schema mode) and OpenAI-compatible endpoints (`json_object`, or the
-prompt as a fallback).
+JSON, so it works the same with Ollama (JSON-schema mode), OpenAI and OpenAI-compatible endpoints (`json_object`, or
+the prompt as a fallback), Claude (structured outputs, or the prompt) and Gemini (`responseJsonSchema`, or the prompt).
 
 - Tools are listed compactly in the system prompt: `name(param: description) - description`.
 - The model replies `{"tool": "name", "args": {...}}` to use one, or `{"tool": "", "text", "slots", "done"}` to
@@ -255,7 +350,8 @@ Measured on an M4 Mac with `qwen2.5:0.5b`, with the model already loaded. They c
 
 ## Voice
 
-Install the extras:
+By default the voice is local (faster-whisper + piper). Each agent can switch transcription and/or the bot's voice to
+a cloud provider: see [Cloud voice providers](#cloud-voice-providers). For the local voice, install the extras:
 
 ```sh
 scripts/setup.sh --voice
@@ -295,3 +391,51 @@ Where it's used:
 - **Widget** with `data-voice="true"`: a microphone button that records, sends to
   `POST /api/v1/bots/{bot}/audio` with `speak: true` and plays the reply.
 - **API**: `POST /api/v1/bots/{bot}/audio` (see [api.md](api.md#post-apiv1botsbotaudio)).
+
+All of these (and the phone with `tts: "parla"`) use the agent's `voice` config.
+
+### Cloud voice providers
+
+Configured per agent in the top-level `voice` key (in the UI: **AI → Voice**, with **Transcription (what the person
+says)** and **Bot voice**):
+
+```jsonc
+"voice": {
+  "asr": {"provider": "deepgram", "model": "nova-3"},
+  "tts": {"provider": "elevenlabs", "model": "eleven_flash_v2_5", "voice": "<voice_id>"}
+}
+// each part: provider "local" (default) | "openai" | "deepgram" | "elevenlabs" | "google";
+// optional "api_key_secret" (defaults in the Keys table above)
+```
+
+**Transcription (ASR).** The bot's vocabulary (entity values and synonyms, like the Whisper hotwords) is sent as
+hints. Languages `es`/`en`/`pt` are mapped for each provider.
+
+| Provider | Model | Vocabulary hints |
+|---|---|---|
+| `openai` | `gpt-4o-mini-transcribe` (default), `gpt-4o-transcribe`, `gpt-transcribe`, `whisper-1` | `prompt` |
+| `deepgram` | `nova-3` (default) | `keyterm` (Nova-3 only) |
+| `elevenlabs` | Scribe `scribe_v3` (default) | `keyterms` (ElevenLabs charges ~20% more when they're sent) |
+| `google` | Speech-to-Text v1 | `speechContexts`; `es-US`, `en-US`, `pt-BR` unless you give a region. Audio that isn't Opus or LINEAR16 is converted to WAV with ffmpeg. |
+
+**Bot voice (TTS).** Every provider returns WAV, like piper, so call mode, the widget and the phone `<Play>` work the same.
+
+| Provider | Model / voice |
+|---|---|
+| `openai` | `gpt-4o-mini-tts-2025-12-15`; voices `alloy`, `ash`, `ballad`, `coral` (default), `echo`, `fable`, `onyx`, `nova`, `sage`, `shimmer`, `verse`, `marin`, `cedar`. (`gpt-4o-mini-tts` and `tts-1` are deprecated by OpenAI, shutdown announced for 2027-01-06.) |
+| `deepgram` | Aura-2: the voice is the model id, e.g. `aura-2-celeste-es` (Spanish default), `aura-2-thalia-en` (English default). No Portuguese voices. |
+| `elevenlabs` | `eleven_flash_v2_5` (default, ~100 ms, lowest latency), `eleven_v4_turbo`, `eleven_multilingual_v2`; voice id from your ElevenLabs voices. |
+| `google` | Cloud Text-to-Speech, voice name optional (e.g. `es-US-Neural2-A`). |
+
+- **Test it** in the Voice panel: **Test voice** plays a sample; **Record 3 s and transcribe** / **Upload audio**
+  shows the transcript. The voice list comes from the provider (ElevenLabs and Google from their APIs, OpenAI and
+  Deepgram fixed lists, local = piper voices). The panel warns when audio or text leaves the machine.
+- **Pre-generated phrases** also work with cloud TTS (each phrase is generated once). The cache key includes provider,
+  model and voice, so switching never plays stale audio.
+- Each voice call has a 30 s timeout. Keys and masking work as in [Keys](#keys).
+- **Phone:** `channels.phone.tts: "parla"` uses the agent's `voice.tts` (piper or a cloud provider); `"provider"` is
+  still Twilio/jambonz's own voice. Speech recognition on the phone is always Twilio/jambonz.
+- **Privacy and cost:** cloud ASR receives the person's audio and the vocabulary hints; cloud TTS receives the bot's
+  reply text. Usage is billed by the provider to the key owner.
+- API: `POST /api/voice/speak` and `POST /api/voice/voices` take an `agent` (or an unsaved `voice` to test);
+  `POST /api/agents/{id}/voice/transcribe` uses the agent's ASR. See [api.md](api.md).

@@ -160,7 +160,7 @@ up (`<Hangup>` / `hangup`).
 | `enabled` | Answer calls. Off, the webhooks answer 403. |
 | `provider` | `twilio` (default) or `jambonz`. Only the chosen provider's webhooks are accepted. |
 | `language` | Recognition and voice language variant, for example `es-AR`, `en-US`, `pt-BR`. If the conversation switches to another of the bot's languages, Parla uses `es-US`, `en-US` or `pt-BR`. |
-| `tts` | `provider` (default): the provider's voice (`<Say>` / `say`). `parla`: Parla's own piper voice, played from signed URLs (`<Play>` / `play`), for the same voice as the test call and no provider TTS. |
+| `tts` | `provider` (default): the provider's voice (`<Say>` / `say`). `parla`: the agent's own voice (`voice.tts`: local piper or a provider with your key, such as Deepgram Aura-2, ElevenLabs, OpenAI or Google), played from signed URLs (`<Play>` / `play`), for the same voice as the test call and no provider TTS. |
 | `voice` | Provider voice name (optional): `Polly.Mia-Neural` on Twilio, the voice of the synthesizer configured in jambonz. |
 | `handoff_to` | Where to transfer when the conversation goes to a person: a number (`+5491112345678`) or a SIP URI (`sip:desk@pbx.mydomain.com`). |
 | `finish_on_key` | Key that ends a number typed on the keypad. Default `#`. |
@@ -184,8 +184,8 @@ The public address is the same as for the other channels (`PARLA_PUBLIC_URL` or 
 **Costs and privacy with Twilio:** Twilio charges per minute for the call, and for speech recognition (`<Gather
 input="speech">`) and its voices; check its current pricing. **The caller's speech is transcribed by Twilio**
 (and by the speech providers it uses), not by Parla: the audio and the transcript leave your server. Only the text
-reaches Parla. With `tts: "parla"` the bot's answers are synthesized locally, but recognition still happens at
-Twilio. If audio must not leave your infrastructure, use jambonz with a self-hosted recognizer.
+reaches Parla. With `tts: "parla"` the bot's answers are synthesized by the agent's voice (locally with piper, or at
+the provider it uses), but recognition still happens at Twilio. If audio must not leave your infrastructure, use jambonz with a self-hosted recognizer.
 
 ### jambonz step by step
 
@@ -228,9 +228,11 @@ Twilio. If audio must not leave your infrastructure, use jambonz with a self-hos
   last question; after 3 silences in a row it says goodbye and hangs up.
 - **Hanging up:** an `end` step hangs up after saying what came before. When the caller hangs up, the status
   webhook ends the conversation.
-- **Voices:** with `tts: "provider"`, the provider voice (`voice`) speaks; with `tts: "parla"`, piper speaks the
-  same pre-generated phrases as the test call (fixed phrases play right away; phrases with `{{ }}` are generated
-  when the provider downloads them, which adds a little latency).
+- **Voices:** with `tts: "provider"`, the provider voice (`voice`) speaks; with `tts: "parla"`, the agent's voice
+  (`voice.tts`) speaks the same pre-generated phrases as the test call (fixed phrases are prewarmed and play right
+  away; phrases with `{{ }}` are generated when the provider downloads them, which adds a little latency).
+- **Lowest latency:** `tts: "parla"` with Deepgram Aura-2 or ElevenLabs Flash as the agent's voice. Setup, keys and
+  what leaves the machine in [ai-and-voice.md](ai-and-voice.md).
 
 ### Handoff on a call
 
@@ -242,15 +244,15 @@ Inbox, **Take conversation** makes Parla transfer the call to `handoff_to` as so
 ### Phone limits
 
 - Inbound calls only: no outbound calls or campaigns.
-- Speech recognition is done by the provider (Twilio, or what jambonz is configured with), not by Parla's local
-  faster-whisper. Turns are request/response (no audio streaming), so each answer waits for the end of the
-  caller's sentence.
+- Speech recognition is done by the provider (Twilio, or what jambonz is configured with), not by Parla (neither
+  local faster-whisper nor the agent's `voice.asr`). Turns are request/response (no audio streaming), so each answer
+  waits for the end of the caller's sentence.
 - The provider waits about 15 seconds for each answer: slow AI steps or HTTP calls can make it fail. Keep them fast.
 - Mid-call handoffs from the Inbox happen on the caller's next turn (or silence), not instantly.
 - The silence counter and the key that signs audio URLs live in memory: a restart invalidates audio URLs being
   played (they last 10 minutes anyway), and several replicas need one shared instance (run one).
-- `tts: "parla"` needs the voice extras on the server, and the provider has to reach the audio URLs (they are
-  under `/api/v1/`, like the webhooks).
+- `tts: "parla"` needs the voice extras on the server (with piper) or the voice provider's key in **Secrets**, and
+  the provider has to reach the audio URLs (they are under `/api/v1/`, like the webhooks).
 
 ## Testing without real accounts
 

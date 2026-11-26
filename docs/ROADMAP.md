@@ -12,6 +12,9 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Shipped recently
 
+- **Bring-your-own-key providers**: the AI can use OpenAI, Claude (Anthropic), Google Gemini or any OpenAI-compatible
+  endpoint, and voice can use OpenAI, Deepgram, ElevenLabs or Google Cloud for transcription and text-to-speech
+  (also for the phone's Parla voice). Keys stay in the vault; local stays the default. See [ai-and-voice.md](ai-and-voice.md).
 - **Tools in the AI agent step**: the `agent` step can call functions, HTTP APIs and allow-listed tools from MCP
   servers (Parla as an **MCP client**, Streamable HTTP), with a per-message call limit and time budget. See
   [ai-and-voice.md](ai-and-voice.md#tools-in-the-agent-step).
@@ -56,5 +59,5 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 ## Already there
 
 For reference, what Parla does today: no-code builder, embeddings + CRF NLU, flows with many step types, optional
-local LLM, local voice, versions with `staging`/`production`, users and roles, OIDC single sign-on, secret vault, inbox, analytics,
+LLM (local or your own key), voice (local or your own key), versions with `staging`/`production`, users and roles, OIDC single sign-on, secret vault, inbox, analytics,
 HTTP API, web widget, MCP server, agent-step tools (MCP client), Docker and Kubernetes. See the [README](../README.md#features).

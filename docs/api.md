@@ -162,8 +162,8 @@ curl -s http://127.0.0.1:8000/api/v1/bots/pizzeria/events \
 
 ### `POST /api/v1/bots/{bot}/audio`
 
-Requires the voice extras. Transcribes locally, handles it like a `message` and, with `speak`, returns the reply as
-audio.
+Requires the voice extras (or a BYOK voice provider). Transcribes with the agent's `voice.asr`, handles it like a
+`message` and, with `speak`, returns the reply as audio from the agent's `voice.tts`.
 
 ```sh
 curl -s http://127.0.0.1:8000/api/v1/bots/pizzeria/audio \
@@ -355,7 +355,7 @@ level) and, in each `agent` step, `tools`, `max_tool_calls` and `time_budget`. S
 |---|---|---|
 | `POST /api/agents/{id}/knowledge/extract` | `{"kind": "text" \| "html" \| "pdf", "data"}` (`data` in base64 for `pdf`) or `{"kind": "url", "url"}` | `{"title", "text"}`. Saves nothing: the UI adds the document with `PUT`. |
 | `POST /api/agents/{id}/knowledge/search` | `{"query", "k"?: 3}` | `{"results": [{"text", "title", "doc", "score"}]}` |
-| `POST /api/agents/{id}/voice/transcribe` | `{"audio": base64, "mime", "language"}` | `{"text", "language", "ms"}` |
+| `POST /api/agents/{id}/voice/transcribe` | `{"audio": base64, "mime", "language", "voice"?}` | `{"text", "language", "ms"}`. Uses the agent's `voice.asr`, or the unsaved `voice` config to test it. |
 | `GET /api/agents/{id}/files` | — | `{"files": [{"id", "name", "mime", "size", "url"}]}` |
 | `POST /api/agents/{id}/files` | `{"name", "data": base64}` | The uploaded file plus `files`. Up to 10 MB; extensions: pdf, png, jpg, jpeg, gif, webp, txt, csv, doc, docx, xls, xlsx, ppt, pptx, zip. |
 | `DELETE /api/agents/{id}/files/{fileId}` | — | `{"files"}` |
@@ -380,22 +380,25 @@ level) and, in each `agent` step, `tools`, `max_tool_calls` and `time_budget`. S
 
 | Route | Body | Response |
 |---|---|---|
-| `POST /api/ai/status` | `{"ai": config}` and/or `{"agent": id}` (with `agent`, the API key named by `ai.api_key_secret` comes from that agent's vault); with `ai.prompt`, it also tests the model. Owner or editor. | `{"ok", "models", "recommended", "provider", "model", "model_ready", "local", "models_unknown"?, "error", "hint", "reply"?, "ms"?}`. Never returns the key. |
-
-The `ai` config (`agent.ai`): `enabled`, `provider` (`"ollama"` default, or `"openai"` for any OpenAI-compatible
-server), `url`, `model`, `api_key_secret` (the **name** of a vault key; the key itself is never accepted in the
-agent JSON), `azure` / `api_version` (Azure OpenAI), `temperature`, `rescue_intents`, `use_knowledge`,
-`generative_fallback`, `persona`. See [ai-and-voice.md](ai-and-voice.md#openai-compatible-endpoints).
+| `POST /api/ai/status` | `{"ai": config}` and/or `{"agent": id}` (with `agent`, the API key named by `ai.api_key_secret` comes from that agent's vault); with `ai.prompt`, it also tests the model. Owner or editor. | `{"ok", "models", "recommended", "suggested", "provider", "model", "model_ready", "local", "models_unknown"?, "error", "hint", "reply"?, "ms"?}`. `suggested`: model ids for that provider; `local` is `false` for `anthropic` and `gemini`. Never returns the key. |
 | `POST /api/ai/pull` | `{"ai": config, "model"}` | `{"ok", "started", "model"}`. Downloads an Ollama model in the background. |
 | `GET /api/ai/progress` | — | `{model: {"status", "completed", "total", "done", "error"}}` |
 | `GET /api/voice/status` | — | `{"stt", "tts", "hint", "errors", "models"}` |
-| `POST /api/voice/speak` | `{"text"` (up to 2000 characters), `"language"}` | The audio (`audio/wav`), not JSON. Phrases already generated come from the cache. |
+| `POST /api/voice/speak` | `{"text"` (up to 2000 characters), `"language", "agent"?, "voice"?}` | The audio (`audio/wav`), not JSON. With `agent`, uses that agent's `voice.tts`; `voice` is an unsaved config to test. Phrases already generated come from the cache. |
+| `POST /api/voice/voices` | `{"language", "agent"?, "voice"?}` | `{"voices": [{"id", "name"}]}`: ElevenLabs and Google from their APIs, OpenAI and Deepgram fixed lists, `local` the piper voices. |
 | `GET /api/connect` | — | `[{"id", "name", "installed", "connected", "manual"}]`, one per assistant. |
 | `POST /api/connect` | `{"client": "claude-code" \| "codex" \| "claude-desktop" \| "cursor"}` | `{"ok", "message", ...}`. With users, creates an API key for the requester. |
 | `POST /api/connect/remove` | `{"client"}` | `{"ok", "message"}` |
 
 `/api/connect*` only responds if the request's `Host` is `127.0.0.1:<port>` or `localhost:<port>` (otherwise 403)
 and the `POST`s require `Content-Type: application/json` (otherwise 415).
+
+The `ai` config (`agent.ai`): `enabled`, `provider` (`"ollama"` default, `"openai"`, `"openai_compatible"`,
+`"anthropic"` or `"gemini"`), `url`, `model`, `api_key_secret` (the **name** of a vault key; the key itself is never
+accepted in the agent JSON), `azure` / `api_version` (Azure OpenAI), `temperature`, `rescue_intents`, `use_knowledge`,
+`generative_fallback`, `persona`. The `voice` config (`agent.voice`): `{"asr": {"provider", "model"?, "api_key_secret"?},
+"tts": {"provider", "voice"?, "model"?, "api_key_secret"?}}`. See [concepts.md](concepts.md#agent) and
+[ai-and-voice.md](ai-and-voice.md#openai-compatible-endpoints).
 
 ### Everything else
 
