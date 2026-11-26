@@ -375,6 +375,14 @@
     .bubble, .answer, .trigger { max-width: 100%; }
   }
 </style>
+<script>
+// Los métodos nativos del DOM convierten null/undefined/false en texto («null» en pantalla). Como h(), los ignoramos
+// en un solo lugar para todas las pantallas.
+for (const proto of [Element.prototype, DocumentFragment.prototype]) for (const name of ['append', 'prepend', 'replaceChildren', 'before', 'after', 'replaceWith']) {
+  const native = proto[name]; if (!native) continue;
+  proto[name] = function (...kids) { return native.apply(this, kids.flat().filter((k) => k != null && k !== false)); };
+}
+</script>
 <script src="/static/i18n.js"></script>
 <script src="/static/themes.js"></script>
 </head>
@@ -449,7 +457,7 @@ const SYSTEM = [
 ];
 const sysOf = (key) => agent.system?.[key] || {};   // el servidor manda agent.system completo (load); {} solo si una versión vieja restaurada no lo trae
 // roles (static/users.js deja window.me; null o undefined = sin usuarios, todo abierto)
-const ROLE_SECTIONS = { agent: ['inbox', 'sessions'], analyst: ['sessions', 'reports', 'campaigns', 'inbox', 'improve', 'tests'] };
+const ROLE_SECTIONS = { agent: ['inbox'], analyst: ['sessions', 'reports', 'campaigns', 'inbox', 'improve', 'tests'] };
 const allowed = () => ROLE_SECTIONS[window.me?.role] || null;
 const canEdit = () => !allowed();
 

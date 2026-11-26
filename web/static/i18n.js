@@ -1894,6 +1894,21 @@
     "•••••••• (escribí una nueva para cambiarla)": "•••••••• (type a new one to change it)",
     "← se guarda en el slot {slot}": "← saved to the slot {slot}",
     "← Todos los documentos": "← All documents",
+    "Empezó la conversación": "Conversation started",
+    "Transferida a {to}": "Transferred to {to}",
+    "Mensaje proactivo": "Proactive message",
+    "Pidió no recibir más mensajes": "Asked to stop receiving messages",
+    "Clasificada como «{name}»": "Classified as “{name}”",
+    "La IA usó «{tool}» → bien": "The AI used “{tool}” → ok",
+    "La IA usó «{tool}» → error": "The AI used “{tool}” → error",
+    "La tomó {name}": "Taken by {name}",
+    "la tomó {name}": "taken by {name}",
+    "Volvió al bot": "Back to the bot",
+    "Recordatorio programado para {when}": "Reminder scheduled for {when}",
+    "Recordatorio para {when}: no se envía desde este canal ({channel})": "Reminder for {when}: can't be sent on this channel ({channel})",
+    "pidió hablar con una persona": "asked to talk to a person",
+    "lo pasó el flujo «{flow}»": "handed over by the flow “{flow}”",
+    "Solo quien edita el bot puede enseñarle frases o ignorarlas.": "Only people who can edit the bot can teach or ignore phrases.",
   };
   // EN-END
   // PT-BEGIN (português do Brasil; mismo formato)
@@ -3783,6 +3798,21 @@
     "•••••••• (escribí una nueva para cambiarla)": "•••••••• (digite uma nova para alterá-la)",
     "← se guarda en el slot {slot}": "← é salvo no slot {slot}",
     "← Todos los documentos": "← Todos os documentos",
+    "Empezó la conversación": "A conversa começou",
+    "Transferida a {to}": "Transferida para {to}",
+    "Mensaje proactivo": "Mensagem proativa",
+    "Pidió no recibir más mensajes": "Pediu para não receber mais mensagens",
+    "Clasificada como «{name}»": "Classificada como «{name}»",
+    "La IA usó «{tool}» → bien": "A IA usou «{tool}» → ok",
+    "La IA usó «{tool}» → error": "A IA usou «{tool}» → erro",
+    "La tomó {name}": "Assumida por {name}",
+    "la tomó {name}": "assumida por {name}",
+    "Volvió al bot": "Voltou para o bot",
+    "Recordatorio programado para {when}": "Lembrete agendado para {when}",
+    "Recordatorio para {when}: no se envía desde este canal ({channel})": "Lembrete para {when}: não é enviado por este canal ({channel})",
+    "pidió hablar con una persona": "pediu para falar com uma pessoa",
+    "lo pasó el flujo «{flow}»": "transferida pelo fluxo «{flow}»",
+    "Solo quien edita el bot puede enseñarle frases o ignorarlas.": "Só quem edita o bot pode ensinar ou ignorar frases.",
   };
   // PT-END
   const DICTS = { en: EN, pt: PT };
@@ -3831,5 +3861,32 @@
       box.append(b);
     }
     return box;
+  };
+})();
+
+// Textos que el servidor guarda en el historial y en los motivos de derivación (en español, con datos adentro):
+// se traducen al mostrarlos. Si no coincide con ninguno, sale tal cual.
+window.tEvent = (() => {
+  const PATTERNS = [["Empezó la conversación", "Empezó\\ la\\ conversación", []],
+    ["Transferida a {to}", "Transferida\\ a\\ (.+?)", ["to"]],
+    ["Mensaje proactivo", "Mensaje\\ proactivo", []],
+    ["Pidió no recibir más mensajes", "Pidió\\ no\\ recibir\\ más\\ mensajes", []],
+    ["Clasificada como «{name}»", "Clasificada\\ como\\ «(.+?)»", ["name"]],
+    ["La IA usó «{tool}» → bien", "La\\ IA\\ usó\\ «(.+?)»\\ →\\ bien", ["tool"]],
+    ["La IA usó «{tool}» → error", "La\\ IA\\ usó\\ «(.+?)»\\ →\\ error", ["tool"]],
+    ["La tomó {name}", "La\\ tomó\\ (.+?)", ["name"]],
+    ["la tomó {name}", "la\\ tomó\\ (.+?)", ["name"]],
+    ["Volvió al bot", "Volvió\\ al\\ bot", []],
+    ["Recordatorio programado para {when}", "Recordatorio\\ programado\\ para\\ (.+?)", ["when"]],
+    ["Recordatorio para {when}: no se envía desde este canal ({channel})", "Recordatorio\\ para\\ (.+?):\\ no\\ se\\ envía\\ desde\\ este\\ canal\\ \\((.+?)\\)", ["when", "channel"]],
+    ["pidió hablar con una persona", "pidió\\ hablar\\ con\\ una\\ persona", []],
+    ["lo pasó el flujo «{flow}»", "lo\\ pasó\\ el\\ flujo\\ «(.+?)»", ["flow"]]].map(([key, re, names]) => [key, new RegExp('^' + re + '$'), names]);
+  return (text) => {
+    if (typeof text !== 'string') return text;
+    for (const [key, re, names] of PATTERNS) {
+      const m = text.match(re);
+      if (m) return t(key, Object.fromEntries(names.map((n, i) => [n, m[i + 1]])));
+    }
+    return text;
   };
 })();

@@ -131,7 +131,7 @@ function svEnvTag(s) {
 // la versión elegida en el chat de prueba (testEnv, en index.html)
 const svTestEnv = () => testEnv === 'draft' ? t('el borrador') : (SV_ENVS[testEnv] || testEnv) + (agent.environments?.[testEnv] != null ? ' (v' + agent.environments[testEnv] + ')' : '');
 const svState = (ended) => h('span', { class: 'sv-state ' + (ended ? 'done' : 'live') }, ended ? t('Terminada') : t('En curso'));
-const svHandBadge = (ho) => h('span', { class: 'sv-badge', title: ho.reason ? t('Motivo: {reason}', { reason: ho.reason }) : null }, icon('hand'), ho.by ? t('La atiende {name}', { name: ho.by }) : t('Espera a una persona'));
+const svHandBadge = (ho) => h('span', { class: 'sv-badge', title: ho.reason ? t('Motivo: {reason}', { reason: window.tEvent(ho.reason) }) : null }, icon('hand'), ho.by ? t('La atiende {name}', { name: ho.by }) : t('Espera a una persona'));
 async function svGet(path, method) {
   const r = await fetch('/api/v1/bots/' + encodeURIComponent(agent.id) + '/sessions' + path, { method });
   const data = await r.json().catch(() => ({}));
@@ -304,7 +304,7 @@ function svDetail(s, redraw) {
   const stamp = (m, cls) => { const tm = svTime(m.at); if (tm === lastAt) return null; lastAt = tm; return h('div', { class: 'sv-at ' + (cls || '') }, tm); };
   const items = s.history.map((m) => {
     if (m.from === 'event' && m.classification) return h('div', { class: 'sv-event' }, t('Clasificada como'), svTag(m.classification), '· ' + svTime(m.at));
-    if (m.from === 'event') return h('div', { class: 'sv-event' }, m.text + ' · ' + svTime(m.at));
+    if (m.from === 'event') return h('div', { class: 'sv-event' }, window.tEvent(m.text) + ' · ' + svTime(m.at));
     if (m.from === 'user') {
       const ents = (m.entities || []).map((e) => [' ', h('mark', { 'data-entity': e.entity, style: markStyle(entityOf(e.entity)) }, e.value)]);
       const pct = m.confidence != null ? ' (' + Math.round(m.confidence * 100) + '%)' : '';

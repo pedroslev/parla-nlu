@@ -82,7 +82,7 @@ window.inboxView = () => {
       onclick: () => { ibSel = s.sessionId; openSig = ''; delete log.dataset.once; drawList(); drawDetail(); },
     }, h('strong', {}, s.sessionId),
       h('span', { class: 'sv-preview' }, s.last_message ? t('«{text}»', { text: s.last_message }) : ''),
-      h('small', {}, [s.handoff?.reason ? t('Motivo: {reason}', { reason: s.handoff.reason }) : null, s.handoff?.by ? t('Atiende {name}', { name: s.handoff.by }) : t('Sin tomar'), ibDate(s.handoff?.since || s.updated)].filter(Boolean).join(' · '))))));
+      h('small', {}, [s.handoff?.reason ? t('Motivo: {reason}', { reason: window.tEvent(s.handoff.reason) }) : null, s.handoff?.by ? t('Atiende {name}', { name: s.handoff.by }) : t('Sin tomar'), ibDate(s.handoff?.since || s.updated)].filter(Boolean).join(' · '))))));
     if (!body.contains(list)) body.replaceChildren(h('div', { class: 'ib-grid' }, list, detail));
   }
 
@@ -102,11 +102,11 @@ window.inboxView = () => {
         if (m.from === 'user') return [h('div', { class: 'msg user' }, m.text), h('div', { class: 'ib-who user' }, t('Cliente') + ' · ' + ibTime(m.at))];
         if (m.from === 'human') return [h('div', { class: 'msg human' }, m.text), h('div', { class: 'ib-who' }, (m.by || t('Persona')) + ' · ' + ibTime(m.at))];
         if (m.from === 'bot') return [h('div', { class: 'msg bot' }, m.file && m.text === m.file.name ? null : m.text, m.file ? window.fileCard(m.file) : null), h('div', { class: 'ib-who' }, t('Bot') + ' · ' + ibTime(m.at))];
-        return h('div', { class: 'msg event' }, m.text + ' · ' + ibTime(m.at));
+        return h('div', { class: 'msg event' }, window.tEvent(m.text) + ' · ' + ibTime(m.at));
       }));
       if (stick || !log.dataset.once) { log.scrollTop = log.scrollHeight; log.dataset.once = '1'; }
       head.replaceChildren(h('div', { class: 'grow stack', style: 'gap:2px;min-width:min(220px,100%)' }, h('h2', {}, id),
-        h('span', { class: 'help', style: 'font-size:14px' }, [ho.reason ? t('Motivo: {reason}', { reason: ho.reason }) : null, ho.by ? t('La atiende {name}', { name: ho.by }) : t('Nadie la tomó todavía')].filter(Boolean).join(' · '))),
+        h('span', { class: 'help', style: 'font-size:14px' }, [ho.reason ? t('Motivo: {reason}', { reason: window.tEvent(ho.reason) }) : null, ho.by ? t('La atiende {name}', { name: ho.by }) : t('Nadie la tomó todavía')].filter(Boolean).join(' · '))),
         ho.by ? null : h('button', { class: 'btn quiet small', onclick: () => act('take') }, icon('hand'), t('Tomar conversación')),
         h('button', { class: 'btn small', onclick: () => act('release') }, icon('back'), t('Devolver al bot')));
       const call = String(s.channel === 'phone');      // una llamada no tiene caja para escribir
@@ -177,7 +177,8 @@ window.improveView = () => {
       h('ul', { class: 'ib-ex' }, g.examples.slice(0, 5).map((e) => h('li', {}, h('q', {}, e.text), h('small', {}, ibDate(e.at)),
         e.sessionId ? h('button', { class: 'link', style: 'font-size:13px', onclick: () => ibOpenInSessions(e.sessionId) }, t('Ver conversación')) : null))),
       g.examples.length > 5 ? h('small', { class: 'help' }, t('y {n} más', { n: g.count - 5 })) : null,
-      intents.length ? h('div', { class: 'ib-teach' }, choice, h('button', { class: 'btn small', onclick: teach }, icon('lightbulb'), t('Enseñar')),
+      intents.length && !canEdit() ? h('p', { class: 'help', style: 'font-size:14px' }, t('Solo quien edita el bot puede enseñarle frases o ignorarlas.'))
+      : intents.length ? h('div', { class: 'ib-teach' }, choice, h('button', { class: 'btn small', onclick: teach }, icon('lightbulb'), t('Enseñar')),
         h('button', { class: 'btn quiet small', onclick: ignore }, t('Ignorar')),
         g.suggested_intent && choice.value ? h('small', { class: 'help' }, t('Te sugerimos la que más se parece.')) : null)
         : h('p', { class: 'help', style: 'font-size:14px' }, t('Creá una intención primero para poder enseñarle esta frase.')));
