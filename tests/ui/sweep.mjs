@@ -15,7 +15,8 @@ const chrome = spawn(process.env.CHROME || 'google-chrome', ['--headless=new', '
   '--window-size=' + (process.env.WIDTH || 1440) + ',900', '--no-first-run', '--disable-gpu', '--disable-dev-shm-usage', ...(process.env.CI ? ['--no-sandbox'] : []), 'about:blank'],
 { stdio: 'ignore' });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const die = (msg) => { console.log(`[${ROLE}] ${msg}`); chrome.kill(); process.exit(2); };
+const annotate = (msg) => { if (process.env.GITHUB_ACTIONS) console.log(`::error title=UI sweep ${ROLE}::${String(msg).replace(/\r?\n/g, '%0A')}`); };   // visible en GitHub sin abrir el log
+const die = (msg) => { console.log(`[${ROLE}] ${msg}`); annotate(msg); chrome.kill(); process.exit(2); };
 
 let port;
 for (let i = 0; i < 100 && !port; i++) {   // Chrome elige el puerto y lo anota en el perfil: varios roles en paralelo no chocan
@@ -138,6 +139,7 @@ for (const lang of LANGS) {
 }
 const seen = new Set();
 for (const p of problems) { const k = p.join('  '); if (!seen.has(k)) { seen.add(k); console.log(`[${ROLE}] ${k}`); } }
+if (seen.size) annotate([...seen].slice(0, 15).join('\n'));
 console.log(`[${ROLE}] ${pages} pantallas en ${((Date.now() - started) / 1000).toFixed(0)}s: ${seen.size ? seen.size + ' problemas' : 'ok'}`);
 chrome.kill();
 await sleep(200);
