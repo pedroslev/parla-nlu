@@ -10,6 +10,8 @@
 | [API HTTP](api_es.md) | Desarrolladores | La API pública `/api/v1` con ejemplos `curl`, autenticación y roles, y la API interna. |
 | [WhatsApp y Telegram](channels_es.md) | Quien publica el bot | Conectar un bot a WhatsApp (Cloud API) y Telegram, paso a paso, límites y seguridad. |
 | [MCP y «Conectar con IA»](mcp_es.md) | Todos | Que Claude, Codex o Cursor te armen el bot. |
+| [Skills para asistentes de IA](skills_es.md) | Todos | Las buenas prácticas para armar bots como Agent Skills: qué son y cómo instalarlas en Claude Code, Claude Desktop, Codex o Cursor. |
+| [Buenas prácticas](best-practices_es.md) | Todos | Guía corta para diseñar intenciones, entidades, flujos, integraciones y pruebas que anden. |
 | [IA local y voz](ai-and-voice_es.md) | Todos | Modelo de vectores, Ollama, qué hace cada función de IA y sus guardas, voz y llamada. |
 | [Seguridad](security_es.md) | Quien lo instala | Usuarios, roles, claves, funciones, qué hacer antes de exponerlo. |
 | [Despliegue](deployment_es.md) | Quien lo instala | Local, Docker, Kubernetes, detrás de un proxy, copias de seguridad. |

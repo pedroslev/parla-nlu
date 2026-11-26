@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Bot-building best practices as Agent Skills in `skills/` (`parla-build-bot`, `parla-nlu-design`,
+  `parla-flow-design`, `parla-integrations`, `parla-testing-and-release`, `parla-migrate-from-rasa`) with a verified
+  example bot, served by the MCP server as `parla://skills` resources and referenced by the `build_bot` prompt;
+  `make skills-install` links them into Claude Code ([docs/skills.md](docs/skills.md),
+  [docs/best-practices.md](docs/best-practices.md)).
 - OpenAI-compatible model endpoints for the AI features (`ai.provider: "openai"`): vLLM, llama.cpp, LM Studio,
   LocalAI, OpenAI, Azure OpenAI, Groq, OpenRouter. API key from the agent's vault (`ai.api_key_secret`), JSON mode
   with a prompt-only fallback, Spanish error messages with the key masked, «Probar conexión» and a privacy warning
@@ -65,6 +70,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Marking a date entity in a phrase (`[mañana](fecha)`) made the answer «mañana» look ambiguous, so the bot kept
+  re-asking; training no longer warns that a date entity is «marked 0 times».
+- Rasa import: CALM conditions with bare slots (`slots.a and slots.b`) became CEL that failed at runtime; a bare
+  slot now means «has a value».
 - The agent step counted each turn twice.
 - The TTS cache key.
 

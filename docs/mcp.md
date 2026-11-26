@@ -98,7 +98,7 @@ Protect it at the proxy (see [security.md](security.md)).
 
 ## Tools
 
-27 tools, one resource (`parla://format-guide`) and one prompt (`build_bot`). In all of them, `agent` can be the
+27 tools, resources (`parla://format-guide` and the [skills](#skills)) and one prompt (`build_bot`). In all of them, `agent` can be the
 id, the exact name or the slug. The ones that change something work on the **draft**.
 
 **Build**
@@ -158,6 +158,14 @@ according to the data, functions tested with `test_function`, buttons for closed
 questions, `handoff` for complaints, system flows turned on, secrets always via `{{ secret.X }}`, classifications,
 reviewing the self-evaluation, testing the draft, publishing to staging and moving to production only with the
 person's OK.
+
+## Skills
+
+The repository's [`skills/`](../skills) folder has bot-building best practices as Agent Skills (workflow, NLU
+design, flows, integrations, tests and releases, Rasa migration). The MCP server serves them as resources —
+`parla://skills` (index) and `parla://skills/<skill>/<file>` — and the `build_bot` prompt tells the model to read
+them first. To install them as real skills in Claude Code (`make skills-install`), Claude Desktop, Codex or Cursor,
+see [skills.md](skills.md).
 
 ## Recommended workflow
 

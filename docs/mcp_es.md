@@ -97,7 +97,7 @@ en el proxy (ver [security.md](security_es.md)).
 
 ## Herramientas
 
-27 herramientas, un recurso (`parla://format-guide`) y un prompt (`build_bot`). En todas, `agent` puede ser el id,
+27 herramientas, recursos (`parla://format-guide` y las [skills](#skills)) y un prompt (`build_bot`). En todas, `agent` puede ser el id,
 el nombre exacto o el slug. Las que cambian algo trabajan sobre el **borrador**.
 
 **Armar**
@@ -157,6 +157,14 @@ según el dato, funciones probadas con `test_function`, botones para opciones ce
 frecuentes, `handoff` para reclamos, flujos del sistema prendidos, claves siempre por `{{ secret.X }}`,
 clasificaciones, revisar la autoevaluación, probar el borrador, publicar a staging y pasar a producción solo con el
 OK de la persona.
+
+## Skills
+
+La carpeta [`skills/`](../skills) del repositorio tiene las buenas prácticas para armar bots como Agent Skills
+(recorrido de trabajo, diseño del NLU, flujos, integraciones, pruebas y versiones, migración desde Rasa). El
+servidor MCP las sirve como recursos —`parla://skills` (índice) y `parla://skills/<skill>/<archivo>`— y el prompt
+`build_bot` le dice al modelo que las lea primero. Para instalarlas como skills en Claude Code
+(`make skills-install`), Claude Desktop, Codex o Cursor, ver [skills_es.md](skills_es.md).
 
 ## Flujo recomendado
 
