@@ -1,0 +1,727 @@
+{
+  "parla": 1,
+  "agent": {
+    "name": "Clínica Dental Sonrisa",
+    "threshold": 0.75,
+    "fallback": [
+      "No te entendí bien. ¿Me lo decís de otra forma?",
+      "Perdón, no lo entendí. Puedo darte un turno, cancelarlo o contarte horarios y obras sociales.",
+      "Uy, eso no lo sé. Probá con «quiero un turno» o «cancelar mi turno»."
+    ],
+    "languages": [
+      "es"
+    ],
+    "knowledge_threshold": 0.7,
+    "knowledge": [
+      {
+        "id": "kfaqds",
+        "title": "Preguntas frecuentes de la clínica",
+        "source": "texto",
+        "url": "",
+        "text": "P: ¿Qué horarios tiene la clínica? ¿A qué hora abren? ¿Atienden los sábados?\nR: Atendemos de lunes a viernes de 9 a 19 h y los sábados de 9 a 13 h. Domingos y feriados está cerrado.\n\nP: ¿Dónde queda la clínica? ¿Cuál es la dirección? ¿Dónde están?\nR: En Av. Corrientes 1234, piso 2, CABA, a media cuadra del subte B (estación Uruguay).\n\nP: ¿Qué obras sociales y prepagas aceptan? ¿Atienden con OSDE o Swiss Medical?\nR: OSDE, Swiss Medical, Galeno y Medifé. También atendemos de forma particular.\n\nP: ¿Cuánto sale una limpieza dental?\nR: La limpieza particular sale $ 45.000. Con obra social, depende del plan: consultalo al sacar el turno.\n\nP: ¿Cuánto sale un blanqueamiento? ¿Y la ortodoncia?\nR: El blanqueamiento y la ortodoncia se presupuestan en la primera consulta, que es sin cargo.\n\nP: ¿Tengo que llevar algo al turno?\nR: El DNI, la credencial de la obra social y, si tenés, radiografías anteriores."
+      }
+    ],
+    "classifications": [
+      {
+        "name": "Turno reservado",
+        "color": 1,
+        "description": "Se confirmó un turno en el sistema de reservas"
+      },
+      {
+        "name": "Turno cancelado",
+        "color": 4,
+        "description": "La persona canceló un turno"
+      },
+      {
+        "name": "Urgencia",
+        "color": 5,
+        "description": "Dolor fuerte, sangrado o golpe: pasó con una persona"
+      },
+      {
+        "name": "Reserva fallida",
+        "color": 3,
+        "description": "El sistema de reservas no confirmó: pasó con una persona"
+      }
+    ],
+    "intents": [
+      {
+        "name": "Pedir turno",
+        "examples": [
+          "quiero sacar un turno",
+          "necesito un turno con el dentista",
+          "me das un turno para [limpieza](tratamiento)",
+          "quería pedir una cita",
+          "turno para [ortodoncia](tratamiento) por favor",
+          "sacame un turno",
+          "quiero reservar para un [control](tratamiento)",
+          "¿tienen turnos para esta semana?",
+          "necesito que me vea un odontólogo",
+          "un turno"
+        ]
+      },
+      {
+        "name": "Cancelar turno",
+        "examples": [
+          "quiero cancelar mi turno",
+          "no voy a poder ir, cancelalo",
+          "anulá el turno que tenía",
+          "necesito dar de baja la cita",
+          "cancelame el turno del martes",
+          "ya no necesito el turno",
+          "quiero cancelar la reserva que hice",
+          "cancelar turno",
+          "no puedo ir al dentista, cancelá"
+        ]
+      },
+      {
+        "name": "Urgencia dental",
+        "examples": [
+          "me duele muchísimo una muela",
+          "tengo un dolor de muela insoportable",
+          "se me rompió un diente",
+          "me sangra mucho la encía",
+          "me di un golpe y se me movió un diente",
+          "tengo la cara hinchada",
+          "es una urgencia",
+          "dolor fuerte de muela",
+          "necesito que me atiendan ya, me duele mucho"
+        ]
+      },
+      {
+        "name": "Saludar",
+        "examples": [
+          "hola",
+          "buenas",
+          "buen día",
+          "buenas tardes",
+          "hola, ¿qué tal?",
+          "holis",
+          "buenas noches"
+        ]
+      }
+    ],
+    "entities": [
+      {
+        "name": "tratamiento",
+        "kind": "list",
+        "regex": "",
+        "values": [
+          "limpieza",
+          "control",
+          "extracción",
+          "ortodoncia",
+          "blanqueamiento"
+        ],
+        "synonyms": {
+          "limpieza": [
+            "limpieza dental",
+            "una limpieza"
+          ],
+          "control": [
+            "chequeo",
+            "revisión",
+            "consulta"
+          ],
+          "extracción": [
+            "extraccion",
+            "sacar una muela",
+            "sacarme una muela"
+          ],
+          "ortodoncia": [
+            "brackets",
+            "frenos",
+            "aparatos"
+          ],
+          "blanqueamiento": [
+            "blanquear",
+            "blanqueo"
+          ]
+        }
+      },
+      {
+        "name": "fecha",
+        "kind": "date",
+        "regex": "",
+        "values": []
+      },
+      {
+        "name": "telefono",
+        "kind": "phone",
+        "regex": "\\+?\\d[\\d\\s().-]{6,}\\d",
+        "values": []
+      },
+      {
+        "name": "confirma",
+        "kind": "list",
+        "regex": "",
+        "values": [
+          "si",
+          "no"
+        ],
+        "synonyms": {
+          "si": [
+            "sí",
+            "dale",
+            "ok",
+            "confirmo",
+            "perfecto",
+            "de una"
+          ],
+          "no": [
+            "nop",
+            "mejor no",
+            "cancelá"
+          ]
+        },
+        "phrasings": {
+          "si": [
+            "está bien así",
+            "me sirve",
+            "reservalo"
+          ],
+          "no": [
+            "no me sirve",
+            "prefiero otro día",
+            "cambiemos"
+          ]
+        }
+      }
+    ],
+    "slots": [
+      {
+        "name": "tratamiento",
+        "entity": "tratamiento"
+      },
+      {
+        "name": "fecha",
+        "entity": "fecha",
+        "description": "Día y hora del turno"
+      },
+      {
+        "name": "fecha_texto",
+        "entity": ""
+      },
+      {
+        "name": "fecha_ok",
+        "entity": ""
+      },
+      {
+        "name": "fecha_error",
+        "entity": ""
+      },
+      {
+        "name": "nombre",
+        "entity": ""
+      },
+      {
+        "name": "telefono",
+        "entity": "telefono",
+        "start": true
+      },
+      {
+        "name": "confirma",
+        "entity": "confirma"
+      },
+      {
+        "name": "reserva_status",
+        "entity": ""
+      },
+      {
+        "name": "reserva_codigo",
+        "entity": ""
+      }
+    ],
+    "system": {
+      "cancel": {
+        "enabled": true
+      },
+      "repeat": {
+        "enabled": true
+      },
+      "clarify": {
+        "enabled": true
+      },
+      "resume": {
+        "enabled": true
+      },
+      "correction": {
+        "enabled": true
+      },
+      "handoff": {
+        "enabled": true,
+        "text": "Te paso con alguien de recepción, ya te escriben."
+      },
+      "anything_else": {
+        "enabled": false
+      },
+      "csat": {
+        "enabled": false
+      }
+    },
+    "flows": [
+      {
+        "name": "Bienvenida",
+        "trigger": "__start__",
+        "steps": [
+          {
+            "type": "message",
+            "text": "¡Hola! Soy el asistente de Clínica Dental Sonrisa. ¿En qué te ayudo?",
+            "buttons": [
+              {
+                "label": "Sacar turno",
+                "value": "quiero sacar un turno"
+              },
+              {
+                "label": "Cancelar turno",
+                "value": "quiero cancelar mi turno"
+              },
+              {
+                "label": "Horarios",
+                "value": "¿qué horarios tiene la clínica?"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Saludo",
+        "trigger": "Saludar",
+        "interrupts": false,
+        "steps": [
+          {
+            "type": "message",
+            "text": "¡Hola! Puedo darte un turno, cancelarlo o contarte horarios y obras sociales."
+          }
+        ]
+      },
+      {
+        "name": "Reservar turno",
+        "trigger": "Pedir turno",
+        "steps": [
+          {
+            "type": "ask",
+            "slot": "tratamiento",
+            "text": "¿Para qué tratamiento?",
+            "buttons": [
+              {
+                "label": "Limpieza",
+                "value": "limpieza"
+              },
+              {
+                "label": "Control",
+                "value": "control"
+              },
+              {
+                "label": "Extracción",
+                "value": "extracción"
+              },
+              {
+                "label": "Ortodoncia",
+                "value": "ortodoncia"
+              },
+              {
+                "label": "Blanqueamiento",
+                "value": "blanqueamiento"
+              }
+            ]
+          },
+          {
+            "type": "ask",
+            "slot": "fecha",
+            "text": "¿Qué día y a qué hora te queda bien? Por ejemplo: «el jueves a las 10»."
+          },
+          {
+            "type": "function",
+            "function": "formatear_fecha",
+            "saves": [
+              {
+                "expr": "ok",
+                "slot": "fecha_ok"
+              },
+              {
+                "expr": "ok ? '' : error",
+                "slot": "fecha_error"
+              }
+            ]
+          },
+          {
+            "type": "if",
+            "cond": {
+              "var": "fecha_ok",
+              "op": "eq",
+              "value": "false"
+            },
+            "then": [
+              {
+                "type": "message",
+                "text": "{{ fecha_error }}. Elegí otro día, por favor."
+              },
+              {
+                "type": "set",
+                "slot": "fecha",
+                "mode": "clear"
+              },
+              {
+                "type": "goto",
+                "flow": "Reservar turno"
+              }
+            ],
+            "else": []
+          },
+          {
+            "type": "ask",
+            "slot": "nombre",
+            "text": "¿A nombre de quién reservo?"
+          },
+          {
+            "type": "ask",
+            "slot": "telefono",
+            "text": "¿A qué teléfono te escribimos si hay un cambio?"
+          },
+          {
+            "type": "ask",
+            "slot": "confirma",
+            "text": "Reviso: {{ tratamiento }} el {{ fecha_texto }} a nombre de {{ nombre }}. ¿Lo confirmo?",
+            "buttons": [
+              {
+                "label": "Sí, confirmar",
+                "value": "si"
+              },
+              {
+                "label": "No",
+                "value": "no"
+              }
+            ]
+          },
+          {
+            "type": "if",
+            "cond": {
+              "var": "confirma",
+              "op": "eq",
+              "value": "no"
+            },
+            "then": [
+              {
+                "type": "message",
+                "text": "Listo, no reservé nada. Cuando quieras empezamos de nuevo."
+              },
+              {
+                "type": "set",
+                "slot": "confirma",
+                "mode": "clear"
+              },
+              {
+                "type": "set",
+                "slot": "fecha",
+                "mode": "clear"
+              },
+              {
+                "type": "end"
+              }
+            ],
+            "else": []
+          },
+          {
+            "type": "http",
+            "method": "POST",
+            "url": "http://127.0.0.1:8766/reservas",
+            "headers": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ secret.BOOKING_TOKEN }}"
+              }
+            ],
+            "body": "{\"fecha\": \"{{ fecha }}\", \"telefono\": \"{{ telefono }}\", \"tratamiento\": \"{{ tratamiento }}\"}",
+            "saves": [
+              {
+                "expr": "status",
+                "slot": "reserva_status"
+              },
+              {
+                "expr": "has(body.code) ? body.code : ''",
+                "slot": "reserva_codigo"
+              }
+            ]
+          },
+          {
+            "type": "if",
+            "cond": {
+              "var": "reserva_status",
+              "op": "eq",
+              "value": "201"
+            },
+            "then": [
+              {
+                "type": "message",
+                "text": "¡Listo, {{ nombre }}! Tu turno de {{ tratamiento }} quedó reservado para el {{ fecha_texto }}. Código: {{ reserva_codigo }}."
+              },
+              {
+                "type": "classify",
+                "classification": "Turno reservado"
+              }
+            ],
+            "else": [
+              {
+                "type": "classify",
+                "classification": "Reserva fallida"
+              },
+              {
+                "type": "handoff",
+                "reason": "el sistema de reservas no confirmó el turno",
+                "text": "No pude confirmar el turno en el sistema. Te paso con alguien de recepción para terminarlo."
+              }
+            ]
+          },
+          {
+            "type": "set",
+            "slot": "tratamiento",
+            "mode": "clear"
+          },
+          {
+            "type": "set",
+            "slot": "fecha",
+            "mode": "clear"
+          },
+          {
+            "type": "set",
+            "slot": "confirma",
+            "mode": "clear"
+          }
+        ]
+      },
+      {
+        "name": "Cancelar",
+        "trigger": "Cancelar turno",
+        "steps": [
+          {
+            "type": "ask",
+            "slot": "telefono",
+            "text": "¿Con qué teléfono sacaste el turno?"
+          },
+          {
+            "type": "message",
+            "text": "Listo, cancelé el turno asociado al {{ telefono }}. Si querés otro, decime «quiero un turno»."
+          },
+          {
+            "type": "classify",
+            "classification": "Turno cancelado"
+          }
+        ]
+      },
+      {
+        "name": "Urgencias",
+        "trigger": "Urgencia dental",
+        "interrupts": "always",
+        "steps": [
+          {
+            "type": "classify",
+            "classification": "Urgencia"
+          },
+          {
+            "type": "handoff",
+            "reason": "urgencia dental",
+            "text": "Lamento que estés con dolor. Te paso ya con alguien de la guardia para darte un turno de urgencia."
+          }
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "name": "Saludo inicial con menú",
+        "turns": [
+          {
+            "says": "¿En qué te ayudo?",
+            "buttons": [
+              "Sacar turno",
+              "Cancelar turno",
+              "Horarios"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Reserva completa con botones",
+        "turns": [
+          {
+            "says": "Clínica Dental Sonrisa"
+          },
+          {
+            "user": "quiero sacar un turno",
+            "intent": "Pedir turno",
+            "flow": "Reservar turno",
+            "says": "¿Para qué tratamiento?"
+          },
+          {
+            "user": "Limpieza",
+            "slots": {
+              "tratamiento": "limpieza"
+            },
+            "says": "¿Qué día"
+          },
+          {
+            "user": "el 15/12 a las 10",
+            "says": "¿A nombre de quién"
+          },
+          {
+            "user": "Ana Gómez",
+            "slots": {
+              "nombre": "Ana Gómez"
+            },
+            "says": "teléfono"
+          },
+          {
+            "user": "11 5555 1234",
+            "says": "martes 15/12 a las 10:00",
+            "buttons": [
+              "Sí, confirmar",
+              "No"
+            ]
+          },
+          {
+            "user": "Sí, confirmar",
+            "says": "/quedó reservado .*Código: DC-\\d{4}/",
+            "handoff": false
+          }
+        ]
+      },
+      {
+        "name": "Todo en el primer mensaje",
+        "turns": [
+          {
+            "user": "necesito un turno de limpieza para el 15/12 a las 10",
+            "intent": "Pedir turno",
+            "slots": {
+              "tratamiento": "limpieza"
+            },
+            "says": "¿A nombre de quién"
+          }
+        ]
+      },
+      {
+        "name": "Domingo cerrado: vuelve a pedir la fecha",
+        "turns": [
+          {
+            "user": "quiero un turno para un control"
+          },
+          {
+            "user": "el 13/12 a las 10",
+            "says": "/(?s)domingos .*cerrada.*¿Qué día/"
+          }
+        ]
+      },
+      {
+        "name": "Teléfono inválido se vuelve a pedir",
+        "turns": [
+          {
+            "user": "quiero anular mi turno",
+            "intent": "Cancelar turno",
+            "says": "¿Con qué teléfono"
+          },
+          {
+            "user": "no me acuerdo",
+            "says": "No reconocí ese dato"
+          },
+          {
+            "user": "11 4444 5678",
+            "slots": {
+              "telefono": "11 4444 5678"
+            },
+            "says": "cancelé el turno"
+          }
+        ]
+      },
+      {
+        "name": "Dice que no al confirmar",
+        "turns": [
+          {
+            "user": "quiero turno para brackets",
+            "slots": {
+              "tratamiento": "ortodoncia"
+            }
+          },
+          {
+            "user": "el 15/12 a las 9"
+          },
+          {
+            "user": "Juan"
+          },
+          {
+            "user": "11 5555 9876"
+          },
+          {
+            "user": "no",
+            "says": "no reservé nada",
+            "handoff": false
+          }
+        ]
+      },
+      {
+        "name": "Urgencia corta la reserva",
+        "turns": [
+          {
+            "user": "quiero sacar un turno",
+            "says": "¿Para qué tratamiento?"
+          },
+          {
+            "user": "tengo un dolor de muela tremendo",
+            "flow": "Urgencias",
+            "handoff": true,
+            "says": "guardia"
+          }
+        ]
+      },
+      {
+        "name": "El sistema de reservas rechaza: pasa a recepción",
+        "start": {
+          "telefono": "11 4000 0000"
+        },
+        "turns": [
+          {
+            "user": "quiero un turno para un control"
+          },
+          {
+            "user": "el 15/12 a las 16"
+          },
+          {
+            "user": "Luis"
+          },
+          {
+            "user": "si",
+            "handoff": true,
+            "says": "Te paso con alguien de recepción"
+          }
+        ]
+      },
+      {
+        "name": "Pregunta frecuente desde la base",
+        "turns": [
+          {
+            "user": "¿qué obras sociales aceptan?",
+            "says": "OSDE"
+          }
+        ]
+      },
+      {
+        "name": "Fuera de tema",
+        "turns": [
+          {
+            "user": "¿cuál es la capital de Francia?",
+            "says": "/entend|no lo sé/",
+            "handoff": false
+          }
+        ]
+      }
+    ],
+    "functions": [
+      {
+        "name": "formatear_fecha",
+        "description": "Fecha ISO -> «martes 15/12 a las 10:00»; falla los domingos",
+        "language": "python",
+        "inputs": [
+          "fecha"
+        ],
+        "code": "from datetime import datetime\n\nDIAS = [\"lunes\", \"martes\", \"miércoles\", \"jueves\", \"viernes\", \"sábado\", \"domingo\"]\n\n\ndef run(inputs):\n    raw = inputs.get(\"fecha\") or \"\"            # \"2026-12-15\" o \"2026-12-15T10:00\" (entidad date)\n    when = datetime.fromisoformat(raw)\n    if when.weekday() == 6:\n        raise ValueError(\"Los domingos la clínica está cerrada\")\n    texto = \"%s %d/%d\" % (DIAS[when.weekday()], when.day, when.month)\n    if \"T\" in raw:\n        texto += \" a las \" + when.strftime(\"%H:%M\")\n    return {\"fecha_texto\": texto}\n"
+      }
+    ]
+  }
+}

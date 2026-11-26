@@ -682,6 +682,14 @@ def translate(text, slot_map, slot_types):
             except ValueError:
                 return None
         return {"cond": {"var": n, "op": op, "value": value.lower() if value.lower() in ("true", "false") else value}}
+    def truthy(x):  # «slots.a and slots.b»: un slot suelto es «tiene valor» (en CEL «a && b» con textos falla)
+        n = name(x.group(2))
+        if not n:
+            return x.group(0)
+        test = '%s == "true"' % n if slot_types.get(n) == "bool" else '%s != null && %s != ""' % (n, n)
+        return ("!(%s)" if x.group(1) else "(%s)") % test
+    s = re.sub(r"(?:^|(?<=\band )|(?<=\bor )|(?<=\())(not\s+)?slots\.(\w+)(?=\s*$|\s*\)|\s+and\b|\s+or\b)", truthy, s)
+
     def var(x):     # los slots son texto: un float se compara con double(x)
         n = slot_map.get(x.group(1), "slots_" + x.group(1))
         return "double(%s)" % n if slot_types.get(n) == "float" else n

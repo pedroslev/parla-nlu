@@ -605,6 +605,9 @@ saved_dates = dates.extract
 dates.extract = lambda text, today=None: [{"start": 4, "end": 10, "value": "2026-11-25", "text": "mañana"}] if "mañana" in text else []
 assert app.extract({"intents": [], "entities": [{"name": "fecha", "kind": "date"}]}, "para mañana") == [
     {"entity": "fecha", "value": "2026-11-25", "start": 4, "end": 10}]
+marked = {"intents": [{"name": "Turno", "examples": ["un turno para [mañana](fecha)"]}], "entities": [{"name": "fecha", "kind": "date"}]}
+assert [e["value"] for e in app.extract(marked, "mañana")] == ["2026-11-25"]   # la marca no suma «mañana» como valor
+assert [e["kind"] for e in app.entity_report(marked)] == ["fecha u hora"]
 dates.extract = saved_dates
 st = {}
 for _ in range(10):

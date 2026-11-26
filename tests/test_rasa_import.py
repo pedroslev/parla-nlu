@@ -327,6 +327,9 @@ assert first["cond"] == {"var": "confirma", "op": "ne", "value": "true"}, first
 assert first["then"][0]["text"] == "Cancelado." and [s["slot"] for s in first["then"][1:]] == ["destinatario", "monto", "confirma"]  # CALM borra lo preguntado
 second = first["else"][0]
 assert second["expr"] == 'double(monto) >= 500 && destinatario != "yo"', second
+# un slot suelto en una condición compuesta es «tiene valor»: «a && b» con textos rompe en CEL
+assert rasa_import.translate("slots.a and not slots.b", {"a": "a", "b": "b"}, {}) == {
+    "expr": '(a != null && a != "") && !(b != null && b != "")'}
 assert second["then"][0]["type"] == "http" and second["then"][-1] == {"type": "goto", "goto": "ver_saldo"}
 assert second["else"][1]["text"] == "¡Listo, enviado!"
 ents = {e["name"]: e for e in agent["entities"]}

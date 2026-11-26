@@ -1,7 +1,9 @@
 PY ?= .venv/bin/python
 PORT ?= 8000
 
-.PHONY: setup setup-voice run test mcp clean-pyc docker-build docker-run
+.PHONY: setup setup-voice run test mcp skills-install clean-pyc docker-build docker-run
+
+SKILLS_DIR ?= $(HOME)/.claude/skills
 
 setup:          ## create .venv and install the core
 	scripts/setup.sh
@@ -17,6 +19,13 @@ test:           ## all tests (voice/AI are skipped if models or Ollama are missi
 
 mcp:            ## MCP server over HTTP on :8001/mcp (for stdio: $(PY) mcp_server.py)
 	$(PY) mcp_server.py --http --port 8001
+
+skills-install: ## symlink skills/* into $(SKILLS_DIR) (Claude Code); never replaces an existing folder
+	@mkdir -p "$(SKILLS_DIR)"
+	@for d in skills/*/; do n=$$(basename "$$d"); t="$(SKILLS_DIR)/$$n"; \
+	  if [ -L "$$t" ]; then ln -sfn "$(CURDIR)/skills/$$n" "$$t"; echo "updated  $$t -> $(CURDIR)/skills/$$n"; \
+	  elif [ -e "$$t" ]; then echo "skipped  $$t (already exists and is not a link: move it away to install)"; \
+	  else ln -s "$(CURDIR)/skills/$$n" "$$t"; echo "linked   $$t -> $(CURDIR)/skills/$$n"; fi; done
 
 docker-build:   ## parla:local image (VOICE=1 adds voice)
 	docker build -t parla:local --build-arg INSTALL_VOICE=$(or $(VOICE),0) .
