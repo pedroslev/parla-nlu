@@ -35,6 +35,7 @@ VOICES = {"es": ["es_AR-daniela-high", "es_MX-claude-high", "es_ES-davefx-medium
 FFMPEG = next((p for p in ("/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg") if os.path.exists(p)), "ffmpeg")
 
 PROVIDERS = ("local", "openai", "deepgram", "elevenlabs", "google")
+NAMES = {"openai": "OpenAI", "deepgram": "Deepgram", "elevenlabs": "ElevenLabs", "google": "Google Cloud"}
 SECRETS = {"openai": "OPENAI_API_KEY", "deepgram": "DEEPGRAM_API_KEY", "elevenlabs": "ELEVENLABS_API_KEY", "google": "GOOGLE_API_KEY"}
 # direcciones fijas; PARLA_<NOMBRE>_BASE_URL las cambia (pruebas con servidores falsos o un proxy propio)
 HOSTS = {"openai": "https://api.openai.com", "deepgram": "https://api.deepgram.com", "elevenlabs": "https://api.elevenlabs.io",
@@ -256,7 +257,7 @@ def _base(name):
 
 def _key(conf):
     if not conf.get("api_key"):
-        raise ValueError("Falta la API key de %s: guardala en «Claves» como %s." % (conf["provider"], conf.get("api_key_secret")))
+        raise ValueError("Falta la API key de %s: guardala en «Claves» como %s." % (NAMES[conf["provider"]], conf.get("api_key_secret")))
     return conf["api_key"]
 
 

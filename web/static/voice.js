@@ -146,7 +146,7 @@
       if (window.speechSynthesis) speechSynthesis.cancel();
     },
 
-    // Lee en voz alta con piper (en el servidor); si no está, con la voz del navegador. Resuelve cuando termina de sonar.
+    // Lee en voz alta con la voz del agente (piper u otro proveedor, en el servidor); si no está, con la voz del navegador. Resuelve cuando termina de sonar.
     async speak(text, language) {
       this.hush();
       const mine = turn;
@@ -155,7 +155,7 @@
       try {
         res = await fetch('/api/voice/speak', {
           method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({text, language: language || lang()}),
+          body: JSON.stringify({text, language: language || lang(), agent: current() ? current().id : undefined}),   // la voz que eligió el agente
         });
       } catch (e) { res = null; }
       if (mine !== turn) return; // llegó otro speak() (o hush) mientras bajaba este
@@ -251,7 +251,7 @@
           let cut = false, started = false, src = null;
           // sentenceAt: el VAD mide el eco que queda (sobre todo en los primeros 300 ms de cada oración) y pide un margen claro encima
           const turn = {bargeable: !!route, sentenceAt: 0, stop() { cut = true; try { src && src.stop(); } catch (e) { /* ya paró */ } window.speechSynthesis && speechSynthesis.cancel(); }};
-          const synth = txt => closed ? Promise.reject(new Error('colgó')) : fetch('/api/voice/speak', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: txt, language: language2}), signal: abort.signal})
+          const synth = txt => closed ? Promise.reject(new Error('colgó')) : fetch('/api/voice/speak', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: txt, language: language2, agent: (opts && opts.agent) || (current() && current().id) || undefined}), signal: abort.signal})
             .then(async r => closed ? Promise.reject(new Error('colgó')) : r.ok ? ctx.decodeAudioData(await r.arrayBuffer()) : Promise.reject(new Error((await r.json().catch(() => ({}))).error || t('La voz del bot no está disponible.'))));
           const play = audio => new Promise(done => {
             if (closed || cut) return done();
