@@ -334,6 +334,8 @@ Parla apunta a que un bot útil quede andando en una tarde, en tu máquina y sin
 
 ## Documentación
 
+**[Manual de uso](docs/manual/README_es.md)**: guía paso a paso para quienes usan la interfaz web (armar bots, Bandeja, reportes, administración).
+
 Todo en [`docs/`](docs/README_es.md): primeros pasos, conceptos, API, [probar bots](docs/testing-bots_es.md), [WhatsApp, Telegram y teléfono](docs/channels_es.md), MCP, [skills](docs/skills_es.md), [buenas prácticas](docs/best-practices_es.md),
 IA y voz, seguridad, [inicio de sesión único](docs/sso_es.md), despliegue, desarrollo, preguntas frecuentes, [migrar desde Rasa](docs/migrate-from-rasa_es.md),
 [comparación](docs/comparison_es.md) y [hoja de ruta](docs/ROADMAP_es.md). Las novedades de cada versión están en [CHANGELOG.md](CHANGELOG.md).

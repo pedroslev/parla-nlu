@@ -4,6 +4,7 @@
 
 | Documento | Para quién | Qué tiene |
 |---|---|---|
+| [Manual de uso](manual/README_es.md) | Quien usa la interfaz sin programar | La interfaz web paso a paso, organizada por rol. |
 | [Primeros pasos](getting-started_es.md) | Todos | Tu primer bot, de cero a publicado. |
 | [Conceptos](concepts_es.md) | Todos | Agente, intención, entidad, slot, flujo, tipos de paso, plantillas, flujos del sistema, qué pasa mientras espera una respuesta. |
 | [Probar bots](testing-bots_es.md) | Todos | Suites de pruebas de conversación: formato, «Guardar como test», el freno al publicar, API, línea de comandos y GitHub Actions. |

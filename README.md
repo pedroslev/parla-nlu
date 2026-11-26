@@ -334,6 +334,8 @@ get a useful bot running in an afternoon, on your machine and without sending da
 
 ## Documentation
 
+**[User manual](docs/manual/README.md)**: a step-by-step guide for people who use the web interface (building bots, Inbox, reports, administration).
+
 Everything is in [`docs/`](docs/README.md): getting started, concepts, API, [testing bots](docs/testing-bots.md), [WhatsApp, Telegram and phone](docs/channels.md), MCP, [skills](docs/skills.md), [best practices](docs/best-practices.md),
 AI and voice, security, [single sign-on](docs/sso.md), deployment, development, FAQ, [migrating from Rasa](docs/migrate-from-rasa.md),
 [comparison](docs/comparison.md) and [roadmap](docs/ROADMAP.md). Release notes are in [CHANGELOG.md](CHANGELOG.md).

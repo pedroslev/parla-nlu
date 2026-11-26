@@ -4,6 +4,7 @@
 
 | Document | Audience | Contents |
 |---|---|---|
+| [User manual](manual/README.md) | Non-technical users | The web interface step by step, organized by role. |
 | [Getting started](getting-started.md) | Everyone | Your first bot, from zero to published. |
 | [Concepts](concepts.md) | Everyone | Agent, intent, entity, slot, flow, step types, templates, system flows, what happens while it waits for an answer. |
 | [Testing bots](testing-bots.md) | Everyone | Conversation test suites: format, **Save as test**, the publish gate, API, command line and GitHub Actions. |
