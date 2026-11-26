@@ -1,4 +1,4 @@
-# WhatsApp y Telegram
+# WhatsApp, Telegram y teléfono
 
 [English](channels.md) · **Español**
 
@@ -6,7 +6,8 @@ Un bot puede atender por **WhatsApp** (la Cloud API de WhatsApp Business, de Met
 widget web y la API. Es el mismo bot y el mismo motor: contesta con lo publicado en **Producción** (o el borrador si
 todavía no publicaste nada), con sus botones y archivos. Las conversaciones aparecen en **Conversaciones** con el
 canal `whatsapp` o `telegram`, y cuando la charla pasa a una persona, lo que esa persona escribe en la **Bandeja**
-también le llega al WhatsApp o Telegram del cliente.
+también le llega al WhatsApp o Telegram del cliente. También puede atender **llamadas telefónicas** por Twilio o
+jambonz: ver [Llamadas telefónicas](#llamadas-telefónicas-twilio-y-jambonz).
 
 Todo se configura en **Publicar → Canales**.
 
@@ -19,6 +20,8 @@ Todo se configura en **Publicar → Canales**.
   de `deploy/` ya publican:
   - `GET` y `POST /api/v1/bots/{bot}/whatsapp`
   - `POST /api/v1/bots/{bot}/telegram`
+  - `POST /api/v1/bots/{bot}/phone/twilio[/gather|/status]` o `…/phone/jambonz[/gather|/status]`, y
+    `GET /api/v1/bots/{bot}/phone/audio/<token>.wav` (la voz de Parla en las llamadas)
 - **Decirle a Parla su dirección pública**, de una de dos formas:
   - La variable de entorno `PARLA_PUBLIC_URL` (`https://bots.midominio.com`), para todo el servidor.
   - **Dirección pública** en **Canales**, por bot (`channels.public_url` en el JSON del agente). Gana sobre la variable.
@@ -135,10 +138,136 @@ la persona del equipo desde la Bandeja se manda por el canal. **Devolver al bot*
   ver las conversaciones del bot.
 - Solo se aceptan mensajes del `phone_number_id` configurado. Un id de mensaje repetido se atiende una sola vez.
 
+- Teléfono: los pedidos de Twilio tienen que traer `X-Twilio-Signature` (HMAC-SHA1 con `TWILIO_AUTH_TOKEN` de la URL
+  completa más los parámetros del POST ordenados); los de jambonz, `Jambonz-Signature` (`JAMBONZ_WEBHOOK_SECRET`)
+  y/o HTTP basic (`JAMBONZ_BASIC_USER` / `JAMBONZ_BASIC_PASSWORD`). El audio de Parla para las llamadas solo se
+  sirve con un token firmado con HMAC que vence a los 10 minutos y nombra al bot; el id `call-<CallSid>` y el número
+  de quien llama (`caller`, si el bot tiene un slot con ese nombre) son datos personales.
+
 Más en [security_es.md](security_es.md#canales-de-mensajería-whatsapp-y-telegram).
+
+## Llamadas telefónicas (Twilio y jambonz)
+
+Un bot también puede atender **llamadas telefónicas**, por **Twilio Programmable Voice** (en la nube, el más
+común) o por **jambonz** (código abierto, se instala en tu propia infraestructura SIP). Es el mismo bot: cada
+llamada es una conversación `call-<CallSid>` con canal `phone`, corre el flujo `__start__` al atender y aparece en
+**Conversaciones** y en la **Bandeja** como cualquier otra.
+
+Cómo funciona una llamada: el proveedor llama al webhook de Parla cuando entra la llamada, Parla contesta qué decir
+y que escuche (`<Gather>` / `gather`), el proveedor transcribe lo que dice la persona (o junta las teclas) y se lo
+manda, Parla corre un turno y contesta el paso siguiente: volver a escuchar, transferir (`<Dial>` / `dial`) o
+cortar (`<Hangup>` / `hangup`).
+
+### Configuración
+
+**Canales → Teléfono** (`channels.phone` en el JSON del agente; ahí no va nada secreto):
+
+| Campo | Qué es |
+|---|---|
+| `enabled` | Atender llamadas. Apagado, los webhooks responden 403. |
+| `provider` | `twilio` (por defecto) o `jambonz`. Solo se aceptan los webhooks del proveedor elegido. |
+| `language` | Variante de idioma para reconocer y hablar, por ejemplo `es-AR`, `en-US`, `pt-BR`. Si la charla pasa a otro idioma del bot, Parla usa `es-US`, `en-US` o `pt-BR`. |
+| `tts` | `provider` (por defecto): la voz del proveedor (`<Say>` / `say`). `parla`: la voz piper de Parla, que se reproduce desde direcciones firmadas (`<Play>` / `play`): la misma voz que la llamada de prueba y sin TTS del proveedor. |
+| `voice` | Nombre de la voz del proveedor (opcional): `Polly.Mia-Neural` en Twilio, la voz del sintetizador configurado en jambonz. |
+| `handoff_to` | A dónde transferir cuando la charla pasa a una persona: un número (`+5491112345678`) o una dirección SIP (`sip:mesa@pbx.midominio.com`). |
+| `finish_on_key` | Tecla que termina un número escrito con el teclado. Por defecto `#`. |
+| `greeting` | Qué decir al atender si el bot no tiene flujo `__start__`. Por defecto «Hola, ¿en qué te puedo ayudar?» en el idioma del bot. |
+
+La dirección pública es la misma que la de los otros canales (`PARLA_PUBLIC_URL` o **Dirección pública**).
+
+### Twilio paso a paso
+
+1. Creá una cuenta en [twilio.com](https://www.twilio.com) y comprá un número con voz (sirve una cuenta de prueba,
+   con un aviso antes de cada llamada y solo a números verificados).
+2. En Parla, **Canales → Teléfono**: prendé **Atender llamadas**, proveedor **Twilio**, elegí el idioma.
+3. Cargá el **Auth Token** de la cuenta (*Console → Account Info*) en `TWILIO_AUTH_TOKEN`. Parla lo usa para
+   verificar el `X-Twilio-Signature` de cada pedido. Si lo rotás en Twilio, cargá el nuevo.
+4. En Twilio, *Phone Numbers → Manage → Active numbers → tu número → Voice configuration*:
+   - *A call comes in*: **Webhook**, `https://bots.midominio.com/api/v1/bots/<id>/phone/twilio`, **HTTP POST**.
+   - *Call status changes*: `https://bots.midominio.com/api/v1/bots/<id>/phone/twilio/status`.
+   Copialas tal cual las muestra **Canales**: la firma cubre la URL completa.
+5. Llamá al número.
+
+**Costos y privacidad con Twilio:** Twilio cobra por minuto de llamada, y aparte el reconocimiento de voz
+(`<Gather input="speech">`) y sus voces; mirá sus precios actuales. **La voz de quien llama la transcribe Twilio**
+(y los proveedores de voz que usa), no Parla: el audio y la transcripción salen de tu servidor. A Parla solo llega
+el texto. Con `tts: "parla"` las respuestas del bot se generan acá, pero el reconocimiento sigue en Twilio. Si el
+audio no puede salir de tu infraestructura, usá jambonz con un reconocedor propio.
+
+### jambonz paso a paso
+
+1. Tené un jambonz: propio ([docs.jambonz.org](https://docs.jambonz.org/)) o el servicio en la nube, con un
+   troncal SIP / operador y un número, y un reconocedor y un sintetizador de voz configurados (*Speech services*).
+   Ahí elegís quién transcribe y quién habla: un proveedor en la nube o uno propio.
+2. En Parla, **Canales → Teléfono**: prendé **Atender llamadas**, proveedor **jambonz**, elegí el idioma.
+3. Autenticación (al menos una; si cargás las dos, tienen que dar bien las dos):
+   - **Firma del webhook**: copiá el *webhook secret* de tu cuenta (en el portal de jambonz, *Account*) en
+     `JAMBONZ_WEBHOOK_SECRET`. jambonz manda `Jambonz-Signature: t=<unix>,v1=<hex>`, el HMAC-SHA256 de
+     `<t>.<cuerpo>`; Parla lo compara en tiempo constante y rechaza firmas de hace más de 5 minutos.
+   - **HTTP basic**: inventá un usuario y una contraseña larga, ponelos en la aplicación de jambonz y cargalos en
+     `JAMBONZ_BASIC_USER` y `JAMBONZ_BASIC_PASSWORD`. Útil en instalaciones propias.
+4. En jambonz, *Applications → Add application*:
+   - *Calling webhook*: `https://bots.midominio.com/api/v1/bots/<id>/phone/jambonz`, **POST**.
+   - *Call status webhook*: `https://bots.midominio.com/api/v1/bots/<id>/phone/jambonz/status`, **POST**.
+   - Elegí los proveedores de voz y el idioma (Parla manda `vendor: "default"`: se usan los de la aplicación).
+5. Apuntá tu número (*Phone numbers*) a esa aplicación y llamá.
+
+### Teclado (DTMF), botones y números
+
+- Cuando el último mensaje del bot tiene **botones**, Parla los anuncia en el idioma del bot: «Marcá 1 para
+  Muzzarella, 2 para Fugazza.» / «Press 1 for …» / «Digite 1 para …» (los primeros 9). Una tecla elige ese botón,
+  y la llamada espera una sola tecla. Decir la opción en voz alta también sirve.
+- Cuando el bot **pregunta un dato** (un DNI, un número de pedido), la persona lo puede marcar y terminar con `#`
+  (`finish_on_key`): los dígitos le llegan al bot como respuesta.
+- **Pistas para el reconocedor:** los valores y sinónimos de las entidades del bot y las etiquetas de los botones
+  van como pistas (`hints`), igual que en la transcripción local.
+
+### Qué se dice por teléfono
+
+- **Texto para la voz:** se sacan emojis, Markdown (`**negrita**`, `[texto](url)`, viñetas, títulos) y direcciones
+  web antes de hablar. Las respuestas largas se parten por oraciones en varios `<Say>` / audios. Escribí textos
+  cortos para el teléfono: un link o una lista de diez opciones no funcionan por voz.
+- **Archivos** (paso `file`): no se pueden mandar en una llamada. Parla dice el texto del paso, si tiene, y un aviso
+  corto («Tengo un archivo para vos, pero por teléfono no lo puedo mandar.»).
+- **Interrumpir (barge-in):** todo se dice dentro del `Gather` / `gather`, así la persona puede interrumpir
+  hablando o con una tecla (en jambonz con `bargein` y `dtmfBargein`).
+- **Silencio:** si no se escucha nada (`actionOnEmptyResult` en Twilio, un `timeout` en jambonz), Parla repite la
+  última pregunta; después de 3 silencios seguidos se despide y corta.
+- **Cortar:** un paso `end` corta después de decir lo anterior. Cuando la persona corta, el webhook de estado
+  termina la conversación.
+- **Voces:** con `tts: "provider"` habla la voz del proveedor (`voice`); con `tts: "parla"` habla piper con las
+  mismas frases pregeneradas que la llamada de prueba (las fijas suenan al instante; las que tienen `{{ }}` se
+  generan cuando el proveedor las baja, con algo de demora).
+
+### Pasar con una persona en una llamada
+
+Cuando un flujo o la persona piden hablar con alguien, Parla dice el texto del paso y transfiere la llamada a
+`handoff_to` (`<Dial>` / `dial`); la conversación queda en la **Bandeja** con un evento «Transferida a …». Sin
+`handoff_to`, Parla pide disculpas y corta (y muestra el error en **Canales**). En una llamada no hay nada para
+escribir: en la Bandeja, **Tomar conversación** hace que Parla transfiera la llamada a `handoff_to` apenas la persona
+deje de hablar.
+
+### Límites del teléfono
+
+- Solo llamadas entrantes: no hay llamadas salientes ni campañas.
+- El reconocimiento de voz lo hace el proveedor (Twilio, o lo que tenga configurado jambonz), no el faster-whisper
+  local de Parla. Los turnos son pedido/respuesta (sin audio en streaming): cada respuesta espera a que la persona
+  termine la frase.
+- El proveedor espera unos 15 segundos cada respuesta: pasos de IA o consultas HTTP lentas pueden hacerla fallar.
+  Que sean rápidos.
+- Tomar una llamada desde la Bandeja transfiere en el próximo turno (o silencio) de la persona, no al instante.
+- El contador de silencios y la clave que firma los audios viven en memoria: un reinicio invalida los audios que se
+  están reproduciendo (igual duran 10 minutos), y varias réplicas necesitan una sola instancia (corré una).
+- `tts: "parla"` necesita los extras de voz en el servidor, y el proveedor tiene que llegar a las direcciones de los
+  audios (están bajo `/api/v1/`, como los webhooks).
 
 ## Probar sin cuentas reales
 
 `tests/test_channels.py` corre todo contra APIs falsas de Graph y Telegram en un puerto local. Las direcciones de
 esas APIs se cambian con `PARLA_WHATSAPP_API` (por defecto `https://graph.facebook.com/v21.0`) y
 `PARLA_TELEGRAM_API` (por defecto `https://api.telegram.org`). Cambialas solo para pruebas.
+
+`tests/test_phone.py` manda pedidos falsos y firmados de Twilio y jambonz (primer turno, voz, teclas, pasar con una
+persona, cortar, silencio, firmas, audios firmados) sin hablar con ningún proveedor. Para probar una llamada real
+desde tu compu, publicá Parla con un túnel (`cloudflared tunnel --url http://127.0.0.1:8000`), poné esa dirección
+como dirección pública y pegá los webhooks en Twilio o jambonz.

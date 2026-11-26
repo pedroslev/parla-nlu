@@ -1,4 +1,4 @@
-# WhatsApp and Telegram
+# WhatsApp, Telegram and phone
 
 **English** · [Español](channels_es.md)
 
@@ -6,7 +6,8 @@ A bot can answer on **WhatsApp** (Meta's WhatsApp Business Cloud API) and **Tele
 the API. It is the same bot and the same conversation engine: it answers with what is published in **Production**,
 or the draft if nothing has been published yet, with its buttons and files. Conversations show up in
 **Conversations** with channel `whatsapp` or `telegram`. When the conversation is handed to a person, what that
-person writes in the **Inbox** reaches the customer's WhatsApp or Telegram too.
+person writes in the **Inbox** reaches the customer's WhatsApp or Telegram too. It can also answer **phone
+calls** through Twilio or jambonz: see [Phone calls](#phone-calls-twilio-and-jambonz).
 
 Everything is configured in **Publish → Channels**.
 
@@ -19,6 +20,8 @@ Everything is configured in **Publish → Channels**.
   Ingresses in `deploy/` already publish:
   - `GET` and `POST /api/v1/bots/{bot}/whatsapp`
   - `POST /api/v1/bots/{bot}/telegram`
+  - `POST /api/v1/bots/{bot}/phone/twilio[/gather|/status]` or `…/phone/jambonz[/gather|/status]`, and
+    `GET /api/v1/bots/{bot}/phone/audio/<token>.wav` (Parla's voice on calls)
 - **Tell Parla its public address**, in one of two ways:
   - The `PARLA_PUBLIC_URL` environment variable (`https://bots.mydomain.com`), for the whole server.
   - **Public address** in **Channels**, per bot (`channels.public_url` in the agent JSON). It wins over the variable.
@@ -128,10 +131,134 @@ writes from the Inbox is sent through the channel. **Hand back to the bot** give
   see the bot's conversations sees it.
 - Messages are only accepted for the configured `phone_number_id`. Repeated message ids are answered once.
 
+- Phone: Twilio requests must carry `X-Twilio-Signature` (HMAC-SHA1 with `TWILIO_AUTH_TOKEN` of the full URL plus
+  the sorted POST parameters); jambonz requests `Jambonz-Signature` (`JAMBONZ_WEBHOOK_SECRET`) and/or HTTP basic
+  (`JAMBONZ_BASIC_USER` / `JAMBONZ_BASIC_PASSWORD`). Parla's audio for calls is served only with an HMAC-signed token
+  that expires in 10 minutes and names the bot; the conversation id `call-<CallSid>` and the caller number
+  (`caller`, if the bot has a slot with that name) are personal data.
+
 More in [security.md](security.md#messaging-channels-whatsapp-and-telegram).
+
+## Phone calls (Twilio and jambonz)
+
+A bot can also answer **phone calls**, through **Twilio Programmable Voice** (hosted, the most common) or
+**jambonz** (open source, self-hostable on your own SIP infrastructure). It is the same bot: each call is a
+conversation `call-<CallSid>` with channel `phone`, it runs the `__start__` flow when the call is answered, and it
+shows up in **Conversations** and the **Inbox** like any other.
+
+How a call works: the provider calls Parla's webhook when the call comes in, Parla answers what to say and to
+listen (`<Gather>` / `gather`), the provider transcribes what the caller says (or collects the keys pressed) and
+posts it back, Parla runs a turn and answers the next step: listen again, transfer (`<Dial>` / `dial`) or hang
+up (`<Hangup>` / `hangup`).
+
+### Settings
+
+**Channels → Phone** (`channels.phone` in the agent JSON; nothing secret goes there):
+
+| Field | Meaning |
+|---|---|
+| `enabled` | Answer calls. Off, the webhooks answer 403. |
+| `provider` | `twilio` (default) or `jambonz`. Only the chosen provider's webhooks are accepted. |
+| `language` | Recognition and voice language variant, for example `es-AR`, `en-US`, `pt-BR`. If the conversation switches to another of the bot's languages, Parla uses `es-US`, `en-US` or `pt-BR`. |
+| `tts` | `provider` (default): the provider's voice (`<Say>` / `say`). `parla`: Parla's own piper voice, played from signed URLs (`<Play>` / `play`), for the same voice as the test call and no provider TTS. |
+| `voice` | Provider voice name (optional): `Polly.Mia-Neural` on Twilio, the voice of the synthesizer configured in jambonz. |
+| `handoff_to` | Where to transfer when the conversation goes to a person: a number (`+5491112345678`) or a SIP URI (`sip:desk@pbx.mydomain.com`). |
+| `finish_on_key` | Key that ends a number typed on the keypad. Default `#`. |
+| `greeting` | What to say when the call starts if the bot has no `__start__` flow. Default «Hola, ¿en qué te puedo ayudar?» in the bot's language. |
+
+The public address is the same as for the other channels (`PARLA_PUBLIC_URL` or **Public address**).
+
+### Twilio step by step
+
+1. Create an account at [twilio.com](https://www.twilio.com) and buy a number with voice (a trial account works,
+   with a notice before each call and only to verified numbers).
+2. In Parla, **Channels → Phone**: turn on **Answer phone calls**, provider **Twilio**, set the language.
+3. Load the account's **Auth Token** (*Console → Account Info*) in `TWILIO_AUTH_TOKEN`. Parla uses it to check the
+   `X-Twilio-Signature` of every request. If you rotate it in Twilio, load the new one.
+4. In Twilio, *Phone Numbers → Manage → Active numbers → your number → Voice configuration*:
+   - *A call comes in*: **Webhook**, `https://bots.mydomain.com/api/v1/bots/<id>/phone/twilio`, **HTTP POST**.
+   - *Call status changes*: `https://bots.mydomain.com/api/v1/bots/<id>/phone/twilio/status`.
+   Copy them exactly as **Channels** shows them: the signature covers the full URL.
+5. Call the number.
+
+**Costs and privacy with Twilio:** Twilio charges per minute for the call, and for speech recognition (`<Gather
+input="speech">`) and its voices; check its current pricing. **The caller's speech is transcribed by Twilio**
+(and by the speech providers it uses), not by Parla: the audio and the transcript leave your server. Only the text
+reaches Parla. With `tts: "parla"` the bot's answers are synthesized locally, but recognition still happens at
+Twilio. If audio must not leave your infrastructure, use jambonz with a self-hosted recognizer.
+
+### jambonz step by step
+
+1. Have a jambonz: self-hosted ([docs.jambonz.org](https://docs.jambonz.org/)) or the hosted service, with a SIP
+   trunk / carrier and a number, and a speech recognizer and synthesizer configured (*Speech services*). That's
+   where you choose who transcribes and speaks: a cloud vendor, or a self-hosted one.
+2. In Parla, **Channels → Phone**: turn on **Answer phone calls**, provider **jambonz**, set the language.
+3. Authentication (at least one; if you load both, both have to match):
+   - **Webhook signature**: copy your account's *webhook secret* (in the jambonz portal, *Account*) into
+     `JAMBONZ_WEBHOOK_SECRET`. jambonz sends `Jambonz-Signature: t=<unix>,v1=<hex>`, the HMAC-SHA256 of
+     `<t>.<body>`; Parla checks it in constant time and rejects signatures older than 5 minutes.
+   - **HTTP basic auth**: make up a user and a long password, put them in the jambonz application and load them in
+     `JAMBONZ_BASIC_USER` and `JAMBONZ_BASIC_PASSWORD`. Useful on self-hosted installs.
+4. In jambonz, *Applications → Add application*:
+   - *Calling webhook*: `https://bots.mydomain.com/api/v1/bots/<id>/phone/jambonz`, **POST**.
+   - *Call status webhook*: `https://bots.mydomain.com/api/v1/bots/<id>/phone/jambonz/status`, **POST**.
+   - Choose the speech vendors and language (Parla sends `vendor: "default"`, so the application's ones are used).
+5. Point your number (*Phone numbers*) to that application and call.
+
+### Keypad (DTMF), buttons and numbers
+
+- When the bot's last message has **buttons**, Parla announces them in the bot's language: «Marcá 1 para
+  Muzzarella, 2 para Fugazza.» / «Press 1 for …» / «Digite 1 para …» (the first 9). Pressing a key chooses that
+  button, and the call waits for a single key. Saying the option out loud also works.
+- When the bot **asks for a value** (a DNI, an order number), the caller can type it and end with `#`
+  (`finish_on_key`): the digits go to the bot as the answer.
+- **Speech hints:** the bot's entity values and synonyms, and the button labels, are sent as hints to the
+  recognizer (`hints`), like the local transcription does.
+
+### What is said on the phone
+
+- **Voice-friendly text:** emojis, Markdown (`**bold**`, `[text](url)`, bullets, headings) and URLs are removed
+  before speaking. Long answers are split by sentence into several `<Say>` / audio pieces. Keep phone texts short:
+  a URL or a list of ten options doesn't work by voice.
+- **Files** (`file` step): they can't be sent on a call. Parla says the step's text, if any, plus a short notice
+  («Tengo un archivo para vos, pero por teléfono no lo puedo mandar.»).
+- **Barge-in:** everything is said inside the `Gather` / `gather`, so the caller can interrupt by speaking or
+  pressing a key (on jambonz with `bargein` and `dtmfBargein`).
+- **Silence:** if nothing is heard (`actionOnEmptyResult` on Twilio, a `timeout` on jambonz), Parla repeats the
+  last question; after 3 silences in a row it says goodbye and hangs up.
+- **Hanging up:** an `end` step hangs up after saying what came before. When the caller hangs up, the status
+  webhook ends the conversation.
+- **Voices:** with `tts: "provider"`, the provider voice (`voice`) speaks; with `tts: "parla"`, piper speaks the
+  same pre-generated phrases as the test call (fixed phrases play right away; phrases with `{{ }}` are generated
+  when the provider downloads them, which adds a little latency).
+
+### Handoff on a call
+
+When a flow or the caller asks for a person, Parla says the handoff text and transfers the call to `handoff_to`
+(`<Dial>` / `dial`); the conversation stays in the **Inbox** with a «Transferida a …» event. Without `handoff_to`
+Parla apologizes and hangs up (and shows the error in **Channels**). There's nothing to type on a call: in the
+Inbox, **Take conversation** makes Parla transfer the call to `handoff_to` as soon as the caller stops talking.
+
+### Phone limits
+
+- Inbound calls only: no outbound calls or campaigns.
+- Speech recognition is done by the provider (Twilio, or what jambonz is configured with), not by Parla's local
+  faster-whisper. Turns are request/response (no audio streaming), so each answer waits for the end of the
+  caller's sentence.
+- The provider waits about 15 seconds for each answer: slow AI steps or HTTP calls can make it fail. Keep them fast.
+- Mid-call handoffs from the Inbox happen on the caller's next turn (or silence), not instantly.
+- The silence counter and the key that signs audio URLs live in memory: a restart invalidates audio URLs being
+  played (they last 10 minutes anyway), and several replicas need one shared instance (run one).
+- `tts: "parla"` needs the voice extras on the server, and the provider has to reach the audio URLs (they are
+  under `/api/v1/`, like the webhooks).
 
 ## Testing without real accounts
 
 `tests/test_channels.py` runs everything against fake Graph and Telegram APIs on a local port. The base URLs of those
 APIs can be changed with `PARLA_WHATSAPP_API` (default `https://graph.facebook.com/v21.0`) and
 `PARLA_TELEGRAM_API` (default `https://api.telegram.org`). Only change them for tests.
+
+`tests/test_phone.py` sends fake signed Twilio and jambonz requests (first turn, speech, keys, handoff, hang-up,
+silence, signatures, signed audio URLs) without contacting either provider. To try a real call from your computer,
+expose Parla with a tunnel (`cloudflared tunnel --url http://127.0.0.1:8000`), set that address as the public
+address and paste the webhooks into Twilio or jambonz.
