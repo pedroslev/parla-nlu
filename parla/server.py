@@ -913,7 +913,7 @@ def agent_tools(agent, step, trace=None):
         if kind == "function" and name in fns:
             inputs = [i for i in fns[name].get("inputs") or [] if not i.startswith("secret.")]
             out.setdefault(name, {"kind": "function", "fn": fns[name], "description": fns[name].get("description") or "",
-                                  "schema": {"type": "object", "properties": {i: {} for i in inputs}, "required": []}})
+                                  "schema": {"type": "object", "properties": {i: {} for i in inputs}, "required": inputs}})
         elif kind == "http" and isinstance(name, str) and re.fullmatch(r"[A-Za-z_][\w-]{0,63}", name):
             out.setdefault(name, {"kind": "http", "spec": spec, "description": spec.get("description") or "", "schema": http_params(spec.get("params"))})
         elif kind == "mcp":
@@ -937,12 +937,15 @@ def agent_tools(agent, step, trace=None):
 
 def run_tool(agent, tool, args, ctx, timeout=10):
     """Corre una herramienta con lo que pidió la IA. -> {ok, result: texto} (con las claves tapadas y recortado)."""
+    if tool["kind"] == "function":     # las entradas que ya están en un slot no hace falta que las mande la IA
+        args = dict({k: v for k, v in (ctx or {}).items() if k in tool["schema"]["properties"] and v not in (None, "")},
+                    **(args if isinstance(args, dict) else {}))
     args, problem = check_args(tool["schema"] or {}, args)
     if problem:
         return {"ok": False, "result": problem, "args": args}
     try:
         if tool["kind"] == "function":
-            inputs = {k: args.get(k, (ctx or {}).get(k)) for k in tool["schema"]["properties"]}
+            inputs = {k: args.get(k) for k in tool["schema"]["properties"]}
             res = runner.run_function(tool["fn"], dict(inputs, **secret_inputs(agent, tool["fn"])))
             ok, value = res["ok"], res.get("result") if res["ok"] else res.get("error")
         elif tool["kind"] == "http":

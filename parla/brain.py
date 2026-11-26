@@ -356,6 +356,8 @@ def _result_text(res):
     return (value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str))[:1500]
 
 
+HINT = ('\n\n(Si para contestar necesitás un dato que da una herramienta, respondé {"tool": "<nombre>", "args": {...}}. '
+        'Si no, {"tool": "", "text": "<respuesta>"}.)')
 STRICT = ('Tu respuesta anterior no sirvió. Respondé SOLO un objeto JSON, sin texto alrededor. '
           'Para usar una herramienta: {"tool": "nombre", "args": {...}}. Para contestar: {"tool": "", "text": "...", "done": false}.')
 
@@ -406,7 +408,8 @@ def agent_turn(agent, step, st, text, ctx, call_tool, tools=None):
         messages = [_system(cfg, "\n".join(parts))]
         if _recent(st):
             messages.append({"role": "user", "content": "Conversación hasta ahora:\n" + _recent(st)})
-        messages.append({"role": "user", "content": text or "(empieza la conversación)"})
+        # recordarlo al lado del mensaje (no solo en el system) es lo que hace que qwen2.5:1.5b use la herramienta
+        messages.append({"role": "user", "content": (text or "(empieza la conversación)") + (HINT if tools else "")})
         while True:
             can_call = bool(tools) and calls < max_calls and time.time() < deadline
             props = {"text": {"type": "string"}, "slots": {"type": "object"}, "done": {"type": "boolean"}}
@@ -429,7 +432,8 @@ def agent_turn(agent, step, st, text, ctx, call_tool, tools=None):
                     trace.append("IA pidió una herramienta que no tiene: %s" % name[:80])
                     messages.append({"role": "user", "content": "La herramienta «%s» no existe. Usá una de: %s, o contestá." % (name[:80], ", ".join(tools))})
                     continue
-                key = name + json.dumps(args, sort_keys=True, default=str)
+                declared = tools[name].get("params") or {}
+                key = name + json.dumps({k: str(v) for k, v in args.items() if k in declared or not declared}, sort_keys=True)
                 if key in seen:   # los modelos chicos repiten la misma llamada: se le recuerda el resultado y que conteste
                     calls = max_calls
                     messages.append({"role": "user", "content": "Ya tenés ese resultado: %s. Ahora contestá al usuario." % seen[key]})
