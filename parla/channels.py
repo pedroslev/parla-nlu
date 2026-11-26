@@ -11,6 +11,7 @@ Entrada: POST /api/v1/bots/{bot}/whatsapp (firma X-Hub-Signature-256) y POST /ap
 entrada que la API (api_v1 events, entorno production, canal whatsapp/telegram, sesión wa-<teléfono> / tg-<chat>).
 Las respuestas (texto, botones, archivos) y lo que escribe una persona desde la Bandeja vuelven por el canal.
 """
+import contextvars
 import hashlib
 import hmac
 import json
@@ -26,7 +27,7 @@ import urllib.request
 import uuid
 from collections import OrderedDict
 
-from . import auth, files, vault
+from . import auth, files, telemetry, vault
 
 CHANNELS = ("whatsapp", "telegram")
 SECRETS = {"whatsapp": ("WHATSAPP_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN"),
@@ -274,7 +275,7 @@ def _resolve(record, text):
 
 def _handle(agent_id, channel, item):
     app = auth._app()
-    with _session_lock(agent_id + "/" + item["sid"]):
+    with _session_lock(agent_id + "/" + item["sid"]), telemetry.span("channel.message", **{"parla.agent.id": agent_id, "parla.channel": channel}):
         try:
             if item.get("callback"):         # que el botón de Telegram deje de girar
                 _post(agent_id, _tg_base(agent_id) + "answerCallbackQuery", {"callback_query_id": item["callback"]})
@@ -337,7 +338,8 @@ def webhook(headers, rfile, method, ref, channel, query, length):
     _note(agent_id, channel, last_in=time.strftime("%Y-%m-%dT%H:%M:%S"))
     items = [i for i in items if _first_time(agent_id + "/" + i["id"])]
     if items:            # contestar 200 ya: Meta y Telegram reintentan si tardamos
-        threading.Thread(target=_run, args=(agent_id, channel, items), daemon=True).start()
+        # con la traza del webhook: el turno queda como hijo de su pedido aunque se responda antes
+        threading.Thread(target=contextvars.copy_context().run, args=(_run, agent_id, channel, items), daemon=True).start()
     return 200, b"{}" if channel == "telegram" else b"ok", "application/json" if channel == "telegram" else "text/plain"
 
 

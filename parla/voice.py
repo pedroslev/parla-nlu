@@ -20,7 +20,7 @@ import urllib.parse
 import wave
 from pathlib import Path
 
-from . import DATA, llm, vault
+from . import DATA, llm, telemetry, vault
 
 MODELS = Path(DATA) / "models"
 PIPER_DIR = MODELS / "piper"
@@ -107,6 +107,14 @@ def _decode(audio_bytes):
 
 
 def transcribe(audio_bytes, mime="audio/webm", language="es", hint=None, asr=None):
+    provider = (asr or {}).get("provider") or "local"
+    provider = provider if provider in PROVIDERS else "other"
+    with telemetry.span("asr", kind="internal" if provider == "local" else "client", metric="parla_asr_duration_seconds",
+                        labels={"provider": provider}, **{"parla.voice.provider": provider, "parla.audio.bytes": len(audio_bytes or b"")}):
+        return _transcribe(audio_bytes, mime, language, hint, asr)
+
+
+def _transcribe(audio_bytes, mime, language, hint, asr):
     """hint: palabras del bot (valores de entidades) para que el ASR las escriba bien: «muzzarella», no «multareza».
     asr: settings(agent)["asr"]; sin él (o «local»), faster-whisper en esta compu."""
     if not audio_bytes or len(audio_bytes) < 200:
@@ -221,14 +229,18 @@ def speak(text, language="es", keep=True, tts=None):
         hit = _cached(lang, text, tts)
         if hit.exists():                     # frase fija pregenerada: al instante
             return hit.read_bytes()
-    if tts and tts.get("provider", "local") != "local":
-        return _remote_tts(tts, text, language or lang)
-    buf = io.BytesIO()
-    with _lock:
-        v = _voice(lang)
-        with wave.open(buf, "wb") as w:
-            v.synthesize_wav(text, w)
-    return buf.getvalue()
+    provider = (tts or {}).get("provider") or "local"
+    provider = provider if provider in PROVIDERS else "other"
+    with telemetry.span("tts", kind="internal" if provider == "local" else "client", metric="parla_tts_duration_seconds",
+                        labels={"provider": provider}, **{"parla.voice.provider": provider, "parla.text.chars": len(text)}):
+        if tts and tts.get("provider", "local") != "local":
+            return _remote_tts(tts, text, language or lang)
+        buf = io.BytesIO()
+        with _lock:
+            v = _voice(lang)
+            with wave.open(buf, "wb") as w:
+                v.synthesize_wav(text, w)
+        return buf.getvalue()
 
 
 # ---------- proveedores con API key propia ----------

@@ -11,7 +11,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import vault
+from . import telemetry, vault
 
 # Proveedores: ollama (local, por defecto); openai = OpenAI o cualquier servidor compatible con «url» (así venían los
 # agentes viejos); openai_compatible = lo mismo con otro nombre; anthropic (Claude, SDK oficial, opcional) y gemini (REST).
@@ -288,6 +288,8 @@ def _openai(cfg, messages, schema, timeout, max_tokens, temperature):
             _no_json_mode.add(url)
     else:
         data = _json(url, body, timeout, cfg)
+    usage = data.get("usage") or {}
+    telemetry.tokens(usage.get("prompt_tokens"), usage.get("completion_tokens"))
     text = ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
     return _first_json(text) if schema else text
 
@@ -370,6 +372,8 @@ def _anthropic(cfg, messages, schema, timeout, max_tokens):
             response = client.messages.create(**args)
     except Exception as error:  # noqa: BLE001
         raise _claude_error(error, cfg, timeout) from None
+    usage = getattr(response, "usage", None)
+    telemetry.tokens(getattr(usage, "input_tokens", None), getattr(usage, "output_tokens", None))
     if response.stop_reason == "refusal":
         raise LLMError("el modelo no quiso contestar eso (lo frenó un filtro de seguridad del proveedor)")
     if response.stop_reason == "max_tokens":
@@ -407,6 +411,8 @@ def _gemini(cfg, messages, schema, timeout, max_tokens):
             raise
         _gemini_plain.add(cfg["model"])
         return _gemini(cfg, messages, schema, timeout, max_tokens)
+    usage = data.get("usageMetadata") or {}
+    telemetry.tokens(usage.get("promptTokenCount"), usage.get("candidatesTokenCount"))
     if (data.get("promptFeedback") or {}).get("blockReason"):
         raise LLMError("el modelo no quiso contestar eso (lo frenó un filtro de seguridad del proveedor)")
     candidate = (data.get("candidates") or [{}])[0]
@@ -424,6 +430,17 @@ def chat(cfg, messages, schema=None, timeout=45, max_tokens=300):
     devuelve algo inválido (los mensajes nunca muestran la API key)."""
     cfg = _cfg(cfg)
     temperature = float(cfg.get("temperature") or 0)
+    provider = cfg["provider"] if cfg["provider"] in PROVIDERS else "other"
+    system = {"anthropic": "anthropic", "gemini": "gcp.gemini", "ollama": "ollama"}.get(provider, "openai")   # gen_ai semconv
+    # sin los mensajes ni la respuesta: solo proveedor, modelo, límites y tokens
+    with telemetry.span("chat " + str(cfg.get("model") or ""), kind="client", metric="parla_llm_request_duration_seconds",
+                        labels={"provider": provider}, **{"gen_ai.operation.name": "chat", "gen_ai.system": system,
+                        "gen_ai.provider.name": system, "gen_ai.request.model": cfg.get("model"),
+                        "gen_ai.request.max_tokens": max_tokens, "gen_ai.request.temperature": temperature}):
+        return _chat(cfg, messages, schema, timeout, max_tokens, temperature)
+
+
+def _chat(cfg, messages, schema, timeout, max_tokens, temperature):
     if cfg["provider"] == "anthropic":
         text = _anthropic(cfg, messages, schema, timeout, max_tokens)
     elif cfg["provider"] == "gemini":
@@ -436,6 +453,7 @@ def chat(cfg, messages, schema=None, timeout=45, max_tokens=300):
         if schema:
             body["format"] = schema
         data = _json(cfg["url"] + "/api/chat", body, timeout)
+        telemetry.tokens(data.get("prompt_eval_count"), data.get("eval_count"))
         text = (data.get("message") or {}).get("content") or ""
     if not schema:
         return text.strip()

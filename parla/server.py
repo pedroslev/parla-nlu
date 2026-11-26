@@ -19,7 +19,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import DATA, ROOT, write_json, auth, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, mcp_client, phone, rasa_import, runner, vault, voice
+from . import DATA, ROOT, write_json, auth, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, mcp_client, phone, rasa_import, runner, telemetry, vault, voice
 
 import celpy
 import pycrfsuite
@@ -364,9 +364,14 @@ def extract(agent, text, tagger=None, index=None):
 
 
 def parse(agent, text, tagger=None, index=None):
-    ranking = classify(agent, text)
-    intent, confidence = ranking[0] if ranking else (None, 0.0)
-    return {"intent": intent, "confidence": confidence, "ranking": ranking[:5], "entities": extract(agent, text, tagger, index)}
+    with telemetry.span("nlu.classify", metric="parla_nlu_duration_seconds", labels={"stage": "classify"}) as sp:
+        ranking = classify(agent, text)
+        intent, confidence = ranking[0] if ranking else (None, 0.0)
+        sp.set(**{"parla.intent": intent, "parla.confidence": round(confidence, 3)})
+    with telemetry.span("nlu.extract", metric="parla_nlu_duration_seconds", labels={"stage": "extract"}) as sp:
+        entities = extract(agent, text, tagger, index)
+        sp.set(**{"parla.entities": ",".join(sorted({e["entity"] for e in entities}))})     # los nombres, no los valores
+    return {"intent": intent, "confidence": confidence, "ranking": ranking[:5], "entities": entities}
 
 
 # ---------- Entrenamiento: el chat usa la última versión entrenada, el resto del agente es en vivo ----------
@@ -701,14 +706,23 @@ def http_step(step, ctx, timeout=10, body_ctx=None):
     body = render(step.get("body"), body_ctx or ctx).encode() or None
     if body:
         headers.setdefault("Content-Type", "application/json")
-    request = urllib.request.Request(url, data=body, headers=headers, method=step.get("method") or "GET")
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            status, raw = response.status, response.read(1_000_000)
-    except urllib.error.HTTPError as error:       # 4xx/5xx: el flujo decide qué hacer con el código
-        status, raw = error.code, error.read(1_000_000)
-    except urllib.error.URLError as error:        # sin red, DNS, timeout
-        return {"status": 0, "body": str(error.reason)}
+    method = step.get("method") or "GET"
+    # el host sí, la ruta y la query no: pueden traer datos de la persona o claves
+    with telemetry.span("http.step", kind="client", metric="parla_http_step_duration_seconds", **{
+            "http.request.method": method, "server.address": urllib.parse.urlsplit(url).hostname}) as sp:
+        if telemetry.traceparent() and not any(k.lower() == "traceparent" for k in headers):
+            headers["traceparent"] = telemetry.traceparent()    # el servicio de afuera sigue la misma traza
+        request = urllib.request.Request(url, data=body, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                status, raw = response.status, response.read(1_000_000)
+        except urllib.error.HTTPError as error:       # 4xx/5xx: el flujo decide qué hacer con el código
+            status, raw = error.code, error.read(1_000_000)
+        except urllib.error.URLError as error:        # sin red, DNS, timeout
+            sp.outcome = "unreachable"
+            return {"status": 0, "body": str(error.reason)}
+        sp.set(**{"http.response.status_code": status})
+        sp.outcome = "http_error" if status >= 400 else None
     text = raw.decode("utf-8", "replace")
     try:
         return {"status": status, "body": json.loads(text)}
@@ -982,8 +996,10 @@ def agent_step(agent, st, step, text, ctx, out, trace):
         return res
 
     turns = (st.get("agent") or {}).get("turns", 0)
-    res = hook(brain.agent_turn, agent, step, st, text, ctx, call_tool, {n: {"description": t["description"], "params": t["params"]} for n, t in tools.items()}) \
-        or {"messages": [], "done": True, "trace": ["la IA falló"]}
+    with telemetry.span("agent.step", **{"parla.tools": ",".join(sorted(tools)), "parla.agent.turn": turns + 1}) as sp:
+        res = hook(brain.agent_turn, agent, step, st, text, ctx, call_tool, {n: {"description": t["description"], "params": t["params"]} for n, t in tools.items()}) \
+            or {"messages": [], "done": True, "trace": ["la IA falló"]}
+        sp.set(**{"parla.agent.done": bool(res.get("done"))})
     out += [m for m in res.get("messages") or [] if isinstance(m, str)]
     st["slots"].update(res.get("slots") or {})
     trace += [mask(agent, str(t)) for t in res.get("trace") or []]
@@ -1347,7 +1363,10 @@ def handle(agent, st, text, parse=parse):
             return turn(agent, st, [fallback_reply(agent, st)], nlu, trace, fallback=True, via=via)
         st["flow"], st["pc"], st["stack"] = flow["name"], 0, []
         trace.append("empieza el flujo «%s»" % flow["name"])
-    status = run(agent, st, nlu, text, out, trace)
+    with telemetry.span("flow.run", **{"parla.flow": st.get("flow")}) as sp:
+        status = run(agent, st, nlu, text, out, trace)
+        sp.set(**{"parla.flow.status": status})
+        sp.outcome = "error" if status == "error" else None
     if status == "done":
         if conf["csat"].get("enabled") and not st.get("csat_asked"):
             st["csat_asked"] = st["csat_waiting"] = True
@@ -1634,13 +1653,43 @@ def sync(record):
         record["csat"] = state["csat"]
 
 
+def active_sessions():
+    """Para el gauge parla_active_sessions: conversaciones sin terminar con movimiento en los últimos 30 minutos.
+    ponytail: recorre las filas recientes en cada scrape; con millones de charlas, una columna «ended» con índice."""
+    rows = db.q("SELECT agent_id, count(*) FROM sessions WHERE updated >= ? AND json_extract(record, '$.ended') = 0 GROUP BY agent_id",
+                (ago(30 / 1440),))
+    return [({"agent": agent_id}, n) for agent_id, n in rows]
+
+
+def measure(agent, record, result, text, was_handoff, sp):
+    """Métricas y atributos del turno: ids, intención, confianza y estado; el texto solo con PARLA_OTEL_CONTENT=1, tapado."""
+    nlu, aid, channel = result["nlu"], agent["id"], telemetry.channel(record.get("channel"))
+    outcome = ("fallback" if result["fallback"] else "answer" if result["answer_to"] else
+               "system" if str(nlu["intent"] or "").startswith("__") else "matched" if nlu["intent"] else "none")
+    telemetry.count("parla_turns_total", agent=aid, channel=channel, environment=record.get("environment", "production"))
+    telemetry.count("parla_intent_outcomes_total", agent=aid, outcome=outcome)
+    if result["handoff"] and not was_handoff:
+        telemetry.count("parla_handoffs_total", agent=aid, channel=channel)
+    if result.get("csat"):
+        telemetry.observe("parla_csat_score", result["csat"], agent=aid)
+    sp.set(**{"parla.intent": nlu["intent"], "parla.confidence": round(nlu["confidence"], 3), "parla.outcome": outcome,
+              "parla.flow": record["state"].get("flow"), "parla.via": result["via"], "parla.handoff": result["handoff"]})
+    if telemetry.CONTENT and sp is not telemetry.NOOP:
+        cover = lambda t: mask(agent, pii.redact(t))
+        sp.set(**{"parla.message": cover(text), "parla.reply": cover(" / ".join(result["messages"]))})
+
+
 def converse(agent_id, record, text):
     """Un turno contra la última versión entrenada. Lo usan el chat de prueba y la API; queda guardado."""
     number, agent = session_agent(agent_id, record)
     snap = trained_for(agent_id, number)
     state = record["state"]
     before = {"flow": state.get("flow"), "waiting": state.get("waiting") if state.get("flow") else None}   # para medir abandono
-    result = handle(agent, state, text, parse=lambda a, t: parse(snap["data"], t, snap["tagger"], snap.get("index")))
+    was_handoff = bool((state.get("handoff") or {}).get("active"))
+    with telemetry.span("parla.turn", **{"parla.agent.id": agent_id, "parla.channel": record.get("channel"),
+                                         "parla.environment": record.get("environment"), "parla.version": number}) as sp:
+        result = handle(agent, state, text, parse=lambda a, t: parse(snap["data"], t, snap["tagger"], snap.get("index")))
+        measure(agent, record, result, text, was_handoff, sp)
     nlu = result["nlu"]
     record["updated"] = now()
     record["history"].append({"from": "user", "text": text, "at": record["updated"], "intent": nlu["intent"],
@@ -1769,6 +1818,7 @@ def api_v1(method, parts, data, query=None, user=None, public=False):
             end_session(agent["id"], sid)                 # si ya existía, arranca de cero pero conserva lo charlado
             record = open_session(agent["id"], sid, channel, environment)
             result, ignored = begin(session_agent(agent["id"], record)[1], record["state"], initial)
+            telemetry.count("parla_conversations_started_total", agent=agent["id"], channel=telemetry.channel(channel))
             record["updated"] = now()
             record["history"].append({"from": "event", "text": "Empezó la conversación", "at": record["updated"],
                                       "data": {k: v for k, v in initial.items() if k not in ignored}})
@@ -2005,6 +2055,12 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and static and os.path.exists(os.path.join(HERE, "static", static.group(1))):
             with open(os.path.join(HERE, "static", static.group(1)), "rb") as f:
                 return self.reply(f.read(), ctype="text/javascript; charset=utf-8")
+        if method == "GET" and urllib.parse.urlsplit(self.path).path == "/metrics":    # Prometheus (telemetry.py)
+            status = telemetry.allowed(self.headers.get("Authorization"), self.client_address[0], self.headers.get("Host"))
+            if status != 200:
+                return self.reply({"error": "no existe" if status == 404 else "métricas: falta el token (PARLA_METRICS_TOKEN) o no coincide"}, status)
+            telemetry.gauge("parla_active_sessions", active_sessions())
+            return self.reply(telemetry.render().encode(), ctype="text/plain; version=0.0.4; charset=utf-8")
         raw = self.headers.get("Content-Length") or "0"
         if not (raw.isascii() and raw.isdigit()):
             return self.reply({"error": "Content-Length inválido"}, 400)
@@ -2367,14 +2423,28 @@ class Handler(BaseHTTPRequestHandler):
 
     def safely(self, method):
         self.status, self.sent, self.body, self.audit_action = None, {}, {}, None
-        try:
-            self.route(method)
-        except (ValueError, llm.LLMError) as error:      # mensajes pensados para la persona
-            return self.reply({"error": str(error)}, 400)
-        except Exception:  # noqa: BLE001 - agente corrupto, disco: responder sin mostrar rutas ni detalles internos
-            import traceback
-            traceback.print_exc(file=sys.stderr)
-            return self.reply({"error": "Algo falló en el servidor. El detalle quedó en la consola de Parla."}, 500)
+        failed = False
+        with telemetry.span("HTTP " + method, kind="server", metric="parla_http_request_duration_seconds",
+                            parent=self.headers.get("traceparent") or "", **{"http.request.method": method}) as sp:
+            try:
+                self.route(method)
+            except (ValueError, llm.LLMError) as error:      # mensajes pensados para la persona
+                failed = True
+                self.reply({"error": str(error)}, 400)
+            except Exception:  # noqa: BLE001 - agente corrupto, disco: responder sin mostrar rutas ni detalles internos
+                import traceback
+                traceback.print_exc(file=sys.stderr)
+                failed = True
+                self.reply({"error": "Algo falló en el servidor. El detalle quedó en la consola de Parla."}, 500)
+            route = telemetry.route_of(self.path)
+            sp.name, sp.labels = "%s %s" % (method, route), {"route": route, "method": method}
+            sp.set(**{"http.route": route, "http.response.status_code": self.status})
+            if (self.status or 500) >= 500:
+                sp.outcome = "error"
+        telemetry.count("parla_http_requests_total", route=route, method=method, status=self.status)
+        telemetry.log_request(method, route, self.status, sp)
+        if failed:
+            return
         try:
             self.audit(method)
         except Exception:  # noqa: BLE001 - la respuesta ya salió: que la auditoría rota no la tape, solo a la consola

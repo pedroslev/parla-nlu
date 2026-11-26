@@ -14,6 +14,8 @@ from html.parser import HTMLParser
 
 import numpy as np
 
+from . import telemetry
+
 encode = None   # server.py lo apunta a su _encode (mismo modelo de vectores, cargado una sola vez)
 
 MAX_BYTES = 3 * 1024 * 1024
@@ -238,6 +240,14 @@ def _vecs(texts):
 
 def search(agent, query, k=3):
     """[{"text", "title", "doc", "score"}] de mayor a menor. score = similitud coseno (0..1 aprox.)."""
+    with telemetry.span("knowledge.search", metric="parla_knowledge_search_duration_seconds",
+                        **{"parla.knowledge.docs": len((agent or {}).get("knowledge") or [])}) as sp:
+        hits = _search(agent, query, k)
+        sp.set(**{"parla.knowledge.hits": len(hits), "parla.knowledge.top_score": hits[0]["score"] if hits else None})
+        return hits
+
+
+def _search(agent, query, k):
     query = (query or "").strip()
     rows = []   # (texto, título, id del doc, clave a comparar)
     for doc in (agent or {}).get("knowledge") or []:

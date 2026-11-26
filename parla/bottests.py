@@ -17,6 +17,8 @@ import shutil
 import sys
 import tempfile
 
+from . import telemetry
+
 CHECKS = {"user", "intent", "says", "buttons", "slots", "flow", "handoff"}
 FLOW_TRACE = re.compile(r"(?:empieza el flujo|llama al flujo) «(.+?)»")
 ENVIRONMENTS = ("draft", "staging", "production")
@@ -169,6 +171,7 @@ def run_suite(agent_id, environment=None, names=None):
         except Exception as error:  # noqa: BLE001 - una prueba rota no corta las demás
             results.append({"name": name, "passed": False, "error": str(error), "turns": []})
     failed = sum(not r["passed"] for r in results)
+    telemetry.count("parla_test_runs_total", agent=agent_id, outcome="failed" if failed else "passed")
     return {"passed": not failed, "total": len(results), "failed": failed, "tests": results}
 
 

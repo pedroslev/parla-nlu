@@ -13,6 +13,8 @@ import sys
 import tempfile
 import uuid
 
+from . import telemetry
+
 TIMEOUT = 5                 # segundos por ejecución
 MEMORY = 512 * 1024 * 1024  # bytes (donde el sistema lo respeta)
 MAX_OUTPUT = 200_000        # caracteres de salida que se leen
@@ -77,6 +79,15 @@ def _limits_node():
 
 def run_function(function, inputs):
     """{"ok", "result" | "error", "logs", "ms"}. Nunca lanza: cualquier problema vuelve como ok=False."""
+    language = function.get("language") or "python"
+    with telemetry.span("function.run", metric="parla_function_duration_seconds",
+                        labels={"language": language if language in LANGUAGES else "other"}, **{"parla.function": function.get("name")}) as sp:
+        out = _run_function(function, inputs)
+        sp.outcome = "ok" if out["ok"] else "error"
+        return out
+
+
+def _run_function(function, inputs):
     import time
     started = time.perf_counter()
     done = lambda out: dict(out, ms=round((time.perf_counter() - started) * 1000))

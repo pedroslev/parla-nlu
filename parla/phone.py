@@ -25,7 +25,7 @@ import unicodedata
 import urllib.parse
 from xml.sax.saxutils import escape, quoteattr
 
-from . import auth, channels, vault, voice
+from . import auth, channels, telemetry, vault, voice
 from .channels import ChannelError
 
 PROVIDERS = ("twilio", "jambonz")
@@ -358,7 +358,8 @@ def webhook(headers, rfile, method, ref, provider, action, path, length):
                     app.end_session(agent_id, sid)
                 _silent.pop(sid, None)
         return 200, b"{}" if provider == "jambonz" else b"", "application/json" if provider == "jambonz" else "text/plain"
-    with channels._session_lock(agent_id + "/" + sid):
+    with channels._session_lock(agent_id + "/" + sid), telemetry.span("phone.turn", **{
+            "parla.agent.id": agent_id, "parla.phone.provider": provider, "parla.phone.action": action or "start"}):
         try:
             if action == "gather":
                 said = pick(app.load_session(agent_id, sid), speech, digits)
