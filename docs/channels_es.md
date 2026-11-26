@@ -7,7 +7,8 @@ widget web y la API. Es el mismo bot y el mismo motor: contesta con lo publicado
 todavía no publicaste nada), con sus botones y archivos. Las conversaciones aparecen en **Conversaciones** con el
 canal `whatsapp` o `telegram`, y cuando la charla pasa a una persona, lo que esa persona escribe en la **Bandeja**
 también le llega al WhatsApp o Telegram del cliente. También puede atender **llamadas telefónicas** por Twilio o
-jambonz: ver [Llamadas telefónicas](#llamadas-telefónicas-twilio-y-jambonz).
+jambonz: ver [Llamadas telefónicas](#llamadas-telefónicas-twilio-y-jambonz). Y puede **escribir primero** (la API de
+salida, campañas y recordatorios, también llamadas salientes): ver [outbound_es.md](outbound_es.md).
 
 Todo se configura en **Publicar → Canales**.
 
@@ -55,7 +56,8 @@ un número de prueba).
    - *URL de devolución de llamada*: la que muestra **Canales** (`https://bots.midominio.com/api/v1/bots/<id>/whatsapp`).
    - *Token de verificación*: la misma palabra que `WHATSAPP_VERIFY_TOKEN`.
    - *Verificar y guardar*. Meta hace un `GET` con ese token y Parla le devuelve el desafío.
-   - En *Campos del webhook*, **suscribite a `messages`**.
+   - En *Campos del webhook*, **suscribite a `messages`**. Ese campo también trae los estados de entrega (`sent`,
+     `delivered`, `read`, `failed`) que usan las campañas ([outbound_es.md](outbound_es.md#estados-de-entrega)).
 8. **Probá.** Con el número de prueba, sumá tu teléfono a la lista de destinatarios en *Configuración de la API*.
    Escribile al número: el bot contesta. Para atender a cualquiera, la app tiene que estar en modo *Activo (Live)* y
    el número verificado.
@@ -110,10 +112,11 @@ la persona del equipo desde la Bandeja se manda por el canal. **Devolver al bot*
 ## Límites
 
 - **La ventana de 24 horas de WhatsApp.** WhatsApp solo deja mandar mensajes libres hasta 24 horas después del
-  último mensaje de la persona. Pasado eso, hay que usar una **plantilla** aprobada. Parla **todavía no maneja
-  plantillas ni empieza conversaciones**: una respuesta de la Bandeja después de 24 horas falla (Meta responde el
-  error 131047) y lo ves en **Canales → Último error**.
-- No hay envíos salientes ni masivos: el bot solo contesta.
+  último mensaje de la persona. Pasado eso, hay que usar una **plantilla** aprobada. Cuando el bot escribe primero
+  (la API de salida, campañas y recordatorios), la plantilla se elige sola de **Canales → WhatsApp → Plantillas
+  aprobadas** (`channels.whatsapp.templates`): ver [outbound_es.md](outbound_es.md). Una respuesta de la **Bandeja**
+  después de 24 horas sigue fallando (Meta responde el error 131047 y lo ves en **Canales → Último error**), porque la
+  Bandeja manda texto libre.
 - El filtro de repetidos, el orden por conversación y el estado de **Canales** viven en memoria: se pierden al
   reiniciar y no funcionan con varias réplicas (corré una; ver [deployment_es.md](deployment_es.md)).
 - Si Meta o Telegram reintentan un mensaje justo después de reiniciar, podría contestarse dos veces.
@@ -172,8 +175,15 @@ cortar (`<Hangup>` / `hangup`).
 | `handoff_to` | A dónde transferir cuando la charla pasa a una persona: un número (`+5491112345678`) o una dirección SIP (`sip:mesa@pbx.midominio.com`). |
 | `finish_on_key` | Tecla que termina un número escrito con el teclado. Por defecto `#`. |
 | `greeting` | Qué decir al atender si el bot no tiene flujo `__start__`. Por defecto «Hola, ¿en qué te puedo ayudar?» en el idioma del bot. |
+| `from` | **Número desde el que se llama**: tu número en el proveedor, o una URI SIP. Solo para llamadas salientes. |
+| `api_url` | **Dirección de la API de jambonz** para llamadas salientes. Por defecto `https://api.jambonz.cloud`. |
+| `application_sid` | **Application SID**: la aplicación de jambonz que atiende las llamadas salientes (recomendado). |
 
 La dirección pública es la misma que la de los otros canales (`PARLA_PUBLIC_URL` o **Dirección pública**).
+
+Para **hacer llamadas** (API de salida, campañas, recordatorios) Parla además necesita, en **Claves**,
+`TWILIO_ACCOUNT_SID` (junto con `TWILIO_AUTH_TOKEN`) en Twilio, o `JAMBONZ_API_KEY` y `JAMBONZ_ACCOUNT_SID` en jambonz.
+Para atender llamadas no hacen falta. Ver [outbound_es.md](outbound_es.md#teléfono-llamadas-salientes).
 
 ### Twilio paso a paso
 
@@ -252,7 +262,9 @@ deje de hablar.
 
 ### Límites del teléfono
 
-- Solo llamadas entrantes: no hay llamadas salientes ni campañas.
+- Las llamadas salientes (la API, campañas y recordatorios) necesitan `from`, las claves del proveedor y, en jambonz,
+  `api_url` y `application_sid`: ver [outbound_es.md](outbound_es.md#teléfono-llamadas-salientes). No se detectan
+  contestadores automáticos.
 - El reconocimiento de voz lo hace el proveedor (Twilio, o lo que tenga configurado jambonz), no Parla (ni el
   faster-whisper local ni el `voice.asr` del agente). Los turnos son pedido/respuesta (sin audio en streaming): cada
   respuesta espera a que la persona termine la frase.
@@ -268,7 +280,8 @@ deje de hablar.
 
 `tests/test_channels.py` corre todo contra APIs falsas de Graph y Telegram en un puerto local. Las direcciones de
 esas APIs se cambian con `PARLA_WHATSAPP_API` (por defecto `https://graph.facebook.com/v21.0`) y
-`PARLA_TELEGRAM_API` (por defecto `https://api.telegram.org`). Cambialas solo para pruebas.
+`PARLA_TELEGRAM_API` (por defecto `https://api.telegram.org`). Cambialas solo para pruebas. `tests/test_outbound.py`
+también simula Twilio (`PARLA_TWILIO_API`) y jambonz (`channels.phone.api_url`) para las llamadas salientes.
 
 `tests/test_phone.py` manda pedidos falsos y firmados de Twilio y jambonz (primer turno, voz, teclas, pasar con una
 persona, cortar, silencio, firmas, audios firmados) sin hablar con ningún proveedor. Para probar una llamada real

@@ -46,12 +46,15 @@ y `_sum`, así que «llamadas por resultado» es `rate(<nombre>_count{outcome="e
 | `parla_csat_score` | histogram | `agent` | Respuestas a la encuesta CSAT, buckets de 1 a 5 (promedio: `_sum / _count`). |
 | `parla_active_sessions` | gauge | `agent` | Conversaciones sin terminar con movimiento en los últimos 30 minutos (se calcula en cada scrape). |
 | `parla_test_runs_total` | counter | `agent`, `outcome` | Corridas de las pruebas (`passed`, `failed`): interfaz, API, MCP y el control antes de publicar. |
+| `parla_outbound_messages_total` | counter | `channel`, `outcome` | Mensajes y llamadas salientes (API, campañas, recordatorios): `sent`, `retry` (falló y se va a reintentar), `failed`, `opted_out` (rechazado porque la persona se dio de baja, o una baja nueva). |
+| `parla_campaign_recipients` | gauge | `status` | Destinatarios de campañas por estado (`queued`, `sending`, `sent`, `delivered`, `read`, `replied`, `failed`, `opted_out`, `canceled`), calculado en cada lectura. Ver [outbound_es.md](outbound_es.md). |
 | `parla_telemetry_dropped_total` | counter | `reason` | Spans descartados (`queue_full`, `export_failed`) o series rechazadas (`too_many_series`). |
 | `parla_info` | gauge | `version` | Siempre 1. |
 | `process_start_time_seconds` | gauge | | Arranque del proceso, hora Unix. |
 
 La cardinalidad de las etiquetas está acotada: `agent` es el id del agente (8 caracteres hex), `channel` es `web`,
-`api`, `whatsapp`, `telegram`, `phone`, `prueba` (el chat de prueba) u `other`, las rutas son plantillas, y Parla
+`api`, `whatsapp`, `telegram`, `phone`, `prueba` (el chat de prueba) u `other`, las rutas son plantillas (los ids
+quedan como `{id}`, `{bot}`, `{session}`, `{campaign}`…: `/api/agents/{id}/campaigns/{campaign}/start`), y Parla
 deja de crear series nuevas después de 5.000 (cuenta en `parla_telemetry_dropped_total{reason="too_many_series"}`).
 
 Consultas útiles:

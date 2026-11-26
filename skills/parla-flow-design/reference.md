@@ -18,6 +18,7 @@ The authoritative field list is `agent_format_guide`. This is the cheat sheet pl
 | `http` | `method`, `url`, `headers [{key, value}]`, `body`, `saves [{expr, slot}]` | See `parla-integrations`. |
 | `function` | `function`, `auto_save?` (default true), `saves [{expr, slot}]` | See `parla-integrations`. |
 | `file` | `file` (id or name from `list_files`), `text?`, `translations?` | Sends an uploaded file. |
+| `remind` | `after` (`30m`/`24h`/`2d`) **or** `at` (template → `YYYY-MM-DD HH:MM`), `flow` **or** `text` (+ `translations?`), `template?` | Schedules a message to the same person and channel (phone: calls the `caller` slot). Runs later with the current slots preloaded. WhatsApp after 24 h needs `template` (from `channels.whatsapp.templates`). Not sent from the test chat; skipped if the time already passed or the person opted out. |
 | `agent` | `instructions`, `goal`, `functions?`, `tools?`, `slots?`, `knowledge?`, `max_turns?`, `max_tool_calls?`, `time_budget?` | AI island; needs `ai.enabled`. Tools (function / http / mcp): see `parla-integrations`. |
 
 ## Flow fields
@@ -83,6 +84,16 @@ mark them `"start": true` so the UI's «Empezar con datos» shows them. `if cond
 jueves» the yes/no slot stays empty and `if expr has(entities.fecha)` handles the new date.
 
 **Escalation** — `classify` (to count) then `handoff` with a `reason` the human will read.
+
+**Appointment reminder** — after the booking is confirmed: `ask` «¿Te lo recuerdo el día anterior?» (yes/no) →
+`if` yes → `remind` `at: "{{ fecha_anterior }} 10:00"`, `flow: "Recordatorio turno"`, `template:
+"recordatorio_turno"`. The reminder flow: one `message` «Hola {{ nombre }}, mañana a las {{ hora }} tenés turno.
+¿Confirmás?» with buttons Confirmar / Cambiar / Cancelar, then `classify` on the confirmation (that's the
+campaign's conversion).
+
+**Campaign reply flow** — a WhatsApp campaign sends the template; its `flow` runs when the person answers. Treat
+the first message as the answer to the template (buttons' payloads, «sí», «no puedo»), don't greet again, and end
+with a `classify` that the campaign's `conversion` can count.
 
 **Clear at the end** — `set clear` for every slot that must be asked again next time (the order details), keep
 identity slots (name, phone) unless the business says otherwise.

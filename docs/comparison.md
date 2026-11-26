@@ -35,6 +35,7 @@ English, Spanish and Portuguese. Parla has a **no-open-core pledge**: every feat
 | LLM providers | Local Ollama by default; bring your own key for OpenAI, Claude, Gemini or any OpenAI-compatible endpoint | Configurable LLM providers [2] | Not checked for this page | Not checked for this page | Google models | Microsoft / Azure models | Not checked for this page | Not checked for this page |
 | Voice | Local STT/TTS (default) or bring your own key for OpenAI, Deepgram, ElevenLabs or Google Cloud; interruptible voice call in test chat; phone calls via Twilio or jambonz (DTMF, transfer) | Yes, via AudioCodes, Jambonz, browser [1] | Yes, Voice Gateway [3] | Yes | Yes (audio billed per second) [7] | Yes, real-time voice [10] | Voice channel on enterprise plan, per third-party guide [12] | Yes (voice and chat) [13] |
 | Channels | HTTP API, web widget, WhatsApp, Telegram, phone (Twilio, jambonz) | Many connectors | Many | Many | Many integrations | Teams, web and Microsoft channels | Many | Many |
+| Outbound and campaigns | Yes: outbound API, CSV campaigns (rate, schedule, quiet hours, conversions), reminders from flows, WhatsApp approved templates, outbound calls (Twilio, jambonz), automatic opt-outs | Not checked for this page | Not checked for this page | Not checked for this page | Not checked for this page | Not checked for this page | Not checked for this page | Not checked for this page |
 | MCP | MCP server (27 tools) to build/test/publish bots; MCP tools in the agent step (client, Streamable HTTP, allow-listed) | MCP tools server for IDEs (beta, 3.16) [1] | MCP tools in agents; MCP server endpoint (experimental) [4] | Not verified in official docs | Not verified in official docs | MCP tools in agents (GA) [10] | MCP in the ADK CLI, per third-party sources [12] | MCP tools in agents + hosted MCP server [14] |
 | Analytics | Containment, handoffs, fallbacks, CSAT, drop-off | Built-in dashboard in Studio 1.16 [1] | Yes | Yes | Yes (Google Cloud) | Yes | Yes | Yes (observability) [13] |
 | Observability | Prometheus metrics, OpenTelemetry traces over OTLP (GenAI conventions, W3C trace context), JSON logs; privacy-first by default | Not checked for this page | Not checked for this page | Not checked for this page | Not checked for this page | Not checked for this page | Not checked for this page | Observability features [13] |
@@ -122,8 +123,9 @@ Being honest about gaps matters more than a long feature list. These are on the 
 [ROADMAP.md](ROADMAP.md)):
 
 - **Channels:** HTTP API, web widget, WhatsApp (Cloud API), Telegram and phone. No Messenger, Teams or Slack yet.
-- **Telephony:** inbound calls through Twilio or jambonz (speech recognized by the provider, request/response turns,
-  no outbound campaigns or audio streaming); no AudioCodes or contact-center (CCaaS) connectors.
+- **Telephony:** inbound and outbound calls through Twilio or jambonz (speech recognized by the provider,
+  request/response turns, no audio streaming or answering machine detection); no AudioCodes or contact-center (CCaaS)
+  connectors.
 - **Horizontal scaling:** Parla is a single process with files on disk; it is designed for a small server.
 - **SAML single sign-on** (SSO is OIDC only, see [sso.md](sso.md)).
 

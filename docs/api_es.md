@@ -16,7 +16,8 @@ Generalidades:
   25 MB para subir archivos, documentos de conocimiento, audios y proyectos de Rasa; 2 MB para un audio del widget público; 1 MB para
   lo demás.
 - Errores: `{"error": "mensaje en castellano"}` con 400, 401, 403, 404, 405, 409, 413, 415 o 429 (409: publicar a
-  producción con pruebas que fallan). Una excepción adentro
+  producción con pruebas que fallan, o un envío saliente que no se permite), y 502 cuando el canal rechaza un envío
+  saliente. Una excepción adentro
   de una ruta (por ejemplo, pedir una versión que no existe) vuelve como 400 con el mensaje.
 - `{bot}` puede ser el id (`654a0008`), el nombre exacto (sin importar mayúsculas) o el slug (`pizzeria`). Si el
   nombre es ambiguo, usá el id.
@@ -94,7 +95,8 @@ curl -s http://127.0.0.1:8000/api/v1/bots/pizzeria/events \
 
 - `data` (objeto): los campos que se llaman como un slot se guardan en ese slot; el resto vuelve en
   `ignored_data`. `idioma`, `language` o `lang` eligen el idioma de la charla si el bot lo tiene en `languages`.
-- Corre el flujo con trigger `__start__`, si hay.
+- Corre el flujo con trigger `__start__`, si hay. `flow` (el nombre de un flujo) corre ese en su lugar; desde el
+  widget público no se acepta.
 - Si ese `sessionId` ya existía, empieza de cero (memoria en blanco, con la versión que tiene el entorno ahora)
   pero conserva el historial.
 
@@ -181,7 +183,8 @@ voz instalada, con un audio que no se puede leer o sin palabras: 400 con el moti
 ### `GET /api/v1/bots/{bot}/sessions`
 
 Filtros: `channel`, `classification` (`__none__` = sin clasificar), `from` y `to` (`YYYY-MM-DD`, por el día en
-que empezó). La de actividad más reciente primero.
+que empezó) y `campaign` (el id de la campaña que la empezó, ver [outbound_es.md](outbound_es.md#campañas)). La de
+actividad más reciente primero.
 
 ```sh
 curl -s 'http://127.0.0.1:8000/api/v1/bots/pizzeria/sessions?channel=ivr&from=2026-11-01'
@@ -223,7 +226,7 @@ desde la Bandeja.
 
 ### `GET /api/v1/bots/{bot}/report`
 
-Cuántas conversaciones tuvieron cada clasificación. Filtros `from`, `to`, `channel`.
+Cuántas conversaciones tuvieron cada clasificación. Filtros `from`, `to`, `channel`, `campaign`.
 
 ```json
 {"bot": {"id": "654a0008", "name": "Pizzería"}, "from": "2026-11-01", "to": null, "channel": null,
@@ -234,6 +237,31 @@ Cuántas conversaciones tuvieron cada clasificación. Filtros `from`, `to`, `cha
 
 `configured: false` = una clasificación que ya no existe en el bot.
 
+### `POST /api/v1/bots/{bot}/outbound`
+
+El bot escribe primero: un mensaje por WhatsApp o Telegram, una llamada, o un mensaje en una conversación abierta del
+widget. Dueño o editor (clave de API o sesión); nunca es pública. Los detalles, la ventana de WhatsApp y las
+plantillas, en [outbound_es.md](outbound_es.md).
+
+```sh
+curl -s http://127.0.0.1:8000/api/v1/bots/clinica/outbound \
+  -H 'Authorization: Bearer parla_xxxxxxxx' -H 'Content-Type: application/json' \
+  -d '{"channel": "whatsapp", "to": "+5491112345678", "template": "recordatorio_turno",
+       "flow": "Confirmar turno", "data": {"nombre": "Ana", "fecha": "1/12 a las 10"}}'
+```
+```json
+{"sessionId": "wa-5491112345678", "via": "template", "messages": [], "message_id": "wamid.HBgN…",
+ "id": 17, "channel": "whatsapp", "to": "5491112345678", "status": "sent"}
+```
+
+- Cuerpo: `channel` (`whatsapp` por defecto, `telegram`, `phone`, `web`), `to` (número con código de país, chat id
+  de Telegram o `sessionId` del widget), `data` (slots), `flow` y, en WhatsApp, `template` (un nombre de
+  `channels.whatsapp.templates` o `{"name", "language", "params", "components"}`).
+- `via`: `message`, `template` (fuera de la ventana de 24 horas de WhatsApp; `flow` corre cuando la persona contesta)
+  o `call`.
+- 409: fuera de la ventana sin plantilla, la persona se dio de baja, o una persona está atendiendo la conversación.
+  429: más de `agent.outbound.api_per_minute` (30 por defecto) por minuto. 502: el canal lo rechazó.
+
 ### Webhooks de WhatsApp y Telegram
 
 Los llaman Meta y Telegram, no vos: no usan login ni claves de API y aceptan cualquier `Host`. Responden 403 sin
@@ -243,7 +271,7 @@ clave o la firma no coincide. Cuerpo hasta 1 MB. Configuración en [channels_es.
 | Ruta | Se autentica con | Respuesta |
 |---|---|---|
 | `GET /api/v1/bots/{bot}/whatsapp?hub.mode=subscribe&hub.verify_token=…&hub.challenge=…` | `hub.verify_token` = `WHATSAPP_VERIFY_TOKEN` | `200` con el desafío en `text/plain`. |
-| `POST /api/v1/bots/{bot}/whatsapp` | `X-Hub-Signature-256: sha256=<HMAC-SHA256 del cuerpo con WHATSAPP_APP_SECRET>` | `200 ok` enseguida; los mensajes se atienden en segundo plano. Los estados (entregado, leído) se ignoran y un id repetido se atiende una vez. |
+| `POST /api/v1/bots/{bot}/whatsapp` | `X-Hub-Signature-256: sha256=<HMAC-SHA256 del cuerpo con WHATSAPP_APP_SECRET>` | `200 ok` enseguida; los mensajes se atienden en segundo plano. Un id repetido se atiende una vez. Los estados (`sent`, `delivered`, `read`, `failed`) actualizan los envíos salientes ([outbound_es.md](outbound_es.md#estados-de-entrega)). |
 | `POST /api/v1/bots/{bot}/telegram` | `X-Telegram-Bot-Api-Secret-Token` = `TELEGRAM_WEBHOOK_SECRET` | `200 {}` enseguida; `message` y `callback_query` se atienden en segundo plano. |
 
 Cada mensaje se atiende como un `POST …/events` con `environment: production`, `channel: whatsapp` o `telegram` y
@@ -266,6 +294,8 @@ responden 403 sin detalles si `channels.phone.enabled` está apagado, el proveed
 
 Cada turno se atiende como un `POST …/events` con `environment: production`, `channel: phone` y `sessionId`
 `call-<CallSid>`. En el primero, `data` lleva `caller` (el número de quien llama) y `language`.
+En una llamada que hizo Parla, las direcciones de los webhooks llevan `?o=<token>` (lo cubre la firma): `data` suma
+los datos del envío, `caller` es el número al que se llamó y corre el `flow` del envío en vez de `__start__`.
 
 ### Llamadas desde un navegador (CORS) y nombres permitidos
 
@@ -375,6 +405,21 @@ nivel del agente) y, en cada paso `agent`, `tools`, `max_tool_calls` y `time_bud
 | `POST /api/agents/{id}/channels/telegram` | `{"connect": true \| false}` | Llama a `setWebhook` de Telegram (crea `TELEGRAM_WEBHOOK_SECRET` si falta) o a `deleteWebhook`: `{"connected"}`. Dueño o editor. |
 | `GET /api/agents/{id}/insights/unrecognized` | Filtros `from`, `to`, `channel`, `classification` | `{"groups": [{"label", "count", "texts", "examples", "suggested_intent"}]}`: «Para enseñar». |
 | `GET /api/agents/{id}/insights/analytics` | Los mismos filtros | `{"sessions", "contained", "handoff", "contained_rate", "handoff_rate", "user_messages", "fallbacks", "fallback_rate", "csat", "abandoned", "drop_off", "flows", "by_day"}` |
+
+### Campañas y bajas
+
+Dueño o editor; analista, solo los `GET`. `{c}` es el id de 12 caracteres de la campaña. Cuerpos, estados y ejemplos en
+[outbound_es.md](outbound_es.md#rutas-de-administración).
+
+| Ruta | Respuesta |
+|---|---|
+| `GET`, `POST /api/agents/{id}/campaigns` | La lista (`{"campaigns"}`) / una campaña nueva en `draft`, con `imported: {"added", "duplicates", "invalid", "opted_out"}`. |
+| `POST /api/agents/{id}/campaigns/preview` | `{"columns", "rows", "count", "mapping"}` de un CSV, sin guardar nada. |
+| `GET`, `PUT`, `DELETE /api/agents/{id}/campaigns/{c}` | La campaña / cambiarla (`draft` o `paused`) / borrarla (no mientras está `running`). |
+| `GET`, `POST /api/agents/{id}/campaigns/{c}/recipients` | `{"total", "recipients"}` con filtros `status`, `limit`, `offset` / sumar personas (CSV o lista). |
+| `POST /api/agents/{id}/campaigns/{c}/start\|pause\|resume\|cancel` | La campaña; 409 si su estado no lo permite. |
+| `GET /api/agents/{id}/campaigns/{c}/export` | Los resultados en CSV. |
+| `GET`, `POST`, `DELETE /api/agents/{id}/optouts` | `{"optouts": [{"address", "channel", "keyword", "at"}]}`; `POST`/`DELETE` con `{"address"}` suman o sacan una baja a mano. |
 
 ### IA, voz y «Conectar con IA»
 

@@ -9,6 +9,7 @@
 | [Testing bots](testing-bots.md) | Everyone | Conversation test suites: format, **Save as test**, the publish gate, API, command line and GitHub Actions. |
 | [HTTP API](api.md) | Developers | The public `/api/v1` API with `curl` examples, authentication and roles, and the internal API. |
 | [WhatsApp and Telegram](channels.md) | Whoever publishes the bot | Connect a bot to WhatsApp (Cloud API) and Telegram, step by step, limits and security. |
+| [Outbound and campaigns](outbound.md) | Whoever publishes the bot | The bot writes first: outbound API, WhatsApp templates and the 24-hour window, outbound calls, CSV campaigns, reminders, opt-outs, consent. |
 | [MCP and “Connect to AI”](mcp.md) | Everyone | Let Claude, Codex or Cursor build the bot for you. |
 | [Skills for AI assistants](skills.md) | Everyone | Bot-building best practices as Agent Skills: what they are and how to install them in Claude Code, Claude Desktop, Codex or Cursor. |
 | [Best practices](best-practices.md) | Everyone | A short guide to designing intents, entities, flows, integrations and tests that work. |

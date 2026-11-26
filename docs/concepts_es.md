@@ -22,7 +22,8 @@ Un **agente** (o bot) es un archivo JSON con todo lo que lo define. Los campos p
 | `voice` | `{"asr": {"provider", "model"?, "api_key_secret"?}, "tts": {"provider", "voice"?, "model"?, "api_key_secret"?}}`: reconocimiento de voz y la voz del bot. `provider`: `"local"` (por defecto: faster-whisper / piper, nada sale de la máquina), `"openai"`, `"deepgram"`, `"elevenlabs"` o `"google"`. Nombres de clave por defecto: `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `GOOGLE_API_KEY`. |
 | `mcp_servers` | `[{"name", "url", "headers_secret"}]`: servidores MCP cuyas herramientas puede usar un paso `agent` (ver [`agent`](#agent-dejar-que-la-ia-converse)). |
 | `widget` | `{"enabled", "origins", "title", "color", "greeting", "position", "voice"}`. |
-| `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id"}, "telegram": {"enabled"}}`. Los tokens van en la bóveda, ver [channels_es.md](channels_es.md). |
+| `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id", "templates"}, "telegram": {"enabled"}, "phone": {…}}`. Los tokens van en la bóveda, ver [channels_es.md](channels_es.md). `templates` es el catálogo de plantillas aprobadas de WhatsApp (ver [outbound_es.md](outbound_es.md#el-catálogo-de-plantillas)). |
+| `outbound` | Escribir primero: `timezone` (para los recordatorios), `optout_keywords` (`{"es": [...], "en": [...], "pt": [...]}`), `api_per_minute` (30 por defecto) y `max_recipients` (10.000 por defecto). Ver [outbound_es.md](outbound_es.md). |
 | `ignored_phrases` | Frases que «Para enseñar» ya no muestra. |
 | `tests` | Pruebas de conversación: conversaciones esperadas que corren antes de publicar a producción (ver [testing-bots_es.md](testing-bots_es.md)). |
 | `retention_days` | Días que se guardan las conversaciones sin movimiento. Sin el campo o `null`: `PARLA_RETENTION_DAYS`; `0`: para siempre. Ver [Retención y datos personales](#retención-y-datos-personales). |
@@ -183,6 +184,18 @@ mensaje es el nombre del archivo). En la API el mensaje llega en `messages` como
 `{id, name, mime, size, url}`; `url` (`/files/<agente>/<id>`) se abre sin sesión: el id es aleatorio y hace de
 llave, así que no subas nada privado. Los archivos son del bot, no de una versión: si borrás uno, el paso falla
 también en lo publicado. Exportar el bot no lleva los archivos.
+
+### `remind`: programar un recordatorio
+```json
+{"type": "remind", "after": "24h", "flow": "Recordatorio", "template": "recordatorio_turno"}
+```
+Programa un mensaje para más tarde a la misma persona, por el mismo canal: `after` (`30m`, `24h`, `2d`) o `at` (una
+fecha y hora con plantillas que quede como `AAAA-MM-DD HH:MM`, por ejemplo `"{{ fecha }} 09:00"`, en
+`agent.outbound.timezone` o la zona horaria del servidor). Cuando llega la hora, la conversación empieza de nuevo con
+los slots que tiene ahora y corre `flow` (o manda `text`, si no hay flujo). En WhatsApp, si sale más de 24 horas
+después del último mensaje de la persona, hace falta `template` (una plantilla aprobada del catálogo). Funciona en
+WhatsApp, Telegram, el widget y las llamadas (llama al slot `caller`), no desde el chat de prueba. A quien se dio de
+baja no le llega. Ver [outbound_es.md](outbound_es.md#recordatorios-el-paso-remind).
 
 ### `function`: ejecutar una función
 ```json

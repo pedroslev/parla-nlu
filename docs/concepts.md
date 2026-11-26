@@ -22,7 +22,8 @@ An **agent** (or bot) is a JSON file with everything that defines it. The main f
 | `voice` | `{"asr": {"provider", "model"?, "api_key_secret"?}, "tts": {"provider", "voice"?, "model"?, "api_key_secret"?}}`: speech recognition and the bot's voice. `provider`: `"local"` (default: faster-whisper / piper, nothing leaves the machine), `"openai"`, `"deepgram"`, `"elevenlabs"` or `"google"`. Default key names: `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `GOOGLE_API_KEY`. |
 | `mcp_servers` | `[{"name", "url", "headers_secret"}]`: MCP servers whose tools an `agent` step can use (see [`agent`](#agent-let-the-ai-converse)). |
 | `widget` | `{"enabled", "origins", "title", "color", "greeting", "position", "voice"}`. |
-| `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id"}, "telegram": {"enabled"}}`. Tokens go in the vault, see [channels.md](channels.md). |
+| `channels` | `{"public_url", "whatsapp": {"enabled", "phone_number_id", "templates"}, "telegram": {"enabled"}, "phone": {…}}`. Tokens go in the vault, see [channels.md](channels.md). `templates` is the catalog of approved WhatsApp templates (see [outbound.md](outbound.md#the-template-catalog)). |
+| `outbound` | Writing first: `timezone` (for reminders), `optout_keywords` (`{"es": [...], "en": [...], "pt": [...]}`), `api_per_minute` (default 30) and `max_recipients` (default 10,000). See [outbound.md](outbound.md). |
 | `ignored_phrases` | Phrases that **Improve** no longer shows. |
 | `tests` | Conversation tests: expected conversations that run before publishing to production (see [testing-bots.md](testing-bots.md)). |
 | `retention_days` | Days to keep conversations with no activity. Absent or `null`: `PARLA_RETENTION_DAYS`; `0`: forever. See [Retention and personal data](#retention-and-personal-data). |
@@ -183,6 +184,18 @@ text, the message is the file name). In the API the message arrives in `messages
 carries `{id, name, mime, size, url}`; `url` (`/files/<agent>/<id>`) opens without a session: the id is random and
 acts as the key, so don't upload anything private. Files belong to the bot, not to a version: if you delete one, the
 step also fails in what is published. Exporting the bot doesn't include the files.
+
+### `remind`: schedule a reminder
+```json
+{"type": "remind", "after": "24h", "flow": "Recordatorio", "template": "recordatorio_turno"}
+```
+Schedules a message to the same person, on the same channel, for later: `after` (`30m`, `24h`, `2d`) or `at` (a
+date and time with templates that ends up as `YYYY-MM-DD HH:MM`, for example `"{{ fecha }} 09:00"`, in
+`agent.outbound.timezone` or the server's time zone). When it's time, the conversation starts again with the slots it
+has now and runs `flow` (or sends `text`, if there is no flow). On WhatsApp, if it goes out more than 24 hours after
+the person's last message, it needs `template` (an approved template from the catalog). It works on WhatsApp,
+Telegram, the widget and phone calls (it calls the `caller` slot), not from the test chat. People who opted out
+don't get it. See [outbound.md](outbound.md#reminders-the-remind-step).
 
 ### `function`: run a function
 ```json

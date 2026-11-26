@@ -38,6 +38,7 @@ tiene un **compromiso de no open core**: todas las funciones siguen siendo de c�
 | Proveedores de LLM | Ollama local por defecto; tu propia key de OpenAI, Claude, Gemini o cualquier endpoint compatible con OpenAI | Proveedores de LLM configurables [2] | No verificado para esta página | No verificado para esta página | Modelos de Google | Modelos de Microsoft / Azure | No verificado para esta página | No verificado para esta página |
 | Voz | STT/TTS local (por defecto) o tu propia key de OpenAI, Deepgram, ElevenLabs o Google Cloud; llamada de voz interrumpible en el chat de prueba; llamadas telefónicas por Twilio o jambonz (DTMF, transferencia) | Sí, vía AudioCodes, Jambonz, navegador [1] | Sí, Voice Gateway [3] | Sí | Sí (audio facturado por segundo) [7] | Sí, voz en tiempo real [10] | Canal de voz en el plan enterprise, según guía de terceros [12] | Sí (voz y chat) [13] |
 | Canales | API HTTP, widget web, WhatsApp, Telegram, teléfono (Twilio, jambonz) | Muchos conectores | Muchos | Muchos | Muchas integraciones | Teams, web y canales de Microsoft | Muchos | Muchos |
+| Salientes y campañas | Sí: API de salida, campañas con CSV (ritmo, fecha de inicio, horario de silencio, conversiones), recordatorios desde los flujos, plantillas aprobadas de WhatsApp, llamadas salientes (Twilio, jambonz), bajas automáticas | No se revisó para esta página | No se revisó para esta página | No se revisó para esta página | No se revisó para esta página | No se revisó para esta página | No se revisó para esta página | No se revisó para esta página |
 | MCP | Servidor MCP (27 herramientas) para construir, probar y publicar bots; herramientas MCP en el paso agente (cliente, Streamable HTTP, con allow-list) | Servidor de herramientas MCP para IDE (beta, 3.16) [1] | Herramientas MCP en agentes; endpoint de servidor MCP (experimental) [4] | No verificado en la documentación oficial | No verificado en la documentación oficial | Herramientas MCP en agentes (GA) [10] | MCP en el ADK CLI, según fuentes de terceros [12] | Herramientas MCP en agentes + servidor MCP alojado [14] |
 | Analítica | Contención, derivaciones, fallbacks, CSAT, abandono | Panel integrado en Studio 1.16 [1] | Sí | Sí | Sí (Google Cloud) | Sí | Sí | Sí (observabilidad) [13] |
 | Observabilidad | Métricas de Prometheus, trazas de OpenTelemetry por OTLP (convenciones GenAI, contexto de traza W3C), logs JSON; privadas por defecto | No verificado para esta página | No verificado para esta página | No verificado para esta página | No verificado para esta página | No verificado para esta página | No verificado para esta página | Funciones de observabilidad [13] |
@@ -131,8 +132,9 @@ Ser honestos con lo que falta importa más que una lista larga de funciones. Est
 [ROADMAP_es.md](ROADMAP_es.md)):
 
 - **Canales:** API HTTP, widget web, WhatsApp (Cloud API), Telegram y teléfono. Todavía no hay Messenger, Teams ni Slack.
-- **Telefonía:** llamadas entrantes por Twilio o jambonz (la voz la reconoce el proveedor, turnos pedido/respuesta,
-  sin campañas salientes ni audio en streaming); sin conectores de AudioCodes ni de centros de contacto (CCaaS).
+- **Telefonía:** llamadas entrantes y salientes por Twilio o jambonz (la voz la reconoce el proveedor, turnos
+  pedido/respuesta, sin audio en streaming ni detección de contestadores); sin conectores de AudioCodes ni de centros
+  de contacto (CCaaS).
 - **Escalado horizontal:** Parla es un solo proceso con archivos en disco; está pensado para un servidor chico.
 - **Inicio de sesión único con SAML** (el SSO es solo OIDC, ver [sso_es.md](sso_es.md)).
 

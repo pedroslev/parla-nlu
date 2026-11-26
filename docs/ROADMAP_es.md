@@ -12,6 +12,10 @@ una edición paga que se guarde funciones.
 
 ## Recién salido
 
+- **Mensajes salientes y campañas**: el bot escribe primero con una API de salida, campañas desde un CSV
+  (plantillas aprobadas de WhatsApp con la ventana de 24 horas resuelta sola, Telegram, llamadas salientes por
+  Twilio o jambonz) con fecha de inicio, ritmo, horario de silencio, reintentos, estados de entrega y conversiones,
+  recordatorios desde un flujo (paso `remind`) y bajas automáticas. Ver [outbound_es.md](outbound_es.md).
 - **Observabilidad**: métricas de Prometheus en `/metrics` (pedidos, turnos, tasa de fallback, NLU, IA, voz, pasos
   HTTP, funciones, pases a una persona, CSAT, sesiones activas), trazas de OpenTelemetry por OTLP/HTTP con atributos
   GenAI y contexto de traza W3C, y logs de pedidos en JSON. Solo biblioteca estándar, apagado por defecto, sin el
@@ -52,7 +56,8 @@ una edición paga que se guarde funciones.
 
 ## Después
 
-- **Campañas salientes**: iniciar conversaciones de forma proactiva (recordatorios, avisos).
+- **Salientes, lo que sigue**: detección de contestadores en las llamadas, zona horaria por destinatario y estado
+  de entrega de los envíos sueltos por la API.
 
 ## Más adelante
 
@@ -64,5 +69,5 @@ una edición paga que se guarde funciones.
 
 Como referencia, lo que Parla hace hoy: constructor sin código, NLU con embeddings + CRF, flujos con muchos tipos de
 paso, LLM opcional (local o con tu propia key), voz (local o con tu propia key), versiones con `staging`/`production`, usuarios y roles, inicio de sesión único con OIDC, bóveda de secretos,
-bandeja, analíticas, API HTTP, widget web, servidor MCP, herramientas en el paso agente (cliente MCP), métricas de Prometheus y trazas de OpenTelemetry, Docker y Kubernetes. Ver el
+bandeja, analíticas, API HTTP, widget web, servidor MCP, herramientas en el paso agente (cliente MCP), métricas de Prometheus y trazas de OpenTelemetry, mensajes salientes y campañas, Docker y Kubernetes. Ver el
 [README](../README_es.md#qué-trae).

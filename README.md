@@ -59,7 +59,7 @@ The interface is available in English, Spanish and Portuguese (pick it next to t
 
 ### Conversations
 - Flows with steps: message, question, set value, HTTP request, condition, jump, subflow, end, classify, send a
-  file (PDF, image, spreadsheet…), function, hand off to a person, and AI step.
+  file (PDF, image, spreadsheet…), function, hand off to a person, schedule a reminder, and AI step.
 - While it's asking something, it understands corrections, side questions («¿qué es presencial?», "what does in
   person mean?", answered from the knowledge base) and interruptions (it handles the other thing and then goes back
   to the question).
@@ -104,6 +104,9 @@ The interface is available in English, Spanish and Portuguese (pick it next to t
 - WhatsApp (Cloud API) and Telegram channels, with buttons, files and Inbox replies ([docs/channels.md](docs/channels.md)).
 - Phone calls through Twilio or jambonz (open source, self-hostable): speech and keypad (DTMF), buttons as «press 1
   for…» menus, barge-in, transfer to a person, optional local piper voice ([docs/channels.md](docs/channels.md#phone-calls-twilio-and-jambonz)).
+- The bot writes first: an outbound API, **campaigns** from a CSV (WhatsApp templates, Telegram or outbound calls,
+  with schedule, rate, quiet hours, delivery statuses and conversions), reminders from a flow, and automatic
+  opt-outs («STOP», «BAJA») ([docs/outbound.md](docs/outbound.md)).
 - Light, dark and colorful themes in the interface.
 
 ### Security
@@ -273,6 +276,7 @@ Everything is optional. Copy `.env.example` to see the values.
 | `PARLA_SECURE_COOKIE` | empty | `1` marks the session cookie as `Secure` (behind HTTPS). |
 | `PARLA_RETENTION_DAYS` | empty | Days to keep conversations with no activity, for agents without their own `retention_days`. Empty or `0`: forever. |
 | `PARLA_AUDIT_DAYS` | `365` | Days to keep the audit log. |
+| `PARLA_CAMPAIGN_MAX` | `10000` | Maximum recipients per campaign, for agents without `outbound.max_recipients` (see [docs/outbound.md](docs/outbound.md)). |
 | `PARLA_PUBLIC_URL` | empty | Public HTTPS address, for the WhatsApp, Telegram and phone webhooks (see [docs/channels.md](docs/channels.md)) and the SSO redirect URI. |
 | `PARLA_METRICS`, `PARLA_METRICS_TOKEN` | empty | `1` serves Prometheus metrics at `/metrics`; the token (`Authorization: Bearer`) is needed from another host. See [docs/observability.md](docs/observability.md). |
 | `PARLA_OTEL_ENDPOINT` | empty | OTLP/HTTP base URL for OpenTelemetry traces (the standard `OTEL_EXPORTER_OTLP_*` and `OTEL_SERVICE_NAME` work too). `PARLA_OTEL_CONTENT=1` adds masked message text. |
@@ -304,9 +308,9 @@ the voice extras. Details in [docs/development.md](docs/development.md#tests).
 The public plan (Now / Next / Later) is in [docs/ROADMAP.md](docs/ROADMAP.md). What it does **not** do yet:
 
 - Built-in public endpoint or tunnel (today you publish it yourself with a proxy).
-- Bot templates and outbound campaigns.
+- Bot templates.
 - Per-user memory across conversations.
-- Outbound phone calls and real-time audio streaming (inbound calls work through Twilio or jambonz).
+- Real-time audio streaming on calls, and answering machine detection on outbound calls.
 
 ## Comparison
 

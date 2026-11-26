@@ -50,6 +50,8 @@ Todas son opcionales. Nada carga `.env` solo: exportalas en tu shell.
 | `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` u `off` apagan las funciones de los agentes. |
 | `PARLA_PUBLIC_URL` | vacío | Dirección pública con HTTPS para los webhooks de WhatsApp y Telegram (gana `channels.public_url` del agente). Ver [channels_es.md](channels_es.md). |
 | `PARLA_WHATSAPP_API`, `PARLA_TELEGRAM_API` | `https://graph.facebook.com/v21.0`, `https://api.telegram.org` | Dirección base de esas APIs. Solo para pruebas (`tests/test_channels.py` las apunta a un servidor falso). |
+| `PARLA_TWILIO_API` | `https://api.twilio.com` | Dirección base de la API REST de Twilio para las llamadas salientes. Solo para pruebas (`tests/test_outbound.py`). |
+| `PARLA_CAMPAIGN_MAX` | `10000` | Máximo de destinatarios por campaña, para los agentes sin `outbound.max_recipients`. |
 | `PARLA_WHISPER` | `base` | Modelo de faster-whisper (`tiny` si la máquina es lenta). |
 | `PARLA_LANG` | el del navegador | Idioma de la interfaz por defecto (`en`, `es` o `pt`); `scripts/setup.sh --lang` lo escribe en `.env`. |
 | `PARLA_URL` | `http://127.0.0.1:8000` | (MCP) dónde está Parla. |

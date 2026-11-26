@@ -113,7 +113,9 @@ lado de «Administrar usuarios») o con `GET /api/audit` ([api_es.md](api_es.md)
   `agent.import`, `agent.save`, `agent.delete`, `agent.train`, `agent.publish`, `agent.deploy`, `agent.restore`,
   `secret.set` / `secret.delete` (solo el nombre, nunca el valor), `file.upload` / `file.delete`,
   `channel.update` (un guardado que cambió `channels`), `channel.telegram`, `inbox.take` / `inbox.release` /
-  `inbox.reply` y `session.delete`.
+  `inbox.reply`, `session.delete` y, para los mensajes salientes, `outbound.send`, `campaign.create`,
+  `campaign.update`, `campaign.delete`, `campaign.recipients`, `campaign.start` / `campaign.pause` /
+  `campaign.resume` / `campaign.cancel`, `optout.add` y `optout.remove` (con el teléfono tapado: `549••••••5678`).
 - La interfaz guarda sola cada ~400 ms: los `agent.save` seguidos del mismo usuario en el mismo agente dentro de 5
   minutos se juntan en una sola entrada.
 - Sin usuarios configurados, las entradas quedan con el usuario vacío.
@@ -265,6 +267,31 @@ Configuración y límites en [channels_es.md](channels_es.md).
   va a donde apunten sus servicios de voz, que pueden ser propios.
 - El id `call-<CallSid>` y el número de quien llama (guardado en un slot `caller` si el bot lo tiene, y que también
   guarda el proveedor) son datos personales; `pii_redaction` tapa los teléfonos en lo que se guarda.
+
+## Mensajes salientes y campañas
+
+El bot puede escribir primero: la API de salida, campañas y recordatorios ([outbound_es.md](outbound_es.md)).
+
+- **Quién:** `POST /api/v1/bots/{bot}/outbound`, crear, cambiar, iniciar o cancelar campañas y manejar las bajas
+  necesitan `owner` o `editor`. `analyst` ve las campañas, los resultados, el CSV exportado y las bajas, solo
+  lectura. `agent` (atención) no ve nada de esto. La ruta de salida nunca es pública, aunque el widget esté prendido.
+- **Auditoría:** cada envío por la API, cada cambio y acción de una campaña y cada baja a mano quedan en el
+  [registro de auditoría](#registro-de-auditoría), con el teléfono tapado.
+- **Números tapados:** en la auditoría y en los errores de la consola. La interfaz y la API de administración los
+  muestran a quien puede ver el bot, y los ids de conversación (`wa-<teléfono>`) los siguen teniendo.
+- **Límites de envío:** `agent.outbound.api_per_minute` envíos por minuto con la API por agente (30 por defecto,
+  429 si se pasa); el ritmo de cada campaña (de 1 por minuto a 50 por segundo); 10.000 destinatarios por campaña
+  (`agent.outbound.max_recipients`, `PARLA_CAMPAIGN_MAX`). Los contadores viven en memoria.
+- **Retención y datos personales:** con `retention_days` (o `PARLA_RETENTION_DAYS`), los destinatarios de las
+  campañas que terminaron hace más de esos días se borran (números y datos) y quedan solo los totales; también las
+  filas viejas de la API y de recordatorios. Con `pii_redaction`, los datos de una fila de campaña o recordatorio se
+  tapan apenas sale. Borrar el agente borra sus campañas, la cola y las bajas.
+- **Llamadas salientes:** el proveedor vuelve a llamar al webhook firmado de siempre con un `?o=<token>` aleatorio
+  que identifica el envío; la firma lo cubre. Para llamar hacen falta `TWILIO_ACCOUNT_SID` o `JAMBONZ_API_KEY` /
+  `JAMBONZ_ACCOUNT_SID` en la bóveda.
+- **Consentimiento:** las palabras de baja («STOP», «BAJA») se respetan solas, y a quien se dio de baja no se le
+  puede mandar (409). Pedir el consentimiento antes de escribir y respetar el horario de silencio y los registros de
+  «no llame» corre por tu cuenta: ver [Consentimiento y leyes](outbound_es.md#consentimiento-y-leyes).
 
 ## Bóveda de claves (secretos)
 
@@ -449,7 +476,8 @@ Todo apagado por defecto ([observability.md](observability_es.md)).
 
 - Una sola réplica por carpeta de datos. Los contadores del bloqueo de login viven en memoria: se reinician con el
   servidor.
-- Sin límite de pedidos, salvo el bloqueo de login.
+- Sin un límite de pedidos general: solo el bloqueo de login y los límites de salida (envíos por minuto con la API,
+  ritmo de las campañas).
 - Sin registro de accesos con usuarios o IPs: la auditoría anota escrituras, y `PARLA_LOG_FORMAT=json` anota cada
   pedido con su plantilla de ruta, estado y duración, pero no quién lo hizo.
 - Sin segundo factor para las contraseñas locales (con [SSO](sso_es.md), tu proveedor de identidad puede pedir

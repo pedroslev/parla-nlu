@@ -12,6 +12,10 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Shipped recently
 
+- **Outbound messages and campaigns**: the bot writes first through an outbound API, CSV campaigns (WhatsApp
+  approved templates with the 24-hour window handled automatically, Telegram, outbound calls through Twilio or
+  jambonz) with schedule, rate, quiet hours, retries, delivery statuses and conversions, reminders from a flow
+  (`remind` step) and automatic opt-outs. See [outbound.md](outbound.md).
 - **Observability**: Prometheus metrics at `/metrics` (requests, turns, fallback rate, NLU, LLM, voice, HTTP steps,
   functions, handoffs, CSAT, active sessions), OpenTelemetry traces over OTLP/HTTP with GenAI attributes and W3C
   trace context, and JSON request logs. Standard library only, off by default, no conversation content unless you
@@ -51,7 +55,8 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Next
 
-- **Outbound campaigns**: start conversations proactively (reminders, notifications).
+- **Outbound, next steps**: answering machine detection on calls, a time zone per recipient, and delivery status
+  for single API sends.
 
 ## Later
 
@@ -63,4 +68,4 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 For reference, what Parla does today: no-code builder, embeddings + CRF NLU, flows with many step types, optional
 LLM (local or your own key), voice (local or your own key), versions with `staging`/`production`, users and roles, OIDC single sign-on, secret vault, inbox, analytics,
-HTTP API, web widget, MCP server, agent-step tools (MCP client), Prometheus metrics and OpenTelemetry traces, Docker and Kubernetes. See the [README](../README.md#features).
+HTTP API, web widget, MCP server, agent-step tools (MCP client), Prometheus metrics and OpenTelemetry traces, outbound messages and campaigns, Docker and Kubernetes. See the [README](../README.md#features).

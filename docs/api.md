@@ -17,7 +17,8 @@ General notes:
   everything else.
 - Errors: `{"error": "mensaje en castellano"}` (in Spanish by default; send `Accept-Language: en` or `pt` for
   English or Portuguese) with 400, 401, 403, 404, 405, 409, 413, 415
-  or 429 (409: publishing to production with failing tests). An exception inside a route (for example, requesting a version that doesn't exist) comes back as 400 with the
+  or 429 (409: publishing to production with failing tests, or an outbound send that isn't allowed), and 502 when
+  an outbound send is rejected by the channel. An exception inside a route (for example, requesting a version that doesn't exist) comes back as 400 with the
   message.
 - `{bot}` can be the id (`654a0008`), the exact name (case-insensitive) or the slug (`pizzeria`). If the name is
   ambiguous, use the id.
@@ -95,7 +96,8 @@ curl -s http://127.0.0.1:8000/api/v1/bots/pizzeria/events \
 
 - `data` (object): fields named like a slot are stored in that slot; the rest come back in `ignored_data`.
   `idioma`, `language` or `lang` choose the conversation language if the bot has it in `languages`.
-- Runs the flow with trigger `__start__`, if there is one.
+- Runs the flow with trigger `__start__`, if there is one. `flow` (the name of a flow) runs that one instead; it
+  isn't accepted from the public widget.
 - If that `sessionId` already existed, it starts from scratch (blank memory, with the version the environment has
   now) but keeps the history.
 
@@ -182,7 +184,8 @@ Without voice installed, with audio that can't be read, or with no words: 400 wi
 ### `GET /api/v1/bots/{bot}/sessions`
 
 Filters: `channel`, `classification` (`__none__` = unclassified), `from` and `to` (`YYYY-MM-DD`, by the day it
-started). Most recent activity first.
+started) and `campaign` (the id of the campaign that started it, see [outbound.md](outbound.md#campaigns)). Most
+recent activity first.
 
 ```sh
 curl -s 'http://127.0.0.1:8000/api/v1/bots/pizzeria/sessions?channel=ivr&from=2026-11-01'
@@ -224,7 +227,7 @@ Inbox.
 
 ### `GET /api/v1/bots/{bot}/report`
 
-How many conversations had each classification. Filters `from`, `to`, `channel`.
+How many conversations had each classification. Filters `from`, `to`, `channel`, `campaign`.
 
 ```json
 {"bot": {"id": "654a0008", "name": "Pizzería"}, "from": "2026-11-01", "to": null, "channel": null,
@@ -235,6 +238,30 @@ How many conversations had each classification. Filters `from`, `to`, `channel`.
 
 `configured: false` = a classification that no longer exists in the bot.
 
+### `POST /api/v1/bots/{bot}/outbound`
+
+The bot writes first: a message on WhatsApp or Telegram, a call, or a message into an open widget conversation.
+Owner or editor (API key or session); never public. Details, the WhatsApp window and templates in
+[outbound.md](outbound.md).
+
+```sh
+curl -s http://127.0.0.1:8000/api/v1/bots/clinica/outbound \
+  -H 'Authorization: Bearer parla_xxxxxxxx' -H 'Content-Type: application/json' \
+  -d '{"channel": "whatsapp", "to": "+5491112345678", "template": "recordatorio_turno",
+       "flow": "Confirmar turno", "data": {"nombre": "Ana", "fecha": "1/12 a las 10"}}'
+```
+```json
+{"sessionId": "wa-5491112345678", "via": "template", "messages": [], "message_id": "wamid.HBgN…",
+ "id": 17, "channel": "whatsapp", "to": "5491112345678", "status": "sent"}
+```
+
+- Body: `channel` (`whatsapp` by default, `telegram`, `phone`, `web`), `to` (number with country code, Telegram
+  chat id or widget `sessionId`), `data` (slots), `flow` and, on WhatsApp, `template` (a name from
+  `channels.whatsapp.templates` or `{"name", "language", "params", "components"}`).
+- `via`: `message`, `template` (outside WhatsApp's 24-hour window; `flow` runs when the person replies) or `call`.
+- 409: outside the window without a template, the person opted out, or a person is handling the conversation.
+  429: more than `agent.outbound.api_per_minute` (default 30) per minute. 502: the channel rejected it.
+
 ### WhatsApp and Telegram webhooks
 
 Called by Meta and Telegram, not by you: they don't use login or API keys and accept any `Host`. They answer 403
@@ -244,7 +271,7 @@ is missing or the signature doesn't match. Body up to 1 MB. Setup in [channels.m
 | Route | Authenticated by | Response |
 |---|---|---|
 | `GET /api/v1/bots/{bot}/whatsapp?hub.mode=subscribe&hub.verify_token=…&hub.challenge=…` | `hub.verify_token` = `WHATSAPP_VERIFY_TOKEN` | `200` with the challenge as `text/plain`. |
-| `POST /api/v1/bots/{bot}/whatsapp` | `X-Hub-Signature-256: sha256=<HMAC-SHA256 of the body with WHATSAPP_APP_SECRET>` | `200 ok` right away; messages are processed in the background. Statuses are ignored, repeated ids are processed once. |
+| `POST /api/v1/bots/{bot}/whatsapp` | `X-Hub-Signature-256: sha256=<HMAC-SHA256 of the body with WHATSAPP_APP_SECRET>` | `200 ok` right away; messages are processed in the background, repeated ids once. Statuses (`sent`, `delivered`, `read`, `failed`) update the outbound sends ([outbound.md](outbound.md#delivery-statuses)). |
 | `POST /api/v1/bots/{bot}/telegram` | `X-Telegram-Bot-Api-Secret-Token` = `TELEGRAM_WEBHOOK_SECRET` | `200 {}` right away; `message` and `callback_query` are processed in the background. |
 
 Each message is processed like `POST …/events` with `environment: production`, `channel: whatsapp` or `telegram`
@@ -267,6 +294,8 @@ key is missing or the signature doesn't match. Body up to 1 MB. Setup in
 
 Each turn is processed like `POST …/events` with `environment: production`, `channel: phone` and
 `sessionId` `call-<CallSid>`. On the first one, `data` carries `caller` (the caller's number) and `language`.
+On a call Parla placed, the webhook URLs carry `?o=<token>` (covered by the signature): `data` adds the send's
+data, `caller` is the number that was called, and the send's `flow` runs instead of `__start__`.
 
 ### Calls from a browser (CORS) and allowed host names
 
@@ -375,6 +404,21 @@ level) and, in each `agent` step, `tools`, `max_tool_calls` and `time_budget`. S
 | `POST /api/agents/{id}/channels/telegram` | `{"connect": true \| false}` | Calls Telegram's `setWebhook` (creating `TELEGRAM_WEBHOOK_SECRET` if missing) or `deleteWebhook`: `{"connected"}`. Owner or editor. |
 | `GET /api/agents/{id}/insights/unrecognized` | Filters `from`, `to`, `channel`, `classification` | `{"groups": [{"label", "count", "texts", "examples", "suggested_intent"}]}`: **Improve**. |
 | `GET /api/agents/{id}/insights/analytics` | The same filters | `{"sessions", "contained", "handoff", "contained_rate", "handoff_rate", "user_messages", "fallbacks", "fallback_rate", "csat", "abandoned", "drop_off", "flows", "by_day"}` |
+
+### Campaigns and opt-outs
+
+Owner or editor; analyst only the `GET`s. `{c}` is the campaign's 12-character id. Bodies, statuses and examples in
+[outbound.md](outbound.md#admin-routes).
+
+| Route | Response |
+|---|---|
+| `GET`, `POST /api/agents/{id}/campaigns` | The list (`{"campaigns"}`) / a new campaign in `draft`, with `imported: {"added", "duplicates", "invalid", "opted_out"}`. |
+| `POST /api/agents/{id}/campaigns/preview` | `{"columns", "rows", "count", "mapping"}` of a CSV, without saving. |
+| `GET`, `PUT`, `DELETE /api/agents/{id}/campaigns/{c}` | The campaign / edit it (`draft` or `paused`) / delete it (not while `running`). |
+| `GET`, `POST /api/agents/{id}/campaigns/{c}/recipients` | `{"total", "recipients"}` with `status`, `limit`, `offset` filters / add people (CSV or list). |
+| `POST /api/agents/{id}/campaigns/{c}/start\|pause\|resume\|cancel` | The campaign; 409 if its status doesn't allow it. |
+| `GET /api/agents/{id}/campaigns/{c}/export` | The results as CSV. |
+| `GET`, `POST`, `DELETE /api/agents/{id}/optouts` | `{"optouts": [{"address", "channel", "keyword", "at"}]}`; `POST`/`DELETE` with `{"address"}` add or remove one by hand. |
 
 ### AI, voice and “Connect to AI”
 

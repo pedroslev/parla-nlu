@@ -9,6 +9,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Outbound messaging: the bot writes first ([docs/outbound.md](docs/outbound.md)). `POST /api/v1/bots/{bot}/outbound`
+  (owner/editor; `channel` `whatsapp`, `telegram`, `phone` or `web`, `to`, `data`, `flow`, `template`) starts a
+  production conversation with the same session id an inbound message would use, the data preloaded in the slots and
+  the flow; replies continue it. WhatsApp tracks the 24-hour window per conversation and picks free-form or an
+  approved template on its own (catalog in `channels.whatsapp.templates`, slots mapped to `{{1}}`, `{{2}}`…; the
+  flow runs when the person replies), translates Meta error codes and retries rate limits, and uses the `statuses`
+  webhook (`sent`, `delivered`, `read`, `failed`). Outbound calls through Twilio (`Calls.json`, `TWILIO_ACCOUNT_SID`)
+  or jambonz (`/v1/Accounts/{sid}/Calls`, `JAMBONZ_API_KEY`, `JAMBONZ_ACCOUNT_SID`, `channels.phone.api_url`,
+  `application_sid`) from `channels.phone.from`, matched with a `?o=` token. **Campaigns** (**Operate → Campaigns**):
+  CSV import with column mapping, dedupe and opt-out filtering (up to 10,000 recipients, `PARLA_CAMPAIGN_MAX`),
+  schedule and time zone, rate (default 20/minute, up to 50/second), quiet hours, draft/running/paused/done/canceled,
+  up to 3 attempts with backoff, a queue in `parla.db` that survives restarts, per-recipient statuses, conversions
+  (classification, intent, flow or CSAT), CSV export and a `?campaign=` filter on sessions and reports. A `remind`
+  step schedules a reminder (`after` or `at`, `flow` or `text`, `template`). Opt-out keywords («STOP», «BAJA»,
+  `agent.outbound.optout_keywords`) with a confirmation, plus manual opt-outs. Audit actions `outbound.send`,
+  `campaign.*`, `optout.add` / `optout.remove` with masked numbers; metrics `parla_outbound_messages_total` and
+  `parla_campaign_recipients`; retention and `pii_redaction` cover recipients.
 - Observability, standard library only and off by default ([docs/observability.md](docs/observability.md)).
   **Prometheus metrics** at `GET /metrics` with `PARLA_METRICS=1` (bearer `PARLA_METRICS_TOKEN`, or loopback only
   without one): HTTP requests and latency by route template, turns by agent/channel/environment, intent outcomes

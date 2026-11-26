@@ -108,7 +108,9 @@ next to **Manage users**) or with `GET /api/audit` ([api.md](api.md)); other rol
   `agent.import`, `agent.save`, `agent.delete`, `agent.train`, `agent.publish`, `agent.deploy`, `agent.restore`,
   `secret.set` / `secret.delete` (the name only, never the value), `file.upload` / `file.delete`,
   `channel.update` (a save that changed `channels`), `channel.telegram`, `inbox.take` / `inbox.release` /
-  `inbox.reply` and `session.delete`.
+  `inbox.reply`, `session.delete`, and for outbound messaging `outbound.send`, `campaign.create`, `campaign.update`,
+  `campaign.delete`, `campaign.recipients`, `campaign.start` / `campaign.pause` / `campaign.resume` /
+  `campaign.cancel`, `optout.add` and `optout.remove` (phone numbers masked: `549••••••5678`).
 - The interface autosaves every ~400 ms: consecutive `agent.save` entries by the same user on the same agent
   within 5 minutes are merged into one.
 - Without users configured, entries have an empty user.
@@ -258,6 +260,31 @@ Setup and limits in [channels.md](channels.md).
   goes wherever its speech services point, which can be self-hosted.
 - The conversation id `call-<CallSid>` and the caller's number (saved in a `caller` slot if the bot has one, and kept
   by the provider) are personal data; `pii_redaction` masks phone numbers in what is saved.
+
+## Outbound messages and campaigns
+
+The bot can write first: the outbound API, campaigns and reminders ([outbound.md](outbound.md)).
+
+- **Who:** `POST /api/v1/bots/{bot}/outbound`, creating, changing, starting or canceling campaigns and managing
+  opt-outs need `owner` or `editor`. `analyst` sees campaigns, results, the CSV export and opt-outs, read-only.
+  `agent` (support) sees none of it. The outbound route is never public, even with the widget on.
+- **Audit:** every send through the API, every campaign change and action, and every manual opt-out is in the
+  [audit log](#audit-log), with the phone number masked.
+- **Masking:** numbers are masked in the audit log and in the console errors. The UI and the admin API show them to
+  whoever can see the bot, and conversation ids (`wa-<phone>`) still contain them.
+- **Rate limits:** `agent.outbound.api_per_minute` API sends per minute per agent (default 30, 429 above it); each
+  campaign's rate (1 per minute to 50 per second); 10,000 recipients per campaign (`agent.outbound.max_recipients`,
+  `PARLA_CAMPAIGN_MAX`). The counters live in memory.
+- **Retention and personal data:** with `retention_days` (or `PARLA_RETENTION_DAYS`), the recipients of campaigns
+  that finished more than that many days ago are deleted (numbers and data), keeping only the totals; old API and
+  reminder rows too. With `pii_redaction`, a campaign or reminder row's data is masked once it's sent. Deleting the
+  agent deletes its campaigns, queue and opt-outs.
+- **Outbound calls:** the provider calls back the usual signed webhook with a random `?o=<token>` that names the
+  send; the signature covers it. Placing calls needs `TWILIO_ACCOUNT_SID` or `JAMBONZ_API_KEY` /
+  `JAMBONZ_ACCOUNT_SID` in the vault.
+- **Consent:** opt-out keywords («STOP», «BAJA») are honored on their own, and an opted-out person can't be sent to
+  (409). Getting consent before writing, respecting quiet hours and do-not-call lists is on you: see
+  [Consent and the law](outbound.md#consent-and-the-law).
 
 ## Key vault (secrets)
 
@@ -434,7 +461,7 @@ All off by default ([observability.md](observability.md)).
 ## Not there yet
 
 - One replica per data folder. Login lockout counters are in memory: they reset on restart.
-- No rate limiting, except the login lockout.
+- No general rate limiting: only the login lockout and the outbound limits (API sends per minute, campaign rate).
 - No access log with users or IPs: the audit log records writes, and `PARLA_LOG_FORMAT=json` logs every request
   with its route template, status and duration but not who made it.
 - No second factor for local passwords (with [SSO](sso.md), your identity provider can require MFA), no password

@@ -7,7 +7,8 @@ the API. It is the same bot and the same conversation engine: it answers with wh
 or the draft if nothing has been published yet, with its buttons and files. Conversations show up in
 **Conversations** with channel `whatsapp` or `telegram`. When the conversation is handed to a person, what that
 person writes in the **Inbox** reaches the customer's WhatsApp or Telegram too. It can also answer **phone
-calls** through Twilio or jambonz: see [Phone calls](#phone-calls-twilio-and-jambonz).
+calls** through Twilio or jambonz: see [Phone calls](#phone-calls-twilio-and-jambonz). And it can **write first**
+(the outbound API, campaigns and reminders, also outbound calls): see [outbound.md](outbound.md).
 
 Everything is configured in **Publish → Channels**.
 
@@ -51,7 +52,8 @@ you a test number).
    - *Callback URL*: the one shown by **Channels** (`https://bots.mydomain.com/api/v1/bots/<id>/whatsapp`).
    - *Verify token*: the same word as `WHATSAPP_VERIFY_TOKEN`.
    - *Verify and save*. Meta makes a `GET` with that token, and Parla answers with the challenge.
-   - In *Webhook fields*, **subscribe to `messages`**.
+   - In *Webhook fields*, **subscribe to `messages`**. That field also brings the delivery statuses (`sent`,
+     `delivered`, `read`, `failed`) that campaigns use ([outbound.md](outbound.md#delivery-statuses)).
 8. **Test.** With the test number, add your phone to the allowed recipients list in *API Setup*. Write to the
    number: the bot answers. To serve everyone, the app has to be in *Live* mode and the number verified.
 
@@ -105,10 +107,10 @@ writes from the Inbox is sent through the channel. **Hand back to the bot** give
 ## Limits
 
 - **WhatsApp's 24-hour window.** WhatsApp only allows free-form messages within 24 hours of the person's last
-  message. After that, a message has to be an approved **template**. Parla **doesn't support templates or
-  starting conversations** yet: an Inbox reply after 24 hours fails (Meta answers error 131047), and you see that
-  in **Channels → Last error**.
-- No outbound or bulk sending: the bot only answers.
+  message. After that, a message has to be an approved **template**. Writing first (the outbound API, campaigns
+  and reminders) chooses the template on its own, from **Channels → WhatsApp → Approved templates**
+  (`channels.whatsapp.templates`): see [outbound.md](outbound.md). An **Inbox** reply after 24 hours still fails
+  (Meta answers error 131047, shown in **Channels → Last error**), because the Inbox sends free text.
 - The duplicate filter, the per-conversation order and the status in **Channels** live in memory: they are lost on
   restart and don't work across several replicas (run one; see [deployment.md](deployment.md)).
 - If Meta or Telegram retry a message right after a restart, it could be answered twice.
@@ -165,8 +167,15 @@ up (`<Hangup>` / `hangup`).
 | `handoff_to` | Where to transfer when the conversation goes to a person: a number (`+5491112345678`) or a SIP URI (`sip:desk@pbx.mydomain.com`). |
 | `finish_on_key` | Key that ends a number typed on the keypad. Default `#`. |
 | `greeting` | What to say when the call starts if the bot has no `__start__` flow. Default «Hola, ¿en qué te puedo ayudar?» in the bot's language. |
+| `from` | **Number calls are made from**: your number at the provider, or a SIP URI. Only for outbound calls. |
+| `api_url` | **jambonz API address** for outbound calls. Default `https://api.jambonz.cloud`. |
+| `application_sid` | **Application SID**: the jambonz application that handles outbound calls (recommended). |
 
 The public address is the same as for the other channels (`PARLA_PUBLIC_URL` or **Public address**).
+
+To **place calls** (outbound API, campaigns, reminders) Parla also needs `TWILIO_ACCOUNT_SID` (with
+`TWILIO_AUTH_TOKEN`) on Twilio, or `JAMBONZ_API_KEY` and `JAMBONZ_ACCOUNT_SID` on jambonz, in **Secrets**. Answering
+calls doesn't need them. See [outbound.md](outbound.md#phone-outbound-calls).
 
 ### Twilio step by step
 
@@ -243,7 +252,8 @@ Inbox, **Take conversation** makes Parla transfer the call to `handoff_to` as so
 
 ### Phone limits
 
-- Inbound calls only: no outbound calls or campaigns.
+- Outbound calls (the API, campaigns and reminders) need `from`, the provider's keys and, on jambonz, `api_url` and
+  `application_sid`: see [outbound.md](outbound.md#phone-outbound-calls). There is no answering machine detection.
 - Speech recognition is done by the provider (Twilio, or what jambonz is configured with), not by Parla (neither
   local faster-whisper nor the agent's `voice.asr`). Turns are request/response (no audio streaming), so each answer
   waits for the end of the caller's sentence.
@@ -258,7 +268,8 @@ Inbox, **Take conversation** makes Parla transfer the call to `handoff_to` as so
 
 `tests/test_channels.py` runs everything against fake Graph and Telegram APIs on a local port. The base URLs of those
 APIs can be changed with `PARLA_WHATSAPP_API` (default `https://graph.facebook.com/v21.0`) and
-`PARLA_TELEGRAM_API` (default `https://api.telegram.org`). Only change them for tests.
+`PARLA_TELEGRAM_API` (default `https://api.telegram.org`). Only change them for tests. `tests/test_outbound.py`
+also fakes Twilio (`PARLA_TWILIO_API`) and jambonz (`channels.phone.api_url`) for outbound calls.
 
 `tests/test_phone.py` sends fake signed Twilio and jambonz requests (first turn, speech, keys, handoff, hang-up,
 silence, signatures, signed audio URLs) without contacting either provider. To try a real call from your computer,

@@ -1,6 +1,6 @@
 ---
 name: parla-flow-design
-description: Conversation design for Parla flows - steps (message, ask, set, if, goto, call, end, classify, handoff, file, agent), good questions and re-asks, buttons and their per-channel limits (WhatsApp, Telegram, web), CEL conditions and templates, start flow and preloaded data, corrections, interruptions (interrupts false/always), system flows (cancel, repeat, clarify, resume, handoff, csat, anything_else), fallbacks, voice-friendly wording and multilingual bots. Use it when designing or reviewing the flows of a Parla agent, writing the bot's messages and questions, or fixing a flow that skips questions, loops, ends early or handles digressions badly.
+description: Conversation design for Parla flows - steps (message, ask, set, if, goto, call, end, classify, handoff, file, agent, remind), good questions and re-asks, buttons and their per-channel limits (WhatsApp, Telegram, web), CEL conditions and templates, start flow and preloaded data, corrections, interruptions (interrupts false/always), system flows (cancel, repeat, clarify, resume, handoff, csat, anything_else), fallbacks, voice-friendly wording and multilingual bots, and reminders / flows for outbound messages (consent, WhatsApp templates, opt-out). Use it when designing or reviewing the flows of a Parla agent, writing the bot's messages and questions, or fixing a flow that skips questions, loops, ends early or handles digressions badly.
 ---
 
 # Flow design for Parla
@@ -111,6 +111,36 @@ repeats the question. Design consequences:
 labels and on system flow texts, + `fallback_translations`. The language comes from start data
 (`{"idioma": "pt"}`) or the first message. Validate warns about missing `fallback_translations`.
 
+## Reminders and flows that write first
+
+The `remind` step schedules a message to the same person and channel for later; campaigns and the outbound API
+start a conversation with a flow (see `docs/outbound.md`).
+
+```json
+{"type": "remind", "after": "24h", "flow": "Recordatorio turno", "template": "recordatorio_turno"}
+{"type": "remind", "at": "{{ fecha }} 09:00", "text": "Hola {{ nombre }}, te esperamos hoy a las {{ hora }}."}
+```
+
+- `after` (`30m`, `24h`, `2d`) **or** `at` (a template that renders as `YYYY-MM-DD HH:MM`, in
+  `agent.outbound.timezone`); `flow` **or** `text`. The flow runs later with the slots the conversation has now,
+  so collect what the reminder needs (name, date, time) before the `remind` step.
+- **Consent first.** Only remind people who asked for it or expect it (they just booked). Ask «¿Querés que te
+  recuerde el turno el día anterior?» when in doubt, and `if` on the answer before `remind`.
+- **One reminder per thing**: one per appointment, placed after the confirmation, never in a step that runs on
+  every turn. Don't stack several reminders for the same event.
+- **Mind the clock.** `at` with a fixed hour in business time (`"{{ fecha }} 09:00"`), not «after 8h» that can land
+  at 3 a.m.; set `agent.outbound.timezone`. Campaigns take `quiet_hours`.
+- **WhatsApp after 24 hours needs a template.** If the reminder can go out more than 24 hours after the person's
+  last message, set `template` to an approved one from `channels.whatsapp.templates` (its `params` are slots, in
+  `{{1}}`, `{{2}}` order). The flow then runs when the person replies to the template, so write the flow as the
+  answer to it: no greeting again, go straight to «¿Confirmás?» with buttons.
+- **Say who you are and why** in the first line, and **offer the way out**: «Respondé BAJA si no querés recibir
+  más avisos.» Opt-outs (STOP, BAJA…) are handled by Parla; don't build an intent for them.
+- **Keep it short and actionable**: one message with 2–3 buttons (Confirmar / Cambiar / Cancelar) that map to
+  flows. On calls (phone reminders and outbound calls, which call the `caller` slot) the first sentence is who is
+  calling; there is no answering machine detection.
+- Low frequency: campaigns default to 20 per minute; don't use reminders as a drip-marketing engine.
+
 ## Anti-patterns
 
 - A flow that asks everything again because slots weren't cleared — or never asks because they weren't.
@@ -120,6 +150,8 @@ labels and on system flow texts, + `fallback_translations`. The language comes f
 - Own «cancelar»/«hablar con una persona» intents; turning `system.cancel`/`system.handoff` off.
 - Long paragraphs, several questions in one message, emojis and links in voice bots.
 - `classify` before the goal is actually met.
+- A `remind` step without consent, in a loop, at night, or without a `template` when it can go out after 24 h on
+  WhatsApp.
 
 ## Worked example
 
