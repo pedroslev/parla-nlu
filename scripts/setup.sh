@@ -4,9 +4,10 @@ set -euo pipefail
 
 usage() {
   cat <<'TXT'
-Usage: scripts/setup.sh [--voice] [--ollama] [--lang en|es|pt] [--help]
+Usage: scripts/setup.sh [--voice] [--providers] [--ollama] [--lang en|es|pt] [--help]
 
   --voice    also install voice (faster-whisper + piper-tts; needs ffmpeg)
+  --providers  also install the optional SDKs for bring-your-own-key providers (anthropic, for Claude)
   --ollama   download the local AI model qwen2.5:0.5b (if Ollama is installed)
   --lang xx  default interface language: en, es or pt (asked if omitted and interactive; saved as PARLA_LANG in .env)
   --help     show this help
@@ -15,11 +16,12 @@ PYTHON variable: the interpreter to use (default: the first of python3.13, pytho
 TXT
 }
 
-VOICE=0; OLLAMA=0; UILANG=""
+VOICE=0; PROVIDERS=0; OLLAMA=0; UILANG=""
 while [ $# -gt 0 ]; do
   arg="$1"; shift
   case "$arg" in
     --voice) VOICE=1 ;;
+    --providers) PROVIDERS=1 ;;
     --ollama) OLLAMA=1 ;;
     --lang) UILANG="${1:-}"; shift || true ;;
     --lang=*) UILANG="${arg#--lang=}" ;;
@@ -55,6 +57,11 @@ if [ "$VOICE" = 1 ]; then
   echo "Installing voice…"
   .venv/bin/pip install -q -r requirements-voice.txt
   command -v ffmpeg >/dev/null 2>&1 || echo "Warning: ffmpeg is missing (brew install ffmpeg / apt install ffmpeg); it's needed to read audio from the browser."
+fi
+
+if [ "$PROVIDERS" = 1 ]; then
+  echo "Installing provider SDKs…"
+  .venv/bin/pip install -q -r requirements-providers.txt
 fi
 
 if [ "$OLLAMA" = 1 ]; then

@@ -9,6 +9,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Bring-your-own-key providers, chosen per agent (local stays the default). **AI** (`ai.provider`): `openai`
+  (api.openai.com, or any compatible server with `url` as before), `openai_compatible`, `anthropic` (Claude through
+  the official `anthropic` SDK, optional `requirements-providers.txt`: structured outputs, effort `low`, server-side
+  refusal fallback, refusal and `max_tokens` handled as errors) and `gemini` (`generateContent` REST with
+  `responseJsonSchema`). **Speech** (`voice.asr` / `voice.tts`): OpenAI, Deepgram (nova-3 with `keyterm`, Aura-2),
+  ElevenLabs (Scribe with `keyterms`, Flash TTS) and Google Cloud (Speech-to-Text with `speechContexts`,
+  Text-to-Speech). Keys come from the agent's vault by name (defaults `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
+  `GEMINI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `GOOGLE_API_KEY`) and are masked in every error. TTS is
+  always WAV, so the browser call mode, the widget and phone `tts: "parla"` (now the agent's voice) keep working; the
+  prewarm cache is keyed by provider and voice. Provider picker and a **Voz** panel (voice list, sample playback,
+  3-second transcription test, privacy notice) in the **IA** screen; `POST /api/voice/voices`; `agent`/`voice` on
+  `POST /api/voice/speak`; `scripts/setup.sh --providers`, `make setup-providers`, Docker `INSTALL_PROVIDERS=1`
+  ([docs/ai-and-voice.md](docs/ai-and-voice.md)).
 - Tools in the AI `agent` step: `tools` with `function`, `http` (like an http step, typed `params`, fixed host) and
   `mcp` entries (mandatory allow-list), agent-level `mcp_servers` (Streamable HTTP only, `headers_secret` from the
   vault, `tools/list` cached 5 minutes), and `max_tool_calls` / `time_budget` limits. Parla's own JSON protocol

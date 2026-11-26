@@ -1,6 +1,6 @@
 ---
 name: parla-integrations
-description: Connecting a Parla bot to the outside world safely - http steps (secrets with {{ secret.NAME }}, URL encoding, timeouts, saving the response into slots, error branches), custom Python/JavaScript functions, file steps, the knowledge base (writing FAQ documents, chunking, knowledge_threshold), the optional AI features (rescue_intents, fill ai, generative_fallback, use_knowledge, the agent step and its tools - functions, http tools and MCP servers with allow-lists; local Ollama vs OpenAI-compatible providers and privacy), web widget, WhatsApp and Telegram channel setup, and personal-data settings (pii_redaction, retention). Use it when a Parla bot must call an API, run code, answer FAQs from documents, use an LLM, or be published on a channel.
+description: Connecting a Parla bot to the outside world safely - http steps (secrets with {{ secret.NAME }}, URL encoding, timeouts, saving the response into slots, error branches), custom Python/JavaScript functions, file steps, the knowledge base (writing FAQ documents, chunking, knowledge_threshold), the optional AI features (rescue_intents, fill ai, generative_fallback, use_knowledge, the agent step and its tools - functions, http tools and MCP servers with allow-lists; local Ollama vs hosted providers - OpenAI, Claude, Gemini, OpenAI-compatible - and privacy; voice providers for transcription and TTS - Deepgram, ElevenLabs, OpenAI, Google), web widget, WhatsApp and Telegram channel setup, and personal-data settings (pii_redaction, retention). Use it when a Parla bot must call an API, run code, answer FAQs from documents, use an LLM, or be published on a channel.
 ---
 
 # Integrations for Parla bots
@@ -105,9 +105,26 @@ to normal behaviour.
 | `agent` step | a free conversation island with tools | only listed tools (`max_tool_calls`, default 3/turn; `time_budget` 15 s), only listed slots, ends at `goal` or `max_turns` (default 8) |
 
 - Provider: `"ollama"` (default, `http://127.0.0.1:11434`, `qwen2.5:0.5b`) keeps everything on the machine.
-  `"openai"` = any OpenAI-compatible server (`url` ending in `/v1`, `model`, `api_key_secret`, `azure: true` for
-  Azure). **With a hosted provider the conversation text, recent turns, persona and knowledge snippets leave the
-  machine** — say so to the user and get their OK. Embeddings, intents and knowledge search always stay local.
+  `"openai"` without `url` = OpenAI (`gpt-6-luna`); with a `url` (or `"openai_compatible"`) = any OpenAI-compatible
+  server (`url` ending in `/v1`, `azure: true` for Azure). `"anthropic"` = Claude via the official SDK
+  (`claude-opus-5-5`; `claude-sonnet-5-5` / `claude-haiku-5-5` cheaper; the user runs
+  `pip install -r requirements-providers.txt`). `"gemini"` = Google Gemini (`gemini-3.8-flash`). Key names default
+  to `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` — the user loads them in «Claves». **With a hosted
+  provider the conversation text, recent turns, persona, knowledge snippets and tool results leave the machine** —
+  say so to the user and get their OK. Embeddings, intents and knowledge search always stay local.
+- Choosing: start local; go hosted when the small model mis-rescues intents or the agent step needs real reasoning.
+  For hosted, pick the cheapest model that passes the bot's tests (`run_tests`), not the biggest. Never switch
+  provider for a client without asking: it changes cost, privacy and data residency.
+
+## Voice providers (`voice: {asr, tts}`)
+
+- Default `"local"`: faster-whisper transcribes and piper speaks on the machine. Per agent, `voice.asr.provider` /
+  `voice.tts.provider` can be `"openai"`, `"deepgram"`, `"elevenlabs"` or `"google"` with `model`, `voice` (TTS) and
+  `api_key_secret` (defaults `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`, `ELEVENLABS_API_KEY`, `GOOGLE_API_KEY`).
+- ASR gets the bot's entity values as vocabulary hints: keep entity values spelled the way people say them.
+- Phone: `channels.phone.tts: "parla"` speaks with `voice.tts`; for low latency suggest Deepgram Aura-2
+  (`aura-2-celeste-es`) or ElevenLabs Flash (`eleven_flash_v2_5`); fixed phrases are pre-generated. Deepgram has
+  no Portuguese voices. Hosted ASR sends the caller's audio out; hosted TTS sends the bot's replies: tell the user.
 - Use the `agent` step sparingly (advice, comparisons); collect data with `ask`. Tests through AI are flaky:
   assert loosely.
 
@@ -176,7 +193,7 @@ them for the tokens.
 - Free text interpolated into a JSON body.
 - A function for something `set mode cel` does; a function used without `test_function`.
 - FAQ as intents; one giant knowledge document with no `P:`/`R:` structure.
-- Turning on a hosted AI provider without telling the user data leaves the machine.
+- Turning on a hosted AI or voice provider without telling the user data leaves the machine; an `api_key` value in `ai` or `voice`.
 - Agent-step tools that write or delete; an MCP tool without an allow-list; a tool URL whose host is a `{{ }}`.
 
 ## Worked example

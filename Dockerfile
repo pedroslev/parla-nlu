@@ -1,10 +1,12 @@
 # Parla in a container. See docs/deployment.md.
 #   docker build -t parla .
 #   docker build -t parla:voice --build-arg INSTALL_VOICE=1 .                 # + ffmpeg, faster-whisper, piper
+#   docker build -t parla:byok --build-arg INSTALL_PROVIDERS=1 .               # + anthropic SDK (Claude)
 #   docker build -t parla:baked --build-arg BAKE_EMBED_DIR=/opt/embeddings .  # embedding model (~1.2 GB) baked in
 FROM python:3.12-slim
 
 ARG INSTALL_VOICE=0
+ARG INSTALL_PROVIDERS=0
 # Empty: the embedding model is downloaded to the data volume the first time you train.
 ARG BAKE_EMBED_DIR=
 
@@ -20,13 +22,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.txt requirements-voice.txt ./
+COPY requirements.txt requirements-voice.txt requirements-providers.txt ./
 RUN if [ "$INSTALL_VOICE" = 1 ]; then \
         apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/* && \
         pip install -r requirements-voice.txt; \
     else \
         pip install -r requirements.txt; \
-    fi
+    fi && \
+    if [ "$INSTALL_PROVIDERS" = 1 ]; then pip install -r requirements-providers.txt; fi
 
 # Before copying the code, so 1.2 GB isn't downloaded again on every change. The name must match MODEL
 # in parla/server.py.
