@@ -36,7 +36,7 @@ English, Spanish and Portuguese. Parla has a **no-open-core pledge**: every feat
 | Channels | HTTP API, web widget, WhatsApp, Telegram, phone (Twilio, jambonz) | Many connectors | Many | Many | Many integrations | Teams, web and Microsoft channels | Many | Many |
 | MCP | MCP server (27 tools) to build/test/publish bots; MCP tools in the agent step (client, Streamable HTTP, allow-listed) | MCP tools server for IDEs (beta, 3.16) [1] | MCP tools in agents; MCP server endpoint (experimental) [4] | Not verified in official docs | Not verified in official docs | MCP tools in agents (GA) [10] | MCP in the ADK CLI, per third-party sources [12] | MCP tools in agents + hosted MCP server [14] |
 | Analytics | Containment, handoffs, fallbacks, CSAT, drop-off | Built-in dashboard in Studio 1.16 [1] | Yes | Yes | Yes (Google Cloud) | Yes | Yes | Yes (observability) [13] |
-| Testing | Self-evaluation, confusion matrix, test chat, replay against another version | Yes (E2E tests) | Simulator [3] | Yes | Yes | Yes | Yes | Yes |
+| Testing | Conversation test suites (UI, CLI, CI, publish gate), self-evaluation, confusion matrix, replay against another version | Yes (E2E tests) | Simulator [3] | Yes | Yes | Yes | Yes | Yes |
 | SSO | Yes, OIDC (Keycloak, Entra ID, Google, Okta, Authentik, Auth0) | Not checked for this page | Not checked for this page | Not checked for this page | Google Cloud identity | Microsoft Entra ID | Not checked for this page | Not checked for this page |
 
 "Yes" without a source means the feature is widely documented by the vendor but was not re-checked for this page.
@@ -124,7 +124,7 @@ Being honest about gaps matters more than a long feature list. These are on the 
   no outbound campaigns or audio streaming); no AudioCodes or contact-center (CCaaS) connectors.
 - **Horizontal scaling:** Parla is a single process with files on disk; it is designed for a small server.
 - **SAML single sign-on** (SSO is OIDC only, see [sso.md](sso.md)).
-- **End-to-end conversation test suites** (replay against another version exists; full test suites do not).
+
 - **Observability exports** (OpenTelemetry, Prometheus or similar).
 
 If any of these is a hard requirement today, one of the platforms above is probably a better fit.
