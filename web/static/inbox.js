@@ -80,7 +80,7 @@ window.inboxView = () => {
     list.replaceChildren(...items.map((s) => h('div', { role: 'listitem' }, h('button', {
       class: 'ib-item', 'aria-current': String(s.sessionId === ibSel),
       onclick: () => { ibSel = s.sessionId; openSig = ''; delete log.dataset.once; drawList(); drawDetail(); },
-    }, h('strong', {}, s.sessionId),
+    }, h('strong', {}, s.sessionId), s.handoff?.mode === 'external' ? h('span', { class: 'tag', style: 'background:var(--warn-soft);color:var(--warn)' }, t('En el contact center externo')) : null,
       h('span', { class: 'sv-preview' }, s.last_message ? t('«{text}»', { text: s.last_message }) : ''),
       h('small', {}, [s.handoff?.reason ? t('Motivo: {reason}', { reason: window.tEvent(s.handoff.reason) }) : null, s.handoff?.by ? t('Atiende {name}', { name: s.handoff.by }) : t('Sin tomar'), ibDate(s.handoff?.since || s.updated)].filter(Boolean).join(' · '))))));
     if (!body.contains(list)) body.replaceChildren(h('div', { class: 'ib-grid' }, list, detail));
@@ -97,6 +97,7 @@ window.inboxView = () => {
       openSig = sig;
       const item = items.find((x) => x.sessionId === id) || {};
       const ho = s.handoff || item.handoff || {};
+      const external = ho.active !== false && ho.mode === 'external';
       const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
       log.replaceChildren(...(s.history || []).flatMap((m) => {
         if (m.from === 'user') return [h('div', { class: 'msg user' }, m.text), h('div', { class: 'ib-who user' }, t('Cliente') + ' · ' + ibTime(m.at))];
@@ -107,10 +108,13 @@ window.inboxView = () => {
       if (stick || !log.dataset.once) { log.scrollTop = log.scrollHeight; log.dataset.once = '1'; }
       head.replaceChildren(h('div', { class: 'grow stack', style: 'gap:2px;min-width:min(220px,100%)' }, h('h2', {}, id),
         h('span', { class: 'help', style: 'font-size:14px' }, [ho.reason ? t('Motivo: {reason}', { reason: window.tEvent(ho.reason) }) : null, ho.by ? t('La atiende {name}', { name: ho.by }) : t('Nadie la tomó todavía')].filter(Boolean).join(' · '))),
-        ho.by ? null : h('button', { class: 'btn quiet small', onclick: () => act('take') }, icon('hand'), t('Tomar conversación')),
-        h('button', { class: 'btn small', onclick: () => act('release') }, icon('back'), t('Devolver al bot')));
-      const call = String(s.channel === 'phone');      // una llamada no tiene caja para escribir
-      if (!detail.contains(log) || detail.dataset.call !== call) (detail.dataset.call = call, detail.replaceChildren(head, log, s.channel === 'phone'
+        external ? h('span', { class: 'tag', style: 'background:var(--warn-soft);color:var(--warn)' }, t('En el contact center externo'))
+          : [ho.by ? null : h('button', { class: 'btn quiet small', onclick: () => act('take') }, icon('hand'), t('Tomar conversación')),
+            h('button', { class: 'btn small', onclick: () => act('release') }, icon('back'), t('Devolver al bot'))]);
+      const call = String(s.channel === 'phone') + external;      // una llamada no tiene caja para escribir; la del contact center externo tampoco
+      if (!detail.contains(log) || detail.dataset.call !== call) (detail.dataset.call = call, detail.replaceChildren(head, log, external
+        ? h('p', { class: 'help' }, t('La atiende el contact center externo (Canales → Derivación): acá solo se puede mirar. La devuelve o la cierra el contact center por la API.'))
+        : s.channel === 'phone'
         ? h('p', { class: 'help' }, t('Es una llamada: no se le puede escribir. Al tomarla, Parla la transfiere al número de «Transferir a una persona» (Canales → Teléfono) apenas la persona deje de hablar.'))
         : h('div', { class: 'ib-reply' }, text, h('button', { class: 'btn', onclick: send }, icon('arrow'), t('Enviar'))), note,
         h('button', { class: 'link', style: 'align-self:flex-start;font-size:13px', onclick: () => ibOpenInSessions(id) }, t('Ver en Conversaciones'))));

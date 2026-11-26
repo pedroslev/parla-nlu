@@ -4,6 +4,10 @@ document.head.append(h('style', {}, `
   .ch-ok, .ch-miss { font-size: 13px; font-weight: 600; white-space: nowrap; }
   .ch-ok { color: var(--ok); } .ch-miss { color: var(--warn); }
   .ch-url { display: flex; gap: 8px; align-items: center; } .ch-url .wg-snippet { flex: 1; min-width: 0; }
+  .ch-events { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; } .ch-events label { display: inline-flex; gap: 6px; align-items: center; }
+  .ch-scroll { overflow-x: auto; } .ch-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ch-table th { text-align: left; color: var(--muted); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  .ch-table td { padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
 `));
 
 const CH_HELP = {
@@ -21,12 +25,81 @@ const CH_HELP = {
   JAMBONZ_ACCOUNT_SID: t('El Account SID de tu cuenta de jambonz. Hace falta para que Parla llame (campañas y recordatorios).'),
 };
 const CH_PHONE = { twilio: ['TWILIO_AUTH_TOKEN', 'TWILIO_ACCOUNT_SID'], jambonz: ['JAMBONZ_WEBHOOK_SECRET', 'JAMBONZ_BASIC_USER', 'JAMBONZ_BASIC_PASSWORD', 'JAMBONZ_API_KEY', 'JAMBONZ_ACCOUNT_SID'] };
-let chInfo = null, chFor = null, chError = '', chNote = '', chEditing = null, chBusy = false;
+let chInfo = null, chFor = null, chError = '', chNote = '', chEditing = null, chBusy = false, chLog = null;
 
 async function chLoad() {
   try { chInfo = await api('GET', '/' + agent.id + '/channels'); chError = ''; }
   catch (e) { chError = e.message; }
+  try { chLog = (await api('GET', '/' + agent.id + '/webhooks/deliveries?limit=20')).deliveries; } catch { chLog = null; }
   if (section === 'channels') render();
+}
+
+// Derivación (parla/handoff.py): a quién pasa la charla, webhooks firmados y el contexto de la transferencia telefónica
+const CH_EVENTS = {
+  'handoff.requested': t('Pasó a una persona'), 'handoff.released': t('Volvió al bot'), 'conversation.started': t('Empezó una conversación'),
+  'conversation.ended': t('Terminó una conversación'), 'message.user': t('Cada mensaje del cliente'), 'message.bot': t('Cada respuesta del bot'),
+  'csat.received': t('Respuesta de la encuesta'), 'campaign.finished': t('Terminó una campaña'),
+};
+const CH_HEADERS = { session: t('Id de la conversación'), intent: t('Intención'), language: t('Idioma'), summary: t('Resumen'), context_url: t('Dirección del contexto (lookup)') };
+const CH_STATUS = { queued: t('En cola'), sending: t('Enviando'), delivered: t('Entregado'), dead: t('Falló (sin más reintentos)') };
+
+async function chWebhook(what, arg) {
+  chBusy = true; chNote = ''; chError = ''; render();
+  try {
+    if (what === 'test') {
+      await saveNow();                    // que el servidor ya tenga el webhook
+      const d = await api('POST', '/' + agent.id + '/webhooks/test', { url: arg });
+      chNote = d.status === 'delivered' ? t('Evento de prueba entregado (HTTP {code}).', { code: d.code }) : t('El evento de prueba no llegó: {error}.', { error: d.error || d.code });
+    } else {
+      await api('POST', '/' + agent.id + '/webhooks/deliveries/' + arg + '/retry');
+      chNote = t('Vuelve a la cola: sale en unos segundos.');
+    }
+  } catch (e) { chError = e.message; }
+  chBusy = false; chLoad();
+}
+
+function chHandoff() {
+  const ho = (agent.handoff ||= {}), ph = (ho.phone ||= {}), hooks = (agent.webhooks ||= []);
+  const upd = () => { touch(); render(); };
+  const box = (list, value, label) => h('label', {}, h('input', { type: 'checkbox', checked: list.includes(value),
+    onchange: (e) => { const i = list.indexOf(value); if (e.target.checked && i < 0) list.push(value); if (!e.target.checked && i >= 0) list.splice(i, 1); touch(); } }), label);
+  const mode = ho.mode || 'inbox';
+  return h('div', { class: 'panel' },
+    h('h2', {}, t('Derivación')),
+    h('p', { class: 'help' }, t('Qué pasa cuando el bot pasa la charla a una persona. Con un contact center propio (Genesys, Twilio Flex, Five9, Zendesk, Salesforce…), Parla le avisa por webhook y el contact center contesta por la API. Guía en docs/contact-centers_es.md.')),
+    lab(t('Quién atiende'), chSelect(ho, 'mode', [['inbox', t('Bandeja de Parla')], ['external', t('Contact center externo')], ['both', t('Ambos')]])),
+    mode === 'inbox' ? null : [
+      lab(t('Si nadie la acepta en (minutos, 0 = esperar siempre)'), h('input', { type: 'number', min: 0, value: ho.timeout_minutes ?? 0, style: 'max-width:120px',
+        oninput: (e) => { ho.timeout_minutes = Number(e.target.value) || 0; touch(); } })),
+      lab(t('Al vencer'), chSelect(ho, 'on_timeout', [['bot', t('Vuelve al bot')], ['close', t('Se cierra la conversación')]])),
+      lab(t('Cola o destino (se manda en el webhook)'), h('input', { ...bind(ho, 'target'), placeholder: 'ventas', spellcheck: 'false' }))],
+    lab(t('Mensajes que van en el contexto'), h('input', { type: 'number', min: 0, max: 50, value: ho.last_messages ?? 10, style: 'max-width:120px',
+      oninput: (e) => { ho.last_messages = Number(e.target.value); touch(); } })),
+    h('div', { class: 'panel phrases' }, h('strong', {}, t('Webhooks')),
+      h('p', { class: 'help', style: 'font-size:14px' }, t('Parla manda cada evento firmado (encabezado Parla-Signature) con la clave que elijas; si falla, reintenta durante unas 24 horas.')),
+      hooks.map((w, i) => h('div', { class: 'stack', style: 'gap:6px;padding:8px 0;border-bottom:1px solid var(--line)' },
+        h('div', { class: 'row' }, h('input', { ...bind(w, 'url'), placeholder: 'https://cc.midominio.com/parla', 'aria-label': t('Dirección del webhook'), spellcheck: 'false', class: 'grow' }),
+          iconBtn('x', t('Quitar webhook'), () => { hooks.splice(i, 1); upd(); })),
+        h('div', { class: 'ch-events' }, Object.entries(CH_EVENTS).map(([k, label]) => box((w.events ||= []), k, label))),
+        h('div', { class: 'row' }, h('input', { ...bind(w, 'secret_name'), placeholder: 'CC_WEBHOOK_SECRET', 'aria-label': t('Clave para firmar'), spellcheck: 'false', class: 'grow' }),
+          h('button', { class: 'link', type: 'button', onclick: () => { section = 'secrets'; render(); } }, t('Ir a Claves')),
+          canEdit() ? h('button', { class: 'btn quiet small', type: 'button', disabled: chBusy || !/^https?:\/\//.test(w.url || ''), onclick: () => chWebhook('test', w.url) }, t('Enviar evento de prueba')) : null))),
+      canEdit() ? h('div', {}, h('button', { class: 'link', type: 'button', onclick: () => { hooks.push({ url: '', events: ['handoff.requested', 'handoff.released'], secret_name: '' }); upd(); } }, t('Agregar webhook'))) : null),
+    hooks.length ? h('div', { class: 'panel phrases' }, h('strong', {}, t('Últimas entregas')),
+      !chLog?.length ? h('p', { class: 'help', style: 'font-size:14px' }, t('Todavía no salió ningún evento.')) : h('div', { class: 'ch-scroll' }, h('table', { class: 'ch-table' },
+        h('thead', {}, h('tr', {}, [t('Cuándo'), t('Evento'), t('Estado'), t('Respuesta'), ''].map((x) => h('th', {}, x)))),
+        h('tbody', {}, chLog.map((d) => h('tr', {}, h('td', {}, d.updated), h('td', {}, h('code', {}, d.event), d.sessionId ? h('small', { style: 'display:block' }, d.sessionId) : null),
+          h('td', {}, CH_STATUS[d.status] || d.status, d.attempts > 1 ? h('small', { style: 'display:block' }, t('{n} intentos', { n: d.attempts })) : null),
+          h('td', {}, d.code ? 'HTTP ' + d.code : '', d.error ? h('small', { class: 'wg-error', style: 'display:block' }, d.error) : null),
+          h('td', {}, canEdit() && (d.status === 'dead' || d.status === 'queued') ? h('button', { class: 'btn quiet small', type: 'button', disabled: chBusy, onclick: () => chWebhook('retry', d.id) }, t('Reintentar')) : null))))))) : null,
+    h('div', { class: 'panel phrases' }, h('strong', {}, t('Contexto en la transferencia telefónica')),
+      h('p', { class: 'help', style: 'font-size:14px' }, t('Al transferir una llamada a una dirección SIP, Parla agrega estos encabezados X-Parla-* (recortados a lo que entra en SIP). A un número común no se le pueden agregar.')),
+      h('div', { class: 'ch-events' }, Object.entries(CH_HEADERS).map(([k, label]) => box((ph.headers ||= []), k, label)),
+        h('label', {}, h('input', { type: 'checkbox', checked: !!ph.uui, onchange: (e) => { ph.uui = e.target.checked; touch(); } }), t('User-to-User (UUI)'))),
+      lab(t('Slots que viajan como encabezado'), h('input', { value: (ph.slots || []).join(', '), placeholder: t('dni, producto'), spellcheck: 'false',
+        onchange: (e) => { ph.slots = e.target.value.split(',').map((v) => v.trim()).filter(Boolean); touch(); } })),
+      lab(t('Twilio Flex: Workflow SID de TaskRouter (opcional)'), h('input', { ...bind(ph, 'twilio_workflow_sid'), placeholder: 'WW…', spellcheck: 'false' })),
+      h('p', { class: 'help', style: 'font-size:14px' }, t('Con un Workflow SID, la llamada entra a Flex con <Enqueue> y el contexto va en los atributos de la tarea, en vez de transferirse.'))));
 }
 const chAll = () => (agent.channels = agent.channels || {});
 const chConf = (c) => (chAll()[c] = chAll()[c] || { enabled: false });
@@ -149,5 +222,5 @@ window.channelsView = () => {
         h('button', { class: 'btn quiet small', type: 'button', disabled: chBusy, onclick: () => chTelegram(false) }, t('Desconectar'))),
       h('p', { class: 'help' }, t('Conectar le dice a Telegram que mande los mensajes a '), h('code', {}, chHook('telegram')), t('.')),
       chStatus('telegram')),
-    chPhone(base));
+    chPhone(base), chHandoff());
 };
