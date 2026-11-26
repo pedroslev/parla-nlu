@@ -95,6 +95,8 @@ The interface is available in English, Spanish and Portuguese (pick it next to t
   ([docs/testing-bots.md](docs/testing-bots.md)).
 - Public HTTP API (`/api/v1`), web widget embeddable with a `<script>`, agent export and import.
 - WhatsApp (Cloud API) and Telegram channels, with buttons, files and Inbox replies ([docs/channels.md](docs/channels.md)).
+- Phone calls through Twilio or jambonz (open source, self-hostable): speech and keypad (DTMF), buttons as «press 1
+  for…» menus, barge-in, transfer to a person, optional local piper voice ([docs/channels.md](docs/channels.md#phone-calls-twilio-and-jambonz)).
 - Light, dark and colorful themes in the interface.
 
 ### Security
@@ -233,6 +235,7 @@ parla/
   runner.py             functions in a separate process
   vault.py              per-agent secrets
   voice.py              local voice (and cache of pre-generated phrases)
+  phone.py              phone calls (Twilio, jambonz)
   connect.py            “Connect to AI”
   mcp_server.py         MCP server
 web/index.html          the interface
@@ -259,7 +262,7 @@ Everything is optional. Copy `.env.example` to see the values.
 | `PARLA_SECURE_COOKIE` | empty | `1` marks the session cookie as `Secure` (behind HTTPS). |
 | `PARLA_RETENTION_DAYS` | empty | Days to keep conversations with no activity, for agents without their own `retention_days`. Empty or `0`: forever. |
 | `PARLA_AUDIT_DAYS` | `365` | Days to keep the audit log. |
-| `PARLA_PUBLIC_URL` | empty | Public HTTPS address, for the WhatsApp/Telegram webhooks (see [docs/channels.md](docs/channels.md)) and the SSO redirect URI. |
+| `PARLA_PUBLIC_URL` | empty | Public HTTPS address, for the WhatsApp, Telegram and phone webhooks (see [docs/channels.md](docs/channels.md)) and the SSO redirect URI. |
 | `PARLA_OIDC_ISSUER`, `PARLA_OIDC_CLIENT_ID` | empty | Single sign-on with OIDC; secret, role mapping and the other `PARLA_OIDC_*` in [docs/sso.md](docs/sso.md). |
 | `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` or `off` disable agent functions. |
 | `PARLA_WHISPER` | `base` | faster-whisper model (`tiny` if the machine is slow). |
@@ -289,7 +292,7 @@ The public plan (Now / Next / Later) is in [docs/ROADMAP.md](docs/ROADMAP.md). W
 - Built-in public endpoint or tunnel (today you publish it yourself with a proxy).
 - Bot templates and outbound campaigns.
 - Per-user memory across conversations.
-- Telephony (the API works for an IVR, but there's no direct integration).
+- Outbound phone calls and real-time audio streaming (inbound calls work through Twilio or jambonz).
 
 ## Comparison
 
@@ -304,7 +307,7 @@ Parla doesn't have yet, is in [docs/comparison.md](docs/comparison.md).
 | NLU | Embeddings + kNN, CRF, rules | Configurable ML pipeline and LLM-based approaches | Managed by Google | LLM-based in current versions |
 | LLM | Optional: local (Ollama) or any OpenAI-compatible endpoint | Optional, configurable | Integrated with Google models | Central to the platform |
 | Scale and ecosystem | Designed for a small server | Mature, large-scale production | Managed, Google scale | Large integration ecosystem |
-| Channels | HTTP API, web widget, WhatsApp and Telegram | Many connectors | Many integrations | Many channels |
+| Channels | HTTP API, web widget, WhatsApp, Telegram and phone (Twilio, jambonz) | Many connectors | Many integrations | Many channels |
 | Cost | Free, local | Open source + paid edition | Pay per use | Free plan + paid plans |
 
 If you need many channels, high availability or a large team, the other options are more mature. Parla aims to
@@ -312,7 +315,7 @@ get a useful bot running in an afternoon, on your machine and without sending da
 
 ## Documentation
 
-Everything is in [`docs/`](docs/README.md): getting started, concepts, API, [testing bots](docs/testing-bots.md), [WhatsApp and Telegram](docs/channels.md), MCP, [skills](docs/skills.md), [best practices](docs/best-practices.md),
+Everything is in [`docs/`](docs/README.md): getting started, concepts, API, [testing bots](docs/testing-bots.md), [WhatsApp, Telegram and phone](docs/channels.md), MCP, [skills](docs/skills.md), [best practices](docs/best-practices.md),
 AI and voice, security, [single sign-on](docs/sso.md), deployment, development, FAQ, [migrating from Rasa](docs/migrate-from-rasa.md),
 [comparison](docs/comparison.md) and [roadmap](docs/ROADMAP.md). Release notes are in [CHANGELOG.md](CHANGELOG.md).
 

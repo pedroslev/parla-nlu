@@ -261,6 +261,10 @@ server {
   site where you embed it in **Web widget → Allowed sites**.
 - WhatsApp and Telegram call `/api/v1/bots/{bot}/whatsapp` and `/telegram`, already covered by `/api/v1/` (see
   [channels.md](channels.md)). Don't rate-limit them too tightly: Meta and Telegram retry when they get errors.
+- Phone providers call `/api/v1/bots/{bot}/phone/…` (and fetch `/phone/audio/<token>.wav` with `tts: "parla"`), also
+  under `/api/v1/`. The proxy must pass the original path and query untouched and `PARLA_PUBLIC_URL` must be the exact
+  address Twilio calls: the Twilio signature covers the full URL. Twilio waits ~15 s per answer, so keep
+  `proxy_read_timeout` above that.
 - Parla has no rate limiting of its own (except on login): add it at the proxy.
 
 ## First login and users

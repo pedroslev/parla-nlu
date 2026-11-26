@@ -14,6 +14,9 @@ una edición paga que se guarde funciones.
 
 - **Inicio de sesión único con OIDC**: entrar con Keycloak, Entra ID, Google Workspace, Okta, Authentik o Auth0,
   con roles mapeados desde los grupos del proveedor y un modo opcional solo SSO. Ver [sso_es.md](sso_es.md).
+- **Telefonía**: llamadas entrantes por Twilio Programmable Voice o jambonz (código abierto, se puede instalar en
+  casa), con voz y teclado (DTMF), menús de teclas para los botones, interrupción (barge-in), transferencia a una
+  persona y la voz de Parla (piper) como opción. Ver [channels_es.md](channels_es.md#llamadas-telefónicas-twilio-y-jambonz).
 - **Interfaz en inglés y portugués**: toda la interfaz, los mensajes del servidor y el widget web en español, inglés
   o portugués (pt-BR), a elección de cada usuario (al lado del selector de tema: inicio, menú ⋯ o pantalla de
   entrada), con un idioma por defecto de la instalación en `PARLA_LANG` (`scripts/setup.sh --lang en|es|pt`); los bots con inglés como idioma principal traen en
@@ -38,16 +41,15 @@ una edición paga que se guarde funciones.
 
 ## Después
 
-- **Telefonía**: llamadas SIP / telefónicas con Jambonz y Twilio, con entrada DTMF, sobre la voz local que ya existe.
+- **Herramientas en el paso de agente de IA**: que el paso `agent` llame herramientas externas como **cliente MCP**.
+- **Observabilidad**: exportar trazas y métricas con OpenTelemetry.
+- **Campañas salientes**: iniciar conversaciones de forma proactiva (recordatorios, avisos).
 
 ## Más adelante
 
 - **Escalado horizontal y Postgres**: varias réplicas sobre almacenamiento compartido, con Postgres como
   alternativa a SQLite.
-- **Herramientas en el paso de agente de IA**: que el paso `agent` llame herramientas externas como **cliente MCP**.
-- **Observabilidad**: exportar trazas y métricas con OpenTelemetry.
 - **Experimentos A/B** entre versiones de flujos o de bots.
-- **Campañas salientes**: iniciar conversaciones de forma proactiva (recordatorios, avisos).
 
 ## Lo que ya está
 

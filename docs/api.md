@@ -250,6 +250,24 @@ is missing or the signature doesn't match. Body up to 1 MB. Setup in [channels.m
 Each message is processed like `POST …/events` with `environment: production`, `channel: whatsapp` or `telegram`
 and `sessionId` `wa-<phone>` or `tg-<chat_id>`; the `replies` are sent back through the channel.
 
+### Phone webhooks (Twilio and jambonz)
+
+Called by Twilio or jambonz during a call. Like the ones above, they skip login and the `Host` check and answer
+403 with no details if `channels.phone.enabled` is off, the route's provider isn't `channels.phone.provider`, a
+key is missing or the signature doesn't match. Body up to 1 MB. Setup in
+[channels.md](channels.md#phone-calls-twilio-and-jambonz).
+
+| Route | Authenticated by | Response |
+|---|---|---|
+| `POST /api/v1/bots/{bot}/phone/twilio` (call starts), `…/twilio/gather` (each answer: `SpeechResult` / `Digits`) | `X-Twilio-Signature`: base64 of HMAC-SHA1 with `TWILIO_AUTH_TOKEN` of the public URL + each POST key and value sorted by key | TwiML (`text/xml`): `<Gather input="speech dtmf">` with `<Say>` or `<Play>`, `<Dial>` or `<Hangup>`. |
+| `POST /api/v1/bots/{bot}/phone/twilio/status` | Same | `200`; `CallStatus` `completed`, `busy`, `failed`, `no-answer` or `canceled` ends the conversation. |
+| `POST /api/v1/bots/{bot}/phone/jambonz`, `…/jambonz/gather` (`speech.alternatives[0].transcript` / `digits`) | `Jambonz-Signature: t=<unix>,v1=<HMAC-SHA256 of "<t>.<body>" with JAMBONZ_WEBHOOK_SECRET>` (5 minutes of tolerance) and/or `Authorization: Basic` with `JAMBONZ_BASIC_USER` / `JAMBONZ_BASIC_PASSWORD`: every one that is loaded must match | jambonz verbs (JSON array): `gather` (`input: ["speech", "digits"]`, `bargein`, nested `say` or `play`), `say`/`play`, `dial`, `hangup`. |
+| `POST /api/v1/bots/{bot}/phone/jambonz/status` | Same | `200 {}`; `call_status` as above ends the conversation. |
+| `GET /api/v1/bots/{bot}/phone/audio/<token>.wav` | The token: HMAC-SHA256 signed by the server, names the bot, expires in 10 minutes | Parla's voice (piper) for `tts: "parla"`, `audio/wav`. 403 if invalid or expired. |
+
+Each turn is processed like `POST …/events` with `environment: production`, `channel: phone` and
+`sessionId` `call-<CallSid>`. On the first one, `data` carries `caller` (the caller's number) and `language`.
+
 ### Calls from a browser (CORS) and allowed host names
 
 Parla rejects with 403 requests to `/api/` that carry an `Origin` header whose host isn't `127.0.0.1:<port>`,
@@ -348,7 +366,7 @@ The actions recorded are listed in [security.md](security.md#audit-log).
 | `POST /api/agents/{id}/sessions/{sid}/take` | — | A person takes over the conversation. Returns the state plus `history`. |
 | `POST /api/agents/{id}/sessions/{sid}/reply` | `{"text"}` | Writes to the person (if it wasn't taken, takes it). On a `whatsapp` or `telegram` conversation it is also sent through that channel. |
 | `POST /api/agents/{id}/sessions/{sid}/release` | — | Hands it back to the bot (stops the flow that was halfway through). |
-| `GET /api/agents/{id}/channels` | — | **Channels**: `{"public_url", "env_public_url", "whatsapp"/"telegram": {"enabled", "webhook", "secrets": {name: loaded?}, "status": {"last_in", "last_out", "error", "error_at"}}}`. Status is in memory. |
+| `GET /api/agents/{id}/channels` | — | **Channels**: `{"public_url", "env_public_url", "whatsapp"/"telegram": {"enabled", "webhook", "secrets": {name: loaded?}, "status": {"last_in", "last_out", "error", "error_at"}}, "phone": {"enabled", "provider", "webhook", "status_webhook", "secrets", "status"}}`. Status is in memory. |
 | `POST /api/agents/{id}/channels/telegram` | `{"connect": true \| false}` | Calls Telegram's `setWebhook` (creating `TELEGRAM_WEBHOOK_SECRET` if missing) or `deleteWebhook`: `{"connected"}`. Owner or editor. |
 | `GET /api/agents/{id}/insights/unrecognized` | Filters `from`, `to`, `channel`, `classification` | `{"groups": [{"label", "count", "texts", "examples", "suggested_intent"}]}`: **Improve**. |
 | `GET /api/agents/{id}/insights/analytics` | The same filters | `{"sessions", "contained", "handoff", "contained_rate", "handoff_rate", "user_messages", "fallbacks", "fallback_rate", "csat", "abandoned", "drop_off", "flows", "by_day"}` |

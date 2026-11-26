@@ -162,7 +162,8 @@ When the subflow finishes, it continues with the next step. Up to 5 stacked flow
 ```json
 {"type": "end"}
 ```
-In a subflow, returns to the caller.
+In a subflow, returns to the caller. On a phone call, it hangs up after saying what came before
+([channels.md](channels.md#phone-calls-twilio-and-jambonz)).
 
 ### `classify`: classify the conversation
 ```json

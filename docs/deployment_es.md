@@ -262,6 +262,10 @@ server {
   el sitio donde lo pegás en **Widget web → sitios autorizados**.
 - WhatsApp y Telegram llaman a `/api/v1/bots/{bot}/whatsapp` y `/telegram`, que ya entran en `/api/v1/` (ver
   [channels_es.md](channels_es.md)). No les pongas un límite muy bajo: Meta y Telegram reintentan cuando reciben errores.
+- Los proveedores de telefonía llaman a `/api/v1/bots/{bot}/phone/…` (y bajan `/phone/audio/<token>.wav` con
+  `tts: "parla"`), también bajo `/api/v1/`. El proxy tiene que pasar la ruta y la query originales sin tocarlas, y
+  `PARLA_PUBLIC_URL` tiene que ser exactamente la dirección a la que llama Twilio: la firma de Twilio cubre la URL
+  completa. Twilio espera ~15 s cada respuesta, así que `proxy_read_timeout` tiene que ser mayor.
 - Parla no tiene límite de pedidos propio (salvo en el login): agregalo en el proxy.
 
 ## Primer ingreso y usuarios

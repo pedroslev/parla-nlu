@@ -14,6 +14,9 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 - **OIDC single sign-on**: sign in with Keycloak, Entra ID, Google Workspace, Okta, Authentik or Auth0, with roles
   mapped from the provider's groups and an optional SSO-only mode. See [sso.md](sso.md).
+- **Telephony**: inbound phone calls through Twilio Programmable Voice or jambonz (open source, self-hostable),
+  with speech and DTMF input, keypad menus for buttons, barge-in, transfer to a person and optional Parla (piper)
+  voice. See [channels.md](channels.md#phone-calls-twilio-and-jambonz).
 - **English and Portuguese UI**: the whole interface, server messages and the web widget in English, Spanish or
   Portuguese (pt-BR), chosen per user (next to the theme picker: home screen, ⋯ menu or sign-in screen), with an
   install default in `PARLA_LANG` (`scripts/setup.sh --lang en|es|pt`); bots whose main language is English get
@@ -38,16 +41,15 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Next
 
-- **Telephony**: SIP / phone calls through Jambonz and Twilio, with DTMF input, on top of the existing local voice.
+- **Tools in the AI agent step**: let the `agent` step call external tools as an **MCP client**.
+- **Observability**: OpenTelemetry traces and metrics export.
+- **Outbound campaigns**: start conversations proactively (reminders, notifications).
 
 ## Later
 
 - **Horizontal scaling and Postgres**: several replicas on shared storage, with Postgres as an alternative to
   SQLite.
-- **Tools in the AI agent step**: let the `agent` step call external tools as an **MCP client**.
-- **Observability**: OpenTelemetry traces and metrics export.
 - **A/B experiments** between flow or bot versions.
-- **Outbound campaigns**: start conversations proactively (reminders, notifications).
 
 ## Already there
 

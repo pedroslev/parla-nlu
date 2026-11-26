@@ -91,6 +91,8 @@ tema: inicio, menú ⋯ o pantalla de entrada).
   ([docs/testing-bots_es.md](docs/testing-bots_es.md)).
 - API HTTP pública (`/api/v1`), widget web embebible con un `<script>`, exportar e importar agentes.
 - Canales de WhatsApp (Cloud API) y Telegram, con botones, archivos y respuestas desde la Bandeja ([docs/channels_es.md](docs/channels_es.md)).
+- Llamadas telefónicas por Twilio o jambonz (código abierto, se puede instalar en casa): voz y teclado (DTMF), botones
+  como menú «marcá 1 para…», interrupción, transferencia a una persona y voz piper local como opción ([docs/channels_es.md](docs/channels_es.md#llamadas-telefónicas-twilio-y-jambonz)).
 - Temas claro, oscuro y colorido en la interfaz.
 
 ### Seguridad
@@ -231,6 +233,7 @@ parla/
   runner.py             funciones en un proceso aparte
   vault.py              claves secretas por agente
   voice.py              voz local (y caché de frases pregeneradas)
+  phone.py              llamadas telefónicas (Twilio, jambonz)
   connect.py            «Conectar con IA»
   mcp_server.py         servidor MCP
 web/index.html          la interfaz
@@ -257,7 +260,7 @@ Todo es opcional. Copiá `.env.example` para ver los valores.
 | `PARLA_SECURE_COOKIE` | vacío | `1` marca la cookie de sesión como `Secure` (detrás de HTTPS). |
 | `PARLA_RETENTION_DAYS` | vacío | Días que se guardan las conversaciones sin movimiento, para los agentes sin `retention_days` propio. Vacío o `0`: para siempre. |
 | `PARLA_AUDIT_DAYS` | `365` | Días que se guarda la auditoría. |
-| `PARLA_PUBLIC_URL` | vacío | Dirección pública con HTTPS, para los webhooks de WhatsApp y Telegram (ver [docs/channels_es.md](docs/channels_es.md)) y la redirect URI del SSO. |
+| `PARLA_PUBLIC_URL` | vacío | Dirección pública con HTTPS, para los webhooks de WhatsApp, Telegram y teléfono (ver [docs/channels_es.md](docs/channels_es.md)) y la redirect URI del SSO. |
 | `PARLA_OIDC_ISSUER`, `PARLA_OIDC_CLIENT_ID` | vacío | Inicio de sesión único con OIDC; el secreto, el mapa de roles y las demás `PARLA_OIDC_*` en [docs/sso_es.md](docs/sso_es.md). |
 | `PARLA_FUNCTIONS` | `1` | `0`, `false`, `no` u `off` apagan las funciones de los agentes. |
 | `PARLA_WHISPER` | `base` | Modelo de faster-whisper (`tiny` si la máquina es lenta). |
@@ -288,7 +291,7 @@ El plan público (Ahora / Después / Más adelante) está en [docs/ROADMAP_es.md
 - Endpoint público o túnel integrado (hoy lo publicás vos con un proxy).
 - Plantillas de bots y campañas salientes.
 - Memoria por usuario entre conversaciones.
-- Telefonía (la API sirve para un IVR, pero no hay integración directa).
+- Llamadas telefónicas salientes y audio en streaming en tiempo real (las entrantes funcionan por Twilio o jambonz).
 
 ## Comparación
 
@@ -303,7 +306,7 @@ Botpress y Voiceflow, incluido lo que a Parla todavía le falta, está en [docs/
 | NLU | Embeddings + kNN, CRF, reglas | Pipeline de ML configurable y enfoques con LLM | Gestionado por Google | Basado en LLM en las versiones actuales |
 | LLM | Opcional: local (Ollama) o cualquier endpoint compatible con OpenAI | Opcional, configurable | Integrado con modelos de Google | Central en la plataforma |
 | Escala y ecosistema | Pensado para un servidor chico | Maduro, producción a gran escala | Gestionado, escala de Google | Gran ecosistema de integraciones |
-| Canales | API HTTP, widget web, WhatsApp y Telegram | Muchos conectores | Muchas integraciones | Muchos canales |
+| Canales | API HTTP, widget web, WhatsApp, Telegram y teléfono (Twilio, jambonz) | Muchos conectores | Muchas integraciones | Muchos canales |
 | Costo | Gratis, local | Open source + edición paga | Pago por uso | Plan gratis + planes pagos |
 
 Si necesitás muchos canales, alta disponibilidad o un equipo grande, las otras opciones son más maduras.
@@ -311,7 +314,7 @@ Parla apunta a que un bot útil quede andando en una tarde, en tu máquina y sin
 
 ## Documentación
 
-Todo en [`docs/`](docs/README_es.md): primeros pasos, conceptos, API, [probar bots](docs/testing-bots_es.md), [WhatsApp y Telegram](docs/channels_es.md), MCP, [skills](docs/skills_es.md), [buenas prácticas](docs/best-practices_es.md),
+Todo en [`docs/`](docs/README_es.md): primeros pasos, conceptos, API, [probar bots](docs/testing-bots_es.md), [WhatsApp, Telegram y teléfono](docs/channels_es.md), MCP, [skills](docs/skills_es.md), [buenas prácticas](docs/best-practices_es.md),
 IA y voz, seguridad, [inicio de sesión único](docs/sso_es.md), despliegue, desarrollo, preguntas frecuentes, [migrar desde Rasa](docs/migrate-from-rasa_es.md),
 [comparación](docs/comparison_es.md) y [hoja de ruta](docs/ROADMAP_es.md). Las novedades de cada versión están en [CHANGELOG.md](CHANGELOG.md).
 

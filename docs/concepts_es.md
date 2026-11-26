@@ -162,7 +162,8 @@ Al terminar el subflujo sigue con el paso siguiente. Hasta 5 flujos apilados (su
 ```json
 {"type": "end"}
 ```
-En un subflujo, vuelve al que lo llamó.
+En un subflujo, vuelve al que lo llamó. En una llamada telefónica, corta después de decir lo anterior
+([channels_es.md](channels_es.md#llamadas-telefónicas-twilio-y-jambonz)).
 
 ### `classify`: clasificar la conversación
 ```json

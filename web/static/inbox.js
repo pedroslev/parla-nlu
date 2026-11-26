@@ -109,9 +109,11 @@ window.inboxView = () => {
         h('span', { class: 'help', style: 'font-size:14px' }, [ho.reason ? t('Motivo: {reason}', { reason: ho.reason }) : null, ho.by ? t('La atiende {name}', { name: ho.by }) : t('Nadie la tomó todavía')].filter(Boolean).join(' · '))),
         ho.by ? null : h('button', { class: 'btn quiet small', onclick: () => act('take') }, icon('hand'), t('Tomar conversación')),
         h('button', { class: 'btn small', onclick: () => act('release') }, icon('back'), t('Devolver al bot')));
-      if (!detail.contains(log)) detail.replaceChildren(head, log, h('div', { class: 'ib-reply' }, text,
-        h('button', { class: 'btn', onclick: send }, icon('arrow'), t('Enviar'))), note,
-        h('button', { class: 'link', style: 'align-self:flex-start;font-size:13px', onclick: () => ibOpenInSessions(id) }, t('Ver en Conversaciones')));
+      const call = String(s.channel === 'phone');      // una llamada no tiene caja para escribir
+      if (!detail.contains(log) || detail.dataset.call !== call) (detail.dataset.call = call, detail.replaceChildren(head, log, s.channel === 'phone'
+        ? h('p', { class: 'help' }, t('Es una llamada: no se le puede escribir. Al tomarla, Parla la transfiere al número de «Transferir a una persona» (Canales → Teléfono) apenas la persona deje de hablar.'))
+        : h('div', { class: 'ib-reply' }, text, h('button', { class: 'btn', onclick: send }, icon('arrow'), t('Enviar'))), note,
+        h('button', { class: 'link', style: 'align-self:flex-start;font-size:13px', onclick: () => ibOpenInSessions(id) }, t('Ver en Conversaciones'))));
     } catch (e) {
       if (id === ibSel) detail.replaceChildren(h('div', { class: 'notice warn', role: 'alert' }, t('No se pudo abrir la conversación: {error}.', { error: e.message })));
     }

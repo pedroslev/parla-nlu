@@ -220,8 +220,9 @@ Things to keep in mind:
 
 ## Messaging channels (WhatsApp and Telegram)
 
-The webhooks `GET`/`POST /api/v1/bots/{bot}/whatsapp` and `POST /api/v1/bots/{bot}/telegram` are the only `/api/`
-routes that skip the login and the `Host` check: Meta's and Telegram's servers call them. Each request
+The webhooks `GET`/`POST /api/v1/bots/{bot}/whatsapp` and `POST /api/v1/bots/{bot}/telegram`, and the phone routes
+below, are the only `/api/` routes that skip the login and the `Host` check: Meta's, Telegram's and the phone
+provider's servers call them. Each request
 authenticates on its own instead:
 
 - WhatsApp `POST`: `X-Hub-Signature-256` has to be `sha256=` + the HMAC-SHA256 of the raw body with the app secret
@@ -237,6 +238,26 @@ authenticates on its own instead:
   other route.
 
 Setup and limits in [channels.md](channels.md).
+
+### Phone calls (Twilio and jambonz)
+
+- `POST /api/v1/bots/{bot}/phone/twilio[/gather|/status]`: `X-Twilio-Signature` has to be the base64 HMAC-SHA1, with
+  `TWILIO_AUTH_TOKEN`, of the public URL (`public_url` / `PARLA_PUBLIC_URL` + the requested path and query) followed
+  by each POST key and value sorted by key, as Twilio computes it.
+- `POST /api/v1/bots/{bot}/phone/jambonz[/gather|/status]`: with `JAMBONZ_WEBHOOK_SECRET` loaded, `Jambonz-Signature`
+  (`t=<unix>,v1=<hex>`) has to be the HMAC-SHA256 of `<t>.<raw body>` and `t` within 5 minutes (replays of old
+  requests fail); with `JAMBONZ_BASIC_USER` and `JAMBONZ_BASIC_PASSWORD` loaded, `Authorization: Basic` has to match.
+  Every method that is loaded must pass; with none loaded, nothing does.
+- Only the provider chosen in `channels.phone.provider` is accepted, and only with `channels.phone.enabled`.
+  Comparisons are constant-time; failures are **403 with no details**; body up to 1 MB.
+- **Signed audio URLs** (`tts: "parla"`): `GET /api/v1/bots/{bot}/phone/audio/<token>.wav` serves only the text inside
+  the token, which carries the bot id, an expiry (10 minutes) and the language, signed with HMAC-SHA256 by a random
+  key that lives in the server's memory. It can't be forged, reused for another bot, or used after it expires, and it
+  opens nothing else. Whoever holds a URL can hear that phrase until it expires (providers fetch them without auth).
+- With Twilio, the caller's audio is transcribed at Twilio (the audio and text leave your server). With jambonz, it
+  goes wherever its speech services point, which can be self-hosted.
+- The conversation id `call-<CallSid>` and the caller's number (saved in a `caller` slot if the bot has one, and kept
+  by the provider) are personal data; `pii_redaction` masks phone numbers in what is saved.
 
 ## Key vault (secrets)
 

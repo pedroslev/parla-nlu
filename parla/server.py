@@ -19,7 +19,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import DATA, ROOT, write_json, auth, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, rasa_import, runner, vault, voice
+from . import DATA, ROOT, write_json, auth, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, phone, rasa_import, runner, vault, voice
 
 import celpy
 import pycrfsuite
@@ -961,7 +961,7 @@ def run(agent, st, nlu, text, out, trace):
             elif kind == "end":
                 if back(agent, st, out):                     # "end" en un subflujo vuelve al que lo llamó
                     continue
-                st["flow"] = None
+                st["flow"], st["finished"] = None, True     # el teléfono corta la llamada (phone.py)
                 return "done"
         except Exception as error:  # noqa: BLE001 - un paso mal armado no tira el server: se ve en el chat
             out.append(mask(agent, "⚠ Hay un problema en el flujo «%s», paso «%s»: %s" % (flow["name"], STEP_NAMES.get(kind, kind), error)))
@@ -1053,6 +1053,7 @@ def handle(agent, st, text, parse=parse):
         slots.setdefault(slot["name"], None)
     language_of(agent, st, text)
     remember(st, "user", text)
+    st.pop("finished", None)
     out, trace = [], []
     empty = {"intent": None, "confidence": 0.0, "ranking": [], "entities": []}
     if (st.get("handoff") or {}).get("active"):         # la charla la tiene una persona: el bot no habla
@@ -1899,6 +1900,15 @@ class Handler(BaseHTTPRequestHandler):
             # webhooks de Meta y Telegram: vienen de otro Host y sin sesión; los autentica la firma o el secreto (channels.py)
             status, body, ctype = channels.webhook(self.headers, self.rfile, method, *hooked.groups(), query, length)
             return self.reply(body, status, ctype)
+        called = re.fullmatch(r"/api/v1/bots/([^/]+)/phone/(twilio|jambonz)(?:/(gather|status))?", url)
+        if called:      # llamadas de Twilio o jambonz: las autentica su firma (phone.py), como los webhooks de arriba
+            status, body, ctype = phone.webhook(self.headers, self.rfile, method, called.group(1), called.group(2),
+                                                called.group(3) or "", self.path, length)
+            return self.reply(body, status, ctype)
+        played = re.fullmatch(r"/api/v1/bots/([^/]+)/phone/audio/([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\.wav", url)
+        if played and method == "GET":      # audio de Parla para la llamada: el token firmado y con vencimiento es la llave
+            status, body, ctype = phone.audio(*played.groups())
+            return self.reply(body, status, ctype)
         if method == "OPTIONS":
             if not self.cors:
                 return self.reply({"error": "pedido de otro sitio web rechazado"}, 403)
@@ -2103,7 +2113,7 @@ class Handler(BaseHTTPRequestHandler):
         elif action == "inbox" and method == "GET":
             return self.reply(inbox(agent_id))
         elif action == "channels" and method == "GET":                # pantalla «Canales»: webhooks, claves que faltan, estado
-            return self.reply(channels.info(load(agent_id)))
+            return self.reply(dict(channels.info(load(agent_id)), phone=phone.info(load(agent_id))))
         elif action == "channels/telegram" and method == "POST":      # {"connect": true|false}: setWebhook / deleteWebhook
             return self.reply(channels.telegram_webhook(load(agent_id), data.get("connect", True) is not False))
         elif action and action.startswith("sessions/") and method == "POST":   # reply | take | release

@@ -1,4 +1,4 @@
-// Canales: WhatsApp y Telegram (agent.channels, ver parla/channels.py). Las claves van a la bóveda (secrets.js: scForm),
+// Canales: WhatsApp, Telegram y Teléfono (agent.channels, ver parla/channels.py y parla/phone.py). Las claves van a la bóveda (secrets.js: scForm),
 // nunca al JSON del agente. El estado (último mensaje, último error) vive en memoria del servidor.
 document.head.append(h('style', {}, `
   .ch-ok, .ch-miss { font-size: 13px; font-weight: 600; white-space: nowrap; }
@@ -12,7 +12,12 @@ const CH_HELP = {
   WHATSAPP_VERIFY_TOKEN: t('Inventá una palabra larga y pegala también en Meta como «Token de verificación».'),
   TELEGRAM_TOKEN: t('El token que te da BotFather (123456:ABC…).'),
   TELEGRAM_WEBHOOK_SECRET: t('Se crea solo al tocar «Conectar webhook».'),
+  TWILIO_AUTH_TOKEN: t('El Auth Token de la cuenta de Twilio (Console → Account Info). Con él se verifica la firma de cada llamada.'),
+  JAMBONZ_WEBHOOK_SECRET: t('El «webhook secret» de tu cuenta de jambonz (Account). Se verifica la firma Jambonz-Signature.'),
+  JAMBONZ_BASIC_USER: t('Opcional: usuario de HTTP basic que pusiste en la aplicación de jambonz.'),
+  JAMBONZ_BASIC_PASSWORD: t('Opcional: la contraseña de HTTP basic de la aplicación de jambonz.'),
 };
+const CH_PHONE = { twilio: ['TWILIO_AUTH_TOKEN'], jambonz: ['JAMBONZ_WEBHOOK_SECRET', 'JAMBONZ_BASIC_USER', 'JAMBONZ_BASIC_PASSWORD'] };
 let chInfo = null, chFor = null, chError = '', chNote = '', chEditing = null, chBusy = false;
 
 async function chLoad() {
@@ -31,10 +36,10 @@ function chUrl(url) {
     h('button', { class: 'btn small', type: 'button', onclick: (e) => wgCopy(url, e.currentTarget) }, icon('check'), h('span', {}, t('Copiar'))));
 }
 
-function chSecrets(c) {
+function chSecrets(c, only) {
   const have = chInfo?.[c]?.secrets || {};
   return h('div', { class: 'panel phrases' }, h('strong', {}, t('Claves')),
-    Object.keys(have).map((n) => chEditing === n ? scForm(n, () => { chEditing = null; chLoad(); }) : h('div', { class: 'phrase-row' },
+    Object.keys(have).filter((n) => !only || only.includes(n)).map((n) => chEditing === n ? scForm(n, () => { chEditing = null; chLoad(); }) : h('div', { class: 'phrase-row' },
       h('span', { class: 'phrase' }, h('code', {}, n), h('small', { class: 'help', style: 'display:block' }, CH_HELP[n])),
       h('span', { class: have[n] ? 'ch-ok' : 'ch-miss' }, have[n] ? t('Cargada') : t('Falta')),
       n === 'TELEGRAM_WEBHOOK_SECRET' ? null
@@ -66,12 +71,39 @@ async function chTelegram(connect) {
   chBusy = false; chLoad();
 }
 
+function chSelect(conf, key, options) {
+  return h('select', { onchange: (e) => { conf[key] = e.target.value; touch(); render(); } },
+    options.map(([value, label]) => h('option', { value, selected: (conf[key] || options[0][0]) === value }, label)));
+}
+
+function chPhone(base) {
+  const ph = chConf('phone'), provider = ph.provider || 'twilio';
+  const hook = base + '/api/v1/bots/' + agent.id + '/phone/' + provider;
+  return h('div', { class: 'panel' },
+    h('h2', {}, t('Teléfono')),
+    chCheck('phone', t('Atender llamadas'), ph.enabled ? t('Prendido: Parla atiende las llamadas firmadas por tu proveedor.') : t('Apagado: el webhook responde 403.')),
+    lab(t('Proveedor'), chSelect(ph, 'provider', [['twilio', 'Twilio'], ['jambonz', t('jambonz (código abierto, propio)')]])),
+    lab(t('Idioma de la llamada'), h('input', { ...bind(ph, 'language'), placeholder: 'es-AR' })),
+    lab(t('Voz'), chSelect(ph, 'tts', [['provider', t('La del proveedor')], ['parla', t('La de Parla (piper, en este servidor)')]])),
+    ph.tts === 'parla' ? null : lab(t('Nombre de la voz del proveedor (opcional)'), h('input', { ...bind(ph, 'voice'), placeholder: provider === 'twilio' ? 'Polly.Mia-Neural' : 'es-US-Neural2-A' })),
+    lab(t('Transferir a una persona'), h('input', { ...bind(ph, 'handoff_to'), placeholder: '+5491112345678 · sip:mesa@pbx.midominio.com' })),
+    lab(t('Tecla para terminar un número'), h('input', { ...bind(ph, 'finish_on_key'), placeholder: '#', maxlength: 1, style: 'max-width:80px' })),
+    h('p', { class: 'help' }, provider === 'twilio'
+      ? t('En Twilio, Phone Numbers → tu número → Voice: en «A call comes in» pegá esta URL (Webhook, HTTP POST) y en «Call status changes» la segunda.')
+      : t('En jambonz, Applications → tu aplicación: pegá la primera URL en «Calling webhook» y la segunda en «Call status webhook», las dos con POST.')),
+    chUrl(hook), chUrl(hook + '/status'),
+    h('p', { class: 'help' }, provider === 'twilio'
+      ? t('Con Twilio, la voz de quien llama la transcribe Twilio (sale de tu servidor). Con jambonz elegís el reconocedor, incluso uno propio.')
+      : t('Con jambonz, el reconocedor y la voz se eligen en la aplicación de jambonz.')),
+    chSecrets('phone', CH_PHONE[provider]), chStatus('phone'));
+}
+
 window.channelsView = () => {
   if (chFor !== agent.id) { chFor = agent.id; chInfo = null; chEditing = null; chError = chNote = ''; chLoad(); }
   const wa = chConf('whatsapp'), tg = chConf('telegram'), base = chBase();
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('h1', {}, t('Canales'))),
-    h('p', { class: 'help' }, t('Conectá este bot a WhatsApp y Telegram: contesta lo publicado en Producción, con sus botones y archivos, y lo que respondés desde la Bandeja también llega por ahí. Guía paso a paso en docs/channels_es.md.')),
+    h('p', { class: 'help' }, t('Conectá este bot a WhatsApp, Telegram y llamadas telefónicas: contesta lo publicado en Producción, con sus botones y archivos, y lo que respondés desde la Bandeja también llega por ahí. Guía paso a paso en docs/channels_es.md.')),
     chError ? h('p', { class: 'notice warn', role: 'alert' }, chError) : null,
     chNote ? h('p', { class: 'notice', role: 'status' }, chNote) : null,
     h('div', { class: 'panel' },
@@ -95,5 +127,6 @@ window.channelsView = () => {
         h('button', { class: 'btn small', type: 'button', disabled: chBusy || !tg.enabled || !/^https:\/\//.test(base), onclick: () => chTelegram(true) }, t('Conectar webhook')),
         h('button', { class: 'btn quiet small', type: 'button', disabled: chBusy, onclick: () => chTelegram(false) }, t('Desconectar'))),
       h('p', { class: 'help' }, t('Conectar le dice a Telegram que mande los mensajes a '), h('code', {}, chHook('telegram')), t('.')),
-      chStatus('telegram')));
+      chStatus('telegram')),
+    chPhone(base));
 };

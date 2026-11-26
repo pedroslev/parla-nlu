@@ -225,8 +225,9 @@ Lo que hay que tener en cuenta:
 
 ## Canales de mensajería (WhatsApp y Telegram)
 
-Los webhooks `GET`/`POST /api/v1/bots/{bot}/whatsapp` y `POST /api/v1/bots/{bot}/telegram` son las únicas rutas de
-`/api/` que se saltean el login y el chequeo de `Host`: los llaman los servidores de Meta y Telegram. En cambio,
+Los webhooks `GET`/`POST /api/v1/bots/{bot}/whatsapp` y `POST /api/v1/bots/{bot}/telegram`, y las rutas del teléfono
+de abajo, son las únicas rutas de `/api/` que se saltean el login y el chequeo de `Host`: los llaman los servidores de
+Meta, Telegram y el proveedor de telefonía. En cambio,
 cada pedido se autentica solo:
 
 - `POST` de WhatsApp: `X-Hub-Signature-256` tiene que ser `sha256=` + el HMAC-SHA256 del cuerpo tal cual con la clave
@@ -243,6 +244,27 @@ cada pedido se autentica solo:
   a otra ruta.
 
 Configuración y límites en [channels_es.md](channels_es.md).
+
+### Llamadas telefónicas (Twilio y jambonz)
+
+- `POST /api/v1/bots/{bot}/phone/twilio[/gather|/status]`: `X-Twilio-Signature` tiene que ser el HMAC-SHA1 en base64,
+  con `TWILIO_AUTH_TOKEN`, de la URL pública (`public_url` / `PARLA_PUBLIC_URL` + la ruta y la query pedidas) seguida
+  de cada clave y valor del POST ordenados por clave, como lo calcula Twilio.
+- `POST /api/v1/bots/{bot}/phone/jambonz[/gather|/status]`: con `JAMBONZ_WEBHOOK_SECRET` cargada, `Jambonz-Signature`
+  (`t=<unix>,v1=<hex>`) tiene que ser el HMAC-SHA256 de `<t>.<cuerpo tal cual>` y `t` de hace menos de 5 minutos
+  (repetir pedidos viejos no sirve); con `JAMBONZ_BASIC_USER` y `JAMBONZ_BASIC_PASSWORD` cargadas, `Authorization:
+  Basic` tiene que coincidir. Cada método cargado tiene que dar bien; sin ninguno cargado, no pasa nada.
+- Solo se acepta el proveedor elegido en `channels.phone.provider`, y solo con `channels.phone.enabled`. Se compara
+  en tiempo constante; si falla, **403 sin detalles**; cuerpo hasta 1 MB.
+- **Audios con dirección firmada** (`tts: "parla"`): `GET /api/v1/bots/{bot}/phone/audio/<token>.wav` sirve solo el
+  texto que va adentro del token, que lleva el id del bot, el vencimiento (10 minutos) y el idioma, firmado con
+  HMAC-SHA256 con una clave al azar que vive en la memoria del servidor. No se puede falsificar, usar para otro bot ni
+  después de vencido, y no abre nada más. Quien tenga una dirección puede escuchar esa frase hasta que venza (los
+  proveedores las bajan sin autenticarse).
+- Con Twilio, el audio de quien llama lo transcribe Twilio (el audio y el texto salen de tu servidor). Con jambonz,
+  va a donde apunten sus servicios de voz, que pueden ser propios.
+- El id `call-<CallSid>` y el número de quien llama (guardado en un slot `caller` si el bot lo tiene, y que también
+  guarda el proveedor) son datos personales; `pii_redaction` tapa los teléfonos en lo que se guarda.
 
 ## Bóveda de claves (secretos)
 
