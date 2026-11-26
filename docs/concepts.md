@@ -280,13 +280,13 @@ Conversation repairs that come enabled (or not) and are edited in `system`:
 | Key | Default | What it does |
 |---|---|---|
 | `cancel` | on | «cancelar», «olvidalo» (cancel, forget it): stops what it was doing. |
-| `repeat` | on | «¿cómo?», «repetí» (what?, repeat): repeats the last thing the bot said. |
+| `repeat` | on | «¿cómo?», «repetí» (what?, repeat): repeats the last thing the bot said. Only when the message is almost the closest example: at most one extra word, not counting politeness («por favor», «perdón»). «¿cómo puedo pagar?» is a question, not «¿cómo?». With nothing to repeat yet, the message is handled as usual. |
 | `clarify` | on, `margin: 0.04` | If the top two intents are above the threshold and less than `margin` apart, asks «¿Quisiste decir A o B?» (Did you mean A or B?) with buttons. |
 | `anything_else` | off | When a flow finishes: «¿Te ayudo con algo más?» (Can I help you with anything else?). |
 | `resume` | on | When returning from an interruption: «Sigamos con lo de antes.» (Let's continue where we left off.). |
-| `correction` | on | «mejor de fugazza» (make it fugazza instead) while it asks something else: changes a value already given (only slots this flow has already asked for) and continues from that question. |
+| `correction` | on | «mejor de fugazza» (make it fugazza instead) while it asks something else: changes a value already given (only slots this flow has already asked for) and continues from that question. If the current question is free text (a slot without an entity), any message can be the answer («Corrientes 1234» to «¿dirección?» doesn't change the quantity): it corrects only with an explicit cue («mejor», «no, …», «en realidad», «cambiá», «actually», «instead»…). |
 | `handoff` | on | «quiero hablar con una persona» (I want to talk to a person): hands over to the Inbox. |
-| `csat` | off | When the conversation's first flow finishes: «¿Cómo te atendí? Del 1 al 5.» (How did I do? From 1 to 5.) with buttons. Accepts `4` or `4/5`. |
+| `csat` | off | Once per conversation, when a flow that did something finishes: it asked a question, or ran an `http`, `function`, `file`, `remind`, `classify`, `agent` or `end` step. A flow that only sends messages (a greeting, an FAQ) doesn't trigger it. Asks «¿Cómo te atendí? Del 1 al 5.» (How did I do? From 1 to 5.) with buttons; accepts `4` or `4/5`. |
 
 Each one has `enabled`, `text` (and `translations`) and, for those recognized by phrases (`cancel`, `repeat`,
 `handoff`), `examples`. Those phrases are trained as system intents.

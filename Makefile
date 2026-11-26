@@ -1,7 +1,7 @@
 PY ?= .venv/bin/python
 PORT ?= 8000
 
-.PHONY: setup setup-voice setup-providers run test mcp skills-install clean-pyc docker-build docker-run
+.PHONY: setup setup-voice setup-providers run test ui-test mcp skills-install clean-pyc docker-build docker-run
 
 SKILLS_DIR ?= $(HOME)/.claude/skills
 
@@ -19,6 +19,9 @@ run:            ## open Parla at http://127.0.0.1:$(PORT) (reads .env if there i
 
 test:           ## all tests (voice/AI are skipped if models or Ollama are missing)
 	$(PY) tests/run_all.py
+
+ui-test:        ## UI sweep in headless Chrome: every role x language x section (Node 22+, CHROME=... if not in the usual place)
+	$(PY) tests/ui/run.py
 
 mcp:            ## MCP server over HTTP on :8001/mcp (for stdio: $(PY) mcp_server.py)
 	$(PY) mcp_server.py --http --port 8001

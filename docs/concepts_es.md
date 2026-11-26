@@ -282,13 +282,13 @@ Reparaciones de la charla que vienen prendidas (o no) y se editan en `system`:
 | Clave | Por defecto | Qué hace |
 |---|---|---|
 | `cancel` | prendido | «cancelar», «olvidalo»: corta lo que estaba haciendo. |
-| `repeat` | prendido | «¿cómo?», «repetí»: repite lo último que dijo el bot. |
+| `repeat` | prendido | «¿cómo?», «repetí»: repite lo último que dijo el bot. Solo si el mensaje es casi el ejemplo más parecido: a lo sumo una palabra de más, sin contar las de cortesía («por favor», «perdón»). «¿cómo puedo pagar?» es una pregunta, no «¿cómo?». Si todavía no hay nada que repetir, el mensaje sigue normal. |
 | `clarify` | prendido, `margin: 0.04` | Si las dos mejores intenciones superan el umbral y están a menos de `margin`, pregunta «¿Quisiste decir A o B?» con botones. |
 | `anything_else` | apagado | Al terminar un flujo: «¿Te ayudo con algo más?». |
 | `resume` | prendido | Al volver de una interrupción: «Sigamos con lo de antes.». |
-| `correction` | prendido | «mejor de fugazza» mientras pregunta otra cosa: cambia un dato que ya había dado (solo slots que este flujo ya preguntó) y sigue desde esa pregunta. |
+| `correction` | prendido | «mejor de fugazza» mientras pregunta otra cosa: cambia un dato que ya había dado (solo slots que este flujo ya preguntó) y sigue desde esa pregunta. Si la pregunta actual es de texto libre (un slot sin entidad), cualquier mensaje puede ser la respuesta («Corrientes 1234» a «¿dirección?» no cambia la cantidad): ahí corrige solo con una señal explícita («mejor», «no, …», «en realidad», «cambiá»…). |
 | `handoff` | prendido | «quiero hablar con una persona»: pasa a la Bandeja. |
-| `csat` | apagado | Al terminar el primer flujo de la conversación: «¿Cómo te atendí? Del 1 al 5.» con botones. Acepta `4` o `4/5`. |
+| `csat` | apagado | Una vez por conversación, al terminar un flujo que hizo algo: hizo una pregunta o corrió un paso `http`, `function`, `file`, `remind`, `classify`, `agent` o `end`. Un flujo que solo manda mensajes (un saludo, una pregunta frecuente) no la dispara. Pregunta «¿Cómo te atendí? Del 1 al 5.» con botones; acepta `4` o `4/5`. |
 
 Cada uno tiene `enabled`, `text` (y `translations`) y, los que se reconocen por frases (`cancel`, `repeat`,
 `handoff`), `examples`. Esas frases se entrenan como intenciones del sistema.

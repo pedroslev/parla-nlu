@@ -60,3 +60,34 @@ jobs:
       # below a laptop (~270 turns/s on an M4) so a slow runner passes; a regression to the old server or any error fails.
       - name: Perf smoke
         run: python tests/perf/load.py --conc 20 --seconds 10 --floor 15
+
+  # tests/ui/run.py: a temporary Parla with 4 roles and both examples, swept in headless Chrome (role x language x section).
+  ui:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PARLA_EMBED_CACHE: ${{ github.workspace }}/.cache/embeddings
+      HF_HOME: ${{ github.workspace }}/.cache/hf
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: pip install -r requirements.txt
+      - name: Embedding model name
+        id: model
+        run: echo "name=$(grep -Po '^MODEL = "\K[^"]+' parla/server.py)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: .cache/embeddings
+          key: embed-${{ steps.model.outputs.name }}
+      - name: UI sweep
+        run: python tests/ui/run.py
+        env:
+          CHROME: google-chrome

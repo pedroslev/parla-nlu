@@ -7,6 +7,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## Unreleased
 
+### Fixed
+
+- «Repetir» no longer takes longer questions: «¿cómo puedo pagar?» matched the «¿cómo?» example and answered with an
+  empty reply. The message has to be almost the closest example (one extra word at most, politeness aside), and
+  with nothing to repeat it's handled as usual ([docs/concepts.md](docs/concepts.md#system-flows)).
+- «Corregir un dato»: an address with a number («Corrientes 1234») to a free-text question was taken as a new
+  quantity, looping «Listo, lo cambié» + the same question. On free-text questions it corrects only with a cue
+  («mejor», «no, …», «en realidad»…).
+- The CSAT survey only follows a flow that did something (asked, called a service or function, sent a file,
+  classified, ended the conversation…), not a greeting.
+- «Para enseñar» pre-selects an intent only when it's close (similarity ≥ 0.7); otherwise «Elegí una intención…».
+- `examples/pizzeria.json`: threshold 0.55 -> 0.7, new «Reclamo» (hands off) and «Estado del pedido» intents and three
+  more tests. Training warns when the threshold is below 0.65.
+- UI: "phrase" everywhere in English for training phrases; site chat and channel toggles are switches; copy buttons
+  show the check mark only after copying; the Inbox stacks the list above the conversation when the center is narrow
+  (it used to squeeze it next to the list); the Try-it header fits at 360 px; JSON `null` in the API docs is code; changing only `#/agent/section` switches
+  section without reloading; the audit page doesn't open for non-owners, even from its hidden link.
+
+### Added
+
+- UI sweep in CI (`make ui-test`, `tests/ui/run.py`): every role × language × agent × section in headless Chrome
+  ([docs/development.md](docs/development.md#ui-sweep)).
+
 ## 0.9.0 — 2026-11-26
 
 First tagged release (`v0.9.0`): images `ghcr.io/pedroslev/parla-nlu:0.9.0` / `:latest`.

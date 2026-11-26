@@ -29,6 +29,7 @@ JavaScript.
 | `make setup` / `make setup-voice` | Lo mismo que `scripts/setup.sh` / `scripts/setup.sh --voice`. |
 | `make run` (o `.venv/bin/python app.py [puerto]`) | Abre Parla en `http://127.0.0.1:8000` (`PORT=8080 make run` para otro puerto). |
 | `make test` (o `.venv/bin/python tests/run_all.py [nombre ...]`) | Las pruebas. |
+| `make ui-test` (o `.venv/bin/python tests/ui/run.py`) | El barrido de la interfaz en Chrome sin ventana (ver abajo). |
 | `make mcp` | El servidor MCP por HTTP en `:8001/mcp`. Para stdio: `.venv/bin/python mcp_server.py`. |
 | `make docker-build` / `make docker-run` | Imagen `parla:local` (`VOICE=1` suma la voz) y correrla en `127.0.0.1:8000`. Ver [deployment.md](deployment_es.md). |
 | `make clean-pyc` | Borra los `__pycache__`. |
@@ -199,6 +200,18 @@ una copia propia del servidor en un puerto libre: nunca tocan tu `data/`.
 | `test_ai.py` | Ollama para la parte con modelo; si no está, la saltea con un aviso. Las fechas se prueban siempre. |
 | `test_voice.py` | Los extras de voz y `ffmpeg`; si faltan, se saltea. |
 | `test_mcp.py` | El paquete `mcp` y el modelo de vectores: levanta su propio Parla temporal y prueba el validador y las herramientas punta a punta. |
+
+### Barrido de la interfaz
+
+`tests/ui/run.py` (no está en `run_all`; CI lo corre en su propio job) levanta un Parla temporal, crea un dueño, un
+editor, un analista y un usuario de atención, importa los dos ejemplos, entrena y deja unas charlas (una pasada a una
+persona, un par que el bot no entendió). Después `tests/ui/sweep.mjs` maneja Chrome sin ventana por CDP, un proceso
+por rol en paralelo, por cada idioma (es, en, pt) × agente × sección del menú de ese rol, y falla con: excepciones de
+JS, errores de consola, HTTP ≥ 400, avisos `[role=alert]` a la vista, «null»/«undefined»/«NaN»/«[object …]» en pantalla
+(fuera de `<pre>`/`<code>`), palabras de la interfaz en español en en/pt y que alguien que no es dueño llegue a la
+auditoría. Lo del agente (frases, globos del chat, textos del bot) queda afuera marcando su contenedor con
+`data-content`: sumalo cuando una vista nueva muestre lo que escribió el bot o la persona. Necesita Node 22+ y Chrome:
+`CHROME=/ruta/a/chrome` si no está en el lugar de siempre (`google-chrome` en Linux); `LANGS=en` barre un solo idioma.
 
 ## Estilo
 

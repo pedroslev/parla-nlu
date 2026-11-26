@@ -28,6 +28,7 @@ The AI talks to Ollama over HTTP with `urllib` (`llm.py`), no SDK. Node.js is on
 | `make setup` / `make setup-voice` | Same as `scripts/setup.sh` / `scripts/setup.sh --voice`. |
 | `make run` (or `.venv/bin/python app.py [port]`) | Opens Parla at `http://127.0.0.1:8000` (`PORT=8080 make run` for another port). |
 | `make test` (or `.venv/bin/python tests/run_all.py [name ...]`) | The tests. |
+| `make ui-test` (or `.venv/bin/python tests/ui/run.py`) | The UI sweep in headless Chrome (see below). |
 | `make mcp` | The MCP server over HTTP at `:8001/mcp`. For stdio: `.venv/bin/python mcp_server.py`. |
 | `make docker-build` / `make docker-run` | Builds the `parla:local` image (`VOICE=1` adds voice) and runs it on `127.0.0.1:8000`. See [deployment.md](deployment.md). |
 | `make clean-pyc` | Deletes the `__pycache__` folders. |
@@ -199,6 +200,18 @@ and, for the tests that need it, starts its own copy of the server on a free por
 | `test_ai.py` | Ollama for the part with a model; if it isn't there, skips it with a warning. Dates are always tested. |
 | `test_voice.py` | The voice extras and `ffmpeg`; if missing, it is skipped. |
 | `test_mcp.py` | The `mcp` package and the vector model: starts its own temporary Parla and tests the validator and the tools end to end. |
+
+### UI sweep
+
+`tests/ui/run.py` (not in `run_all`; CI runs it as its own job) starts a temporary Parla, creates an owner, an editor,
+an analyst and a support user, imports both examples, trains, and leaves a few conversations (one handed off to a
+person, a couple the bot didn't understand). Then `tests/ui/sweep.mjs` drives headless Chrome over CDP, one process
+per role in parallel, through every language (es, en, pt) × agent × section in that role's menu, and fails on: JS
+exceptions, console errors, HTTP ≥ 400, visible `[role=alert]` banners, «null»/«undefined»/«NaN»/«[object …]» on screen
+(outside `<pre>`/`<code>`), Spanish UI words in en/pt, and a non-owner reaching the audit page. Agent content (phrases,
+chat bubbles, bot texts) is excluded by marking its container with `data-content`: add it when a new view shows
+what the bot or the user wrote. Needs Node 22+ and Chrome: `CHROME=/path/to/chrome` if it isn't in the usual place
+(`google-chrome` on Linux); `LANGS=en` sweeps a single language.
 
 ## Style
 
