@@ -20,6 +20,7 @@ const AU_ACTIONS = {
   'inbox.reply': t('Respondió en la Bandeja'), 'session.delete': t('Borró una conversación'),
 };
 window.auditPage = async () => {
+  if (window.authEnabled !== false && window.me?.role !== 'owner') return home();   // solo el dueño (o sin usuarios): el enlace escondido tampoco abre
   if (typeof agent !== 'undefined' && agent) { await saveNow(); agent = null; }
   history.replaceState(null, '', '#/auditoria');              // F5 vuelve a esta pantalla
   const filters = { agent: '', user: '', since: '' };

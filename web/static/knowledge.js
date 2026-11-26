@@ -167,8 +167,8 @@ window.knowledgeView = function () {
     const n = knParse(d.text)?.length;
     const el = h('div', { class: 'panel', style: 'padding:14px 16px' }, h('div', { class: 'row', style: 'flex-wrap:nowrap;align-items:flex-start' },
       h('button', { class: 'kn-doc', onclick: () => { kn.open = d.id; render(); $('#center').scrollTop = 0; } },
-        h('strong', {}, d.title || t('Sin título')), h('small', {}, knSource(d) + ' · ' + (n ? t.plural(n, '{n} pregunta', '{n} preguntas') : t.plural(d.text?.length || 0, '{n} letra', '{n} letras', { n: (d.text?.length || 0).toLocaleString(t.locale) }))),
-        h('span', { class: 'kn-snip' }, knFlat(d.text).slice(0, 220))),
+        h('strong', { 'data-content': '' }, d.title || t('Sin título')), h('small', {}, knSource(d) + ' · ' + (n ? t.plural(n, '{n} pregunta', '{n} preguntas') : t.plural(d.text?.length || 0, '{n} letra', '{n} letras', { n: (d.text?.length || 0).toLocaleString(t.locale) }))),
+        h('span', { class: 'kn-snip', 'data-content': '' }, knFlat(d.text).slice(0, 220))),
       iconBtn('trash', t('Borrar documento'), () => knRemove(d))));
     return [el, d.title + ' ' + d.text];
   });

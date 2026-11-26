@@ -187,7 +187,7 @@ function svBrowser(sessions) {
       class: 'sv-item', 'aria-current': String(s.sessionId === svSel), title: who ? s.sessionId : null,
       onclick: () => { svSel = s.sessionId; svView = 'orig'; drawList(); drawDetail(); if (innerWidth <= 900) detail.scrollIntoView({ behavior: 'smooth', block: 'start' }); },
     }, h('span', { class: 'sv-top' }, h('strong', {}, who || s.sessionId), h('time', { datetime: s.updated }, svTime(s.updated))),
-      h('span', { class: 'sv-preview' }, s.first_message || t('Sin mensajes del cliente')),
+      h('span', { class: 'sv-preview', 'data-content': '' }, s.first_message || t('Sin mensajes del cliente')),
       h('span', { class: 'sv-meta' }, ho ? svHandBadge(ho) : null, s.ended ? null : svState(false), svChannelName(s.channel) + ' · ' + t.plural(s.messages, '{n} mensaje', '{n} mensajes'), svEnvTag(s)),
       svTags(s.classifications));
   };

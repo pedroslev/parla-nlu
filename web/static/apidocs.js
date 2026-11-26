@@ -124,17 +124,18 @@
     return box;
   }
   const inline = (txt) => h('code', { class: 'ad-inline' }, txt);
+  const prose = (d) => typeof d === 'string' ? d.split(/\bnull\b/).flatMap((x, i) => i ? [inline('null'), x] : [x]) : d;   // «null» del JSON va como código
 
   function fields(rows) {
     return h('div', { class: 'ad-scroll' }, h('table', { class: 'ad-table' },
       h('tr', {}, h('th', {}, t('Campo')), h('th', {}, t('¿Obligatorio?')), h('th', {}, t('Qué es'))),
-      rows.map(([f, req, d]) => h('tr', {}, h('td', {}, inline(f)), h('td', {}, req), h('td', {}, d)))));
+      rows.map(([f, req, d]) => h('tr', {}, h('td', {}, inline(f)), h('td', {}, req), h('td', {}, prose(d))))));
   }
 
   function fieldsOut(rows, head = t('Respuesta')) {
     return h('div', { class: 'ad-scroll' }, h('table', { class: 'ad-table' },
       h('tr', {}, h('th', {}, head), h('th', {}, t('Qué es'))),
-      rows.map(([f, d]) => h('tr', {}, h('td', {}, inline(f)), h('td', {}, d)))));
+      rows.map(([f, d]) => h('tr', {}, h('td', {}, inline(f)), h('td', {}, prose(d))))));
   }
 
   function resultBox(key) {
@@ -576,7 +577,8 @@
           ['id / name / slug', t('El id, el nombre y el nombre simplificado para la URL.')],
           ['trained_at', t('Cuándo se entrenó el borrador por última vez.')],
           ['intents', t('Los nombres de las intenciones del borrador.')],
-          ['environments', [t('Qué versión tiene cada entorno: '), inline('{"production": 3, "staging": 4}'), t('. null = ninguna (production contesta con el borrador; staging da 400).')]],
+          ['environments', [t('Qué versión tiene cada entorno: '), inline('{"production": 3, "staging": 4}'),
+            ...prose(t('. null = ninguna (production contesta con el borrador; staging da 400).'))]],
         ]) }),
       endpoint('list', { title: t('Listar conversaciones'),
         purpose: PURPOSE.list,

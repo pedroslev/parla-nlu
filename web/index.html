@@ -283,7 +283,8 @@
 
   /* Probar */
   #chat { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--surface); }
-  .chat-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; }
+  .chat-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 10px; flex-wrap: wrap; gap: 8px; }
+  @media (max-width: 480px) { .chat-head { flex-wrap: nowrap; } .chat-head .btn.small { font-size: 0; gap: 0; } }   /* en el teléfono, solo íconos (el texto queda para lectores) */
   .chat-head h2 { font: 700 18px var(--display); }
   #log { flex: 1; overflow-y: auto; padding: 8px 16px 16px; display: flex; flex-direction: column; gap: 8px; }
   .msg { max-width: 88%; padding: 9px 13px; border-radius: 16px; overflow-wrap: anywhere; white-space: pre-wrap; }
@@ -811,7 +812,7 @@ function render() {
   history.replaceState(null, '', '#/' + agent.id + '/' + section);           // F5 vuelve acá, no a «Tus agentes»
   $('#nav').replaceChildren(...groups.flatMap(([name, items]) => [groups.length > 1 ? h('div', { class: 'nav-group', role: 'presentation' }, name) : null,
     ...items.map(([id, ic, text, n]) => h('button', {
-      'aria-current': id === section ? 'page' : null, title: text, onclick: () => { section = id; render(); $('#center').scrollTop = 0; },
+      'aria-current': id === section ? 'page' : null, 'data-section': id, title: text, onclick: () => { section = id; render(); $('#center').scrollTop = 0; },
     }, icon(ic), h('span', {}, text), n != null ? h('span', { class: 'count' }, n) : null))]).filter(Boolean));
   const c = $('#center'), y = c.scrollTop;
   // Conversaciones, Clasificaciones y API viven en /static/sessions.js, /static/classifications.js y /static/apidocs.js
@@ -1424,7 +1425,7 @@ function fallbackPanel() {             // «fallback» puede venir como texto (a
       iconBtn('trash', t('Borrar esta respuesta'), () => { replies.splice(i, 1); save(); render(); }, replies.length <= 1 || (filled <= 1 && !!r.trim()))))),
     filled || !main ? null : h('p', { class: 'notice warn' }, t('Escribí al menos una respuesta. Si no, el bot contesta «No entendí.».')),
     h('div', {}, h('button', { class: 'btn quiet small', onclick: () => add('') }, icon('plus'), t('Agregar otra respuesta'))),
-    ideas.length ? h('div', { class: 'chips', style: 'font-size:13px' }, t('Ideas:'), ideas.map((idea) => h('button', { class: 'chip', style: 'text-align:left', onclick: () => add(idea) }, idea))) : null);
+    ideas.length ? h('div', { class: 'chips', style: 'font-size:13px' }, t('Ideas:'), ideas.map((idea) => h('button', { class: 'chip', style: 'text-align:left', 'data-content': '', onclick: () => add(idea) }, idea))) : null);
 }
 function privacyPanel() {             // retention_days y pii_redaction: se aplican a lo guardado (parla/server.py cleanup, parla/pii.py)
   const pii = !!agent.pii_redaction;
@@ -1775,7 +1776,7 @@ function renderChat() {
   const envPick = choices.length > 1 ? pick(choices.map((k) => [k, ENVS[k] + (envs[k] != null ? ' (v' + envs[k] + ')' : '')]), testEnv,
     (k) => { testEnv = k; resetTest(); }, t('Qué versión probar')) : null;
   $('#chat').replaceChildren(...[
-    h('div', { class: 'chat-head', style: 'flex-wrap:wrap;gap:8px' }, h('h2', { class: 'grow' }, t('Probar')), envPick ? h('span', { class: 'row', style: 'gap:6px;font-size:13px;color:var(--muted)' }, envPick) : null,
+    h('div', { class: 'chat-head' }, h('h2', { class: 'grow' }, t('Probar')), envPick ? h('span', { class: 'row', style: 'gap:6px;font-size:13px;color:var(--muted)' }, envPick) : null,
       agent && lastLang && (langs().length > 1 || lastLang !== langs()[0]) ? h('span', { class: 'chip', title: t('El idioma en que está respondiendo el bot') }, t('Idioma: {lang}', { lang: LANGS[lastLang] || lastLang })) : null,
       agent && canEdit() && chat.some((m) => m.who === 'user') ? h('button', { class: 'btn quiet small', title: t('Guarda esta charla en Tests, con lo que respondió el bot como lo esperado'), onclick: saveChatAsTest }, icon('check'), t('Guardar como test')) : null,
       h('button', { class: 'btn quiet small', onclick: reset }, icon('redo'), t('Empezar de nuevo')), iconBtn('x', t('Cerrar el panel de prueba'), () => setChat(false))),
@@ -1803,8 +1804,16 @@ function renderChat() {
 addEventListener('DOMContentLoaded', () => {     // después de cargar /static/users.js: si la sesión venció, pide entrar y sigue en el mismo agente
   const m = location.hash.match(/^#\/([0-9a-f]{8})(?:\/([a-z]+))?/);
   if (location.hash === '#/usuarios' && window.usersPage) return window.usersPage();
-  if (location.hash === '#/auditoria' && window.auditPage) return window.auditPage();
+  if (location.hash === '#/auditoria') return;     // la abre users.js cuando sabe quién es (solo el dueño)
   m ? openAgent(m[1], m[2]).catch(home) : home();
+});
+addEventListener('hashchange', () => {          // cambiar solo #/agente/sección (a mano o con atrás) cambia de sección sin recargar
+  const m = location.hash.match(/^#\/([0-9a-f]{8})(?:\/([a-z]+))?/);
+  if (location.hash === '#/usuarios' && window.usersPage) return window.usersPage();
+  if (location.hash === '#/auditoria' && window.auditPage) return window.auditPage();
+  if (!m) return;
+  if (agent?.id !== m[1]) return saveNow().then(() => openAgent(m[1], m[2])).catch(home);
+  if (m[2] && m[2] !== section) { section = m[2]; render(); $('#center').scrollTop = 0; }
 });
 </script>
 <script src="/static/sessions.js"></script>

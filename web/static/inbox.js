@@ -2,7 +2,7 @@
 let ibSel = null, ibTimer = null;
 
 document.head.append(h('style', {}, `
-  .ib { max-width: 1040px; display: flex; flex-direction: column; gap: 18px; }
+  .ib { max-width: 1040px; container-type: inline-size; display: flex; flex-direction: column; gap: 18px; }
   .ib-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start; }
   .ib-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
   .ib-item { text-align: left; padding: 10px 12px; border-radius: 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -24,7 +24,7 @@ document.head.append(h('style', {}, `
   .ib-ex small { color: var(--muted); }
   .ib-teach { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .ib-teach select { min-width: 180px; }
-  @media (max-width: 900px) { .ib-grid { grid-template-columns: 1fr; } }
+  @container (max-width: 760px) { .ib-grid { grid-template-columns: 1fr; } }   /* lo que mide el centro, no la ventana (con «Probar» abierto) */
 `));
 
 const ibTime = (iso) => (iso || '').slice(11, 16);
@@ -179,7 +179,7 @@ window.improveView = () => {
       done(t('Listo: no vamos a mostrarte más «{label}».', { label: g.label }));
     };
     return h('div', { class: 'panel ib-group' },
-      h('div', { class: 'row' }, h('h2', { class: 'grow' }, t('«{text}»', { text: g.label })),
+      h('div', { class: 'row' }, h('h2', { class: 'grow', 'data-content': '' }, t('«{text}»', { text: g.label })),
         h('span', { class: 'help', style: 'font-size:14px' }, t.plural(g.count, 'lo escribió {n} vez', 'lo escribieron {n} veces'))),
       h('ul', { class: 'ib-ex' }, g.examples.slice(0, 5).map((e) => h('li', {}, h('q', {}, e.text), h('small', {}, ibDate(e.at)),
         e.sessionId ? h('button', { class: 'link', style: 'font-size:13px', onclick: () => ibOpenInSessions(e.sessionId) }, t('Ver conversación')) : null))),

@@ -296,7 +296,7 @@ EN = {
         "custom action “%s”: it's Rasa code; a “Call a service” step to %s (the action server) was left as a placeholder. Replace it with the real request or a function",
     "acciones del domain que no usa ninguna regla, historia ni flow, no se importaron: %s": "domain actions not used by any rule, story or flow weren't imported: %s",
     "slots sin mappings (%s): quedaron sin entidad, guardan la respuesta entera cuando se preguntan": "slots without mappings (%s): left without an entity, they save the whole answer when asked",
-    "intenciones sin frases de ejemplo (%s): sumales frases o el bot no las va a reconocer": "intents without example phrases (%s): add phrases or the bot won't recognize them",
+    "intenciones sin frases de ejemplo (%s): sumales frases o el bot no las va a reconocer": "intents without phrases (%s): add some or the bot won't recognize them",
     "no encontré nada de Rasa para importar: mandá los .yml del proyecto (data/, domain.yml, config.yml)": "found nothing from Rasa to import: send the project's .yml files (data/, domain.yml, config.yml)",
     "flow «%s»: «next: %s» apunta a un paso que no existe; ahí termina": "flow “%s”: “next: %s” points to a step that doesn't exist; it ends there",
     "flow «%s»: no pude traducir la condición «%s»; quedó como «no se cumple» (siempre va por el otro camino), arreglala en el paso «Tomar un camino»":

@@ -36,7 +36,7 @@ const chHook = (c) => chBase() + '/api/v1/bots/' + agent.id + '/' + c;
 function chUrl(url) {
   const pre = h('pre', { class: 'wg-snippet' }, url);
   return h('div', { class: 'ch-url' }, pre,
-    h('button', { class: 'btn small', type: 'button', onclick: (e) => wgCopy(url, e.currentTarget) }, icon('check'), h('span', {}, t('Copiar'))));
+    h('button', { class: 'btn small', type: 'button', onclick: (e) => wgCopy(url, e.currentTarget) }, h('span', {}, t('Copiar'))));
 }
 
 function chSecrets(c, only) {
@@ -60,7 +60,7 @@ function chStatus(c) {
 function chCheck(c, text, sub) {
   const conf = chConf(c);
   return h('label', { class: 'wg-check' },
-    h('input', { type: 'checkbox', checked: !!conf.enabled, onchange: (e) => { conf.enabled = e.target.checked; touch(); render(); } }),
+    h('input', { type: 'checkbox', class: 'switch', role: 'switch', checked: !!conf.enabled, onchange: (e) => { conf.enabled = e.target.checked; touch(); render(); } }),
     h('span', {}, text, h('small', {}, sub)));
 }
 

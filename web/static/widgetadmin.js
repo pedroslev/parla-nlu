@@ -4,7 +4,7 @@ document.head.append(h('style', {}, `
     font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; }
   .wg-error { color: var(--warn); font-size: 14px; }
   .wg-check { display: flex; gap: 10px; align-items: flex-start; font-size: 15px; }
-  .wg-check input { margin-top: 4px; width: 18px; height: 18px; accent-color: var(--brand); }
+  .wg-check input { margin-top: 2px; }
   .wg-check small { display: block; color: var(--muted); font-size: 13px; }
 `));
 
@@ -70,7 +70,10 @@ function wgOrigins(w) {
 }
 
 function wgCopy(text, btn) {
-  const done = () => { btn.lastChild.textContent = t('¡Copiado!'); setTimeout(() => { btn.lastChild.textContent = t('Copiar'); }, 1500); };
+  const done = () => {           // la tilde aparece solo cuando se copió de verdad
+    const mark = icon('check'); btn.prepend(mark); btn.lastChild.textContent = t('¡Copiado!');
+    setTimeout(() => { mark.remove(); btn.lastChild.textContent = t('Copiar'); }, 1500);
+  };
   navigator.clipboard?.writeText(text).then(done, () => {}) ?? (() => {
     const sel = getSelection(), r = document.createRange(); r.selectNodeContents($('.wg-snippet')); sel.removeAllRanges(); sel.addRange(r);
     if (document.execCommand('copy')) done();
@@ -81,10 +84,10 @@ window.widgetView = () => {
   const w = wgConf();
   wgRefresh();
   const check = (key, text, sub, after) => h('label', { class: 'wg-check' },
-    h('input', { type: 'checkbox', checked: !!w[key], onchange: (e) => { w[key] = e.target.checked; wgChanged(); after?.(); } }),
+    h('input', { type: 'checkbox', class: 'switch', role: 'switch', checked: !!w[key], onchange: (e) => { w[key] = e.target.checked; wgChanged(); after?.(); } }),
     h('span', {}, text, sub ? h('small', {}, sub) : null));
   const snippet = wgSnippet(w);
-  const copyBtn = h('button', { class: 'btn small', type: 'button', onclick: (e) => wgCopy(snippet, e.currentTarget) }, icon('check'), h('span', {}, t('Copiar')));
+  const copyBtn = h('button', { class: 'btn small', type: 'button', onclick: (e) => wgCopy(snippet, e.currentTarget) }, h('span', {}, t('Copiar')));
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('h1', {}, t('Widget web'))),
     h('p', { class: 'help' }, t('Un botón de chat para tu página web: tus clientes hablan con este bot sin salir de tu sitio. Lo configurás acá y pegás un pedacito de código en tu página.')),
@@ -108,7 +111,7 @@ window.widgetView = () => {
       h('p', { class: 'help' }, t('Copialo y pegalo en tu sitio, antes de «</body>». Si usás un armador de páginas (WordPress, Wix, Tiendanube…), buscá la opción «agregar código» o «HTML personalizado».')),
       h('pre', { class: 'wg-snippet' }, snippet)),
     h('div', { class: 'panel' }, h('label', { class: 'wg-check' },
-      h('input', { type: 'checkbox', checked: wgPreview, onchange: (e) => { wgPreview = e.target.checked; wgInject(); } }),
+      h('input', { type: 'checkbox', class: 'switch', role: 'switch', checked: wgPreview, onchange: (e) => { wgPreview = e.target.checked; wgInject(); } }),
       h('span', {}, t('Ver la vista previa en esta pantalla'),
         h('small', {}, t('Es el chat de verdad, abajo en la esquina. Las charlas de prueba quedan en Conversaciones con el canal «prueba-widget».'))))));
 };
