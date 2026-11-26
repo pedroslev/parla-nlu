@@ -43,17 +43,22 @@ knowledge.encode = None
 g = insights.unrecognized(AGENT, RECORDS)["groups"]
 assert [(x["count"], insights.norm(x["label"])) for x in g] == [(3, "hacen envios"), (1, "mandan a domicilio")], g
 assert {e["sessionId"] for e in g[0]["examples"]} == {"old1", "new1"}
-assert g[0]["suggested_intent"] == "precios" and g[1]["suggested_intent"] is None
+# «Para enseñar» elige de antemano solo si está bastante seguro: «¿Hacen envíos?» quedó cerca de precios con 0.2, no se sugiere
+assert g[0]["suggested_intent"] is None and g[1]["suggested_intent"] is None, g
 assert len(g[0]["texts"]) == 3
+near = lambda conf: [{"sessionId": "s", "history": [u("cuanto cuesta", intent="precios", confidence=conf, fallback=True)]}]
+assert insights.unrecognized(AGENT, near(0.72))["groups"][0]["suggested_intent"] == "precios"
+assert insights.unrecognized(AGENT, near(0.4))["groups"][0]["suggested_intent"] is None
 
 # con encoder: "mandan a domicilio" se junta con "hacen envíos" y la sugerencia sale por parecido
 VEC = {"hacen envios": [1, 0, 0], "mandan a domicilio": [0.9, 0.1, 0], "a que hora abren": [0, 1, 0],
-       "horario de atencion": [0, 1, 0], "cuanto sale": [0, 0, 1], "precio del plan": [0.2, 0, 1]}
+       "horario de atencion": [0, 1, 0], "cuanto sale": [0, 0, 1], "precio del plan": [0.2, 0, 1], "cuanto cuesta": [0.1, 0, 1]}
 knowledge.encode = lambda texts: [np.array(VEC[t], float) / np.linalg.norm(VEC[t]) for t in texts]
 g = insights.unrecognized(AGENT, RECORDS)["groups"]
-assert [x["count"] for x in g] == [4] and g[0]["suggested_intent"] == "precios", g
-solo = [{"sessionId": "s", "history": [u("mandan a domicilio", fallback=True)]}]
-assert insights.unrecognized(AGENT, solo)["groups"][0]["suggested_intent"] == "precios"   # el ejemplo más parecido
+assert [x["count"] for x in g] == [4] and g[0]["suggested_intent"] is None, g                 # envíos: nada parecido
+solo = lambda text: [{"sessionId": "s", "history": [u(text, fallback=True)]}]
+assert insights.unrecognized(AGENT, solo("cuanto cuesta"))["groups"][0]["suggested_intent"] == "precios"   # el ejemplo más parecido
+assert insights.unrecognized(AGENT, solo("mandan a domicilio"))["groups"][0]["suggested_intent"] is None
 
 # un encoder que falla no rompe: vuelve a agrupar por texto
 knowledge.encode = lambda texts: 1 / 0

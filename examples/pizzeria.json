@@ -2,7 +2,7 @@
   "parla": 1,
   "agent": {
     "name": "Pizzería",
-    "threshold": 0.55,
+    "threshold": 0.7,
     "fallback": "No entendí, ¿me lo decís de otra forma?",
     "intents": [
       {
@@ -51,6 +51,30 @@
         "examples": [
           "me llamo [pedro](nombre)",
           "soy [magui](nombre)"
+        ]
+      },
+      {
+        "name": "Reclamo",
+        "examples": [
+          "me llegó fría",
+          "la pizza vino fría",
+          "quiero un reembolso",
+          "me devuelven la plata",
+          "el pedido vino mal",
+          "me trajeron otro gusto",
+          "tengo un problema con mi pedido",
+          "quiero hacer un reclamo"
+        ]
+      },
+      {
+        "name": "Estado del pedido",
+        "examples": [
+          "dónde está mi pedido",
+          "cuánto falta para que llegue",
+          "ya salió mi pedido",
+          "todavía no llegó la pizza",
+          "cuánto tarda el delivery",
+          "mi pedido está demorado"
         ]
       }
     ],
@@ -189,9 +213,39 @@
             "flow": "Tomar pedido"
           }
         ]
+      },
+      {
+        "name": "Reclamo",
+        "trigger": "Reclamo",
+        "steps": [
+          {
+            "type": "classify",
+            "classification": "Reclamo"
+          },
+          {
+            "type": "handoff",
+            "text": "Perdón por eso. Te paso con una persona que lo resuelve.",
+            "reason": "reclamo"
+          }
+        ]
+      },
+      {
+        "name": "Estado del pedido",
+        "trigger": "Estado del pedido",
+        "steps": [
+          {
+            "type": "message",
+            "text": "Los pedidos tardan entre 30 y 45 minutos. Si pasó más, escribí «reclamo» y te paso con una persona."
+          }
+        ]
       }
     ],
-    "classifications": [],
+    "classifications": [
+      {
+        "name": "Reclamo",
+        "color": 4
+      }
+    ],
     "functions": [],
     "system": {
       "cancel": {
@@ -297,6 +351,35 @@
             "intent": "Pedir pizza",
             "flow": "Tomar pedido",
             "says": "Gracias, Ana. ¿Y tu apellido?"
+          }
+        ]
+      },
+      {
+        "name": "Reclamo a una persona",
+        "turns": [
+          {
+            "user": "me llegó fría",
+            "intent": "Reclamo",
+            "handoff": true
+          }
+        ]
+      },
+      {
+        "name": "Dónde está mi pedido",
+        "turns": [
+          {
+            "user": "dónde está mi pedido",
+            "intent": "Estado del pedido",
+            "says": "/30 y 45 minutos/"
+          }
+        ]
+      },
+      {
+        "name": "Una pregunta no es repetir",
+        "turns": [
+          {
+            "user": "¿cómo puedo pagar?",
+            "says": "/(?i)no entendí/"
           }
         ]
       }

@@ -516,9 +516,18 @@ def entity_report(data):
     return [{"name": e["name"], "kind": kind(e), "marked": marks.get(e["name"], 0)} for e in data["entities"]]
 
 
+# ponytail: un piso fijo; la autoevaluación no mide frases de otro tema, así que no sugiere un umbral propio
+THRESHOLD_MIN = 0.65    # con embeddinggemma, una frase de otro tema suele quedar entre 0.55 y 0.65 de la más parecida
+
+
 def training_warnings(agent, data):
     """Consejos concretos para mejorar lo que se acaba de entrenar."""
     out = []
+    threshold = float(agent.get("threshold") or 0)
+    if threshold < THRESHOLD_MIN:
+        out.append("El umbral es %s: con menos de %s, frases que no tienen nada que ver («me llegó fría») caen en la "
+                   "intención más parecida. Subilo y sumá intenciones para lo que falte (reclamos, estado del pedido)."
+                   % ("%.2f" % threshold, "%.2f" % THRESHOLD_MIN))
     triggers = {f.get("trigger") for f in agent["flows"]}
     for i in data["intents"]:
         n = len(i["examples"])
@@ -884,6 +893,7 @@ def stop(st):
     """Corta todo lo que estaba en curso: flujo, pila de flujos y paso de IA."""
     st.update(flow=None, stack=[])
     st.pop("agent", None)
+    st.pop("worked", None)
 
 
 def back(agent, st, out):
@@ -1054,6 +1064,9 @@ def agent_step(agent, st, step, text, ctx, out, trace):
     return True
 
 
+WORK_STEPS = {"http", "function", "handoff", "file", "agent", "remind", "classify", "end"}   # «hizo algo» (más las preguntas)
+
+
 def run(agent, st, nlu, text, out, trace):
     """Ejecuta pasos hasta que el flujo termina ("done"), una pregunta o la IA esperan a la persona ("wait"),
     la charla pasa a una persona ("handoff") o un paso falla ("error")."""
@@ -1070,10 +1083,13 @@ def run(agent, st, nlu, text, out, trace):
         ctx = dict(slots, intent=nlu["intent"], confidence=nlu["confidence"], text=text,
                    entities={e["entity"]: e["value"] for e in reversed(nlu["entities"])})
         kind = step.get("type")
+        if kind in WORK_STEPS:
+            st["worked"] = True
         try:
             if kind == "message":
                 out.append(bubble(step, st, ctx))
             elif kind == "ask":
+                st["worked"] = True                          # juntó un dato: cuenta para la encuesta (handle)
                 if slots.get(step.get("slot")) in (None, ""):
                     out.append(bubble(step, st, ctx))
                     st["waiting"] = step.get("slot") or ""
@@ -1200,9 +1216,34 @@ def doubt(agent, nlu, threshold):
     return [ranking[0][0], ranking[1][0]] if ranking[0][1] - ranking[1][1] <= float(conf.get("margin") or 0) else None
 
 
-def corrections(agent, st, waiting, entities):
+FILLER = set("por favor perdón perdon eh che please sorry desculpa desculpe".split())   # cortesía que no cambia el pedido
+WORD = re.compile(r"\w+")
+
+
+def mostly_trigger(text, examples):
+    """«¿cómo?» no se lleva «¿cómo puedo pagar?»: el mensaje tiene que ser casi el ejemplo más parecido (el que comparte
+    más palabras; empate: el más largo), con a lo sumo una palabra de más sin contar las de cortesía.
+    ponytail: por palabras; «¿cómo pago?» todavía pasa (una sola palabra de más)."""
+    words = [w for w in WORD.findall(text.lower()) if w not in FILLER]
+    shapes = [set(WORD.findall(ANNOT.sub(r"\1", e).lower())) for e in examples if e.strip()]
+    if not shapes:
+        return True
+    closest = max(shapes, key=lambda e: (len(e & set(words)), len(e)))
+    return len(words) - len(closest) <= 1
+
+
+CORRECTION_CUE = re.compile(r"^\s*no\b|\b(mejor|en realidad|cambi\w*|correg\w*|corrij\w*|me equivoqu\w*|quise decir|quería decir|"
+                            r"actually|instead|rather|change|i meant|na verdade|melhor|troc\w*|mud\w*|quis dizer)\b", re.I)
+
+
+def corrections(agent, st, waiting, entities, text=""):
     """Slots que la persona corrige mientras se le pregunta otra cosa ("mejor de fugazza"): solo los que este
-    flujo ya preguntó antes de la pregunta actual. Devuelve (índice del primer paso a repetir, nombres) o None."""
+    flujo ya preguntó antes de la pregunta actual. Devuelve (índice del primer paso a repetir, nombres) o None.
+    Si la pregunta actual es de texto libre, cualquier mensaje es una respuesta posible («Corrientes 1234» a «¿dirección?»
+    no cambia la cantidad): ahí corrige solo con una señal explícita («mejor 3», «no, en realidad…»)."""
+    spec = next((s for s in agent["slots"] if s["name"] == waiting), {})
+    if not spec.get("entity") and not CORRECTION_CUE.search(text or ""):
+        return None
     _, steps = steps_of(agent, st.get("flow"))
     here, first, names = st["pc"] - 1, None, []
     for slot in agent["slots"]:
@@ -1297,6 +1338,8 @@ def handle(agent, st, text, parse=parse):
     if system == "__cancel__":
         stop(st)
         return turn(agent, st, [localized(conf["cancel"], st)], nlu, ["cancela lo que estaba haciendo"])
+    if system == "__repeat__" and (not st.get("last_bot") or not mostly_trigger(said, conf["repeat"].get("examples") or [])):
+        system = None                                   # nada que repetir, o era una pregunta más larga: sigue normal
     if system == "__repeat__":
         st.update(kept)
         return turn(agent, st, list(st.get("last_bot") or []), nlu, ["repite lo último"], again=True)
@@ -1315,7 +1358,7 @@ def handle(agent, st, text, parse=parse):
     elif busy:
         # «¿qué es presencial?» a «¿presencial o virtual?»: se contesta (base de conocimiento) y se vuelve a preguntar
         side = hook(brain.side_question, agent, st, text, asked) if button is None else None
-        fixed = None if side else corrections(agent, st, waiting, entities) if conf["correction"].get("enabled") else None
+        fixed = None if side else corrections(agent, st, waiting, entities, text) if conf["correction"].get("enabled") else None
         if side:
             asked_about = slots.get(waiting)            # «¿qué es presencial?» trajo «presencial»
             slots[waiting] = before
@@ -1427,7 +1470,8 @@ def handle(agent, st, text, parse=parse):
         sp.set(**{"parla.flow.status": status})
         sp.outcome = "error" if status == "error" else None
     if status == "done":
-        if conf["csat"].get("enabled") and not st.get("csat_asked"):
+        # encuesta: solo si el flujo que termina hizo algo (preguntó, consultó, ejecutó, cerró la charla); no tras un saludo
+        if conf["csat"].get("enabled") and not st.get("csat_asked") and st.pop("worked", False):
             st["csat_asked"] = st["csat_waiting"] = True
             out.append({"text": localized(conf["csat"], st), "buttons": [{"label": str(n), "value": str(n)} for n in range(1, 6)]})
         elif conf["anything_else"].get("enabled"):

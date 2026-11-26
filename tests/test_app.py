@@ -519,11 +519,39 @@ assert app.handle(BOT, st, "horario", near)["messages"] == ["Abrimos de 9 a 18"]
 assert app.handle(dict(BOT, system={"clarify": {"enabled": False}}), {}, "algo", near)["messages"] == ["¿Con qué área?"]
 assert say({}, "horario", dict(BOT, system={"anything_else": {"enabled": True}}))["messages"] == ["Abrimos de 9 a 18", "¿Te ayudo con algo más?"]
 surveyed, st = dict(BOT, system={"csat": {"enabled": True}}), {}
-r = say(st, "horario", surveyed)
+assert say(st, "horario", surveyed)["messages"] == ["Abrimos de 9 a 18"]          # solo mensajes (un saludo, un dato): sin encuesta
+say(st, "menu", surveyed)
+r = say(st, "ventas", surveyed)                                                   # el flujo juntó un dato: ahora sí
 assert r["messages"][-1] == "¿Cómo te atendí? Del 1 al 5." and [b["value"] for b in r["buttons"]] == ["1", "2", "3", "4", "5"], r
 r = say(st, "4", surveyed)
 assert st["csat"] == 4 and r["csat"] == 4 and r["messages"] == ["¡Gracias por contarme!"]
-assert say(st, "horario", surveyed)["messages"] == ["Abrimos de 9 a 18"]          # se pregunta una sola vez
+assert say(st, "menu", surveyed)["messages"] == ["Área: ventas"]                  # se pregunta una sola vez
+# «repetí»: una interjección corta («¿cómo?») no se lleva una pregunta más larga, y sin nada que repetir no contesta vacío
+rep = lambda agent, text: dict(R(agent, text), intent="__repeat__", confidence=0.9)
+st = {}
+say(st, "horario")
+assert app.handle(BOT, st, "¿cómo puedo pagar?", rep)["messages"] == ["no entendí"]
+assert app.handle(BOT, st, "¿cómo?", rep)["messages"] == ["no entendí"]                       # repite lo último dicho
+st = {}
+say(st, "horario")
+assert app.handle(BOT, st, "repetí por favor", rep)["messages"] == ["Abrimos de 9 a 18"]
+assert app.handle(BOT, st, "no te escuché bien", rep)["messages"] == ["Abrimos de 9 a 18"]
+assert app.handle(BOT, {}, "¿cómo?", rep)["messages"] == ["no entendí"]                       # nada que repetir
+# corrección: una dirección con número, a «¿dirección?», es la respuesta, no un cambio de la cantidad (antes: loop
+# «Listo, lo cambié» + la misma pregunta). Con una señal de corrección («mejor 3») sí corrige.
+DELIVERY = dict(BOT, slots=BOT["slots"] + [{"name": "direccion"}], flows=[{"name": "pedido", "trigger": "pedir", "steps": [
+    {"type": "ask", "slot": "gusto", "text": "¿De qué gusto?"}, {"type": "ask", "slot": "cantidad", "text": "¿Cuántas?"},
+    {"type": "ask", "slot": "direccion", "text": "¿Dirección?"}, {"type": "message", "text": "{{ cantidad }} de {{ gusto }} a {{ direccion }}"}]}])
+st = {}
+say(st, "una pizza de muzza", DELIVERY)
+assert say(st, "2", DELIVERY)["messages"] == ["¿Dirección?"]
+r = say(st, "Corrientes 1234", DELIVERY)
+assert r["messages"] == ["2 de muzza a Corrientes 1234"] and st["slots"]["cantidad"] == "2", r
+st = {}
+say(st, "una pizza de muzza", DELIVERY)
+say(st, "2", DELIVERY)
+assert say(st, "mejor 3", DELIVERY)["messages"] == ["Listo, lo cambié.", "¿Dirección?"] and st["slots"]["cantidad"] == "3"
+assert say(st, "Corrientes 1234", DELIVERY)["messages"] == ["3 de muzza a Corrientes 1234"]
 # las intenciones del sistema entran al clasificador y a la foto entrenada, pero no a la autoevaluación
 import numpy as np
 saved_enc = app._encode
@@ -649,8 +677,8 @@ assert app.human("eeee5555", "nada", "take", "", "x") is None
 assert app.api_v1("GET", ["bots", "mesa", "sessions", "nada", "messages"], {})[0] == 404
 surveyed = dict(BOT, id="eeee5555", name="Mesa", system={"csat": {"enabled": True}})
 app.all_agents = lambda: [surveyed]
-app.api_v1("POST", ["bots", "mesa", "events"], {"sessionId": "s2", "text": "horario"})
-app.api_v1("POST", ["bots", "mesa", "events"], {"sessionId": "s2", "text": "5"})
+for said in ("menu", "ventas", "5"):
+    app.api_v1("POST", ["bots", "mesa", "events"], {"sessionId": "s2", "text": said})
 assert app.load_session("eeee5555", "s2")["csat"] == 5
 saved_voice = voice.transcribe, voice.speak
 voice.transcribe = lambda audio, mime, language, hint=None, asr=None: {"text": "menu", "language": language, "ms": 1}

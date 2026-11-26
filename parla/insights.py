@@ -9,6 +9,7 @@ from . import knowledge
 ANNOT = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 IDLE = 30 * 60            # una conversación sin cerrar y quieta más de 30 min cuenta como abandonada
 SIMILAR = 0.8
+SUGGEST = 0.7   # «Para enseñar» elige una intención de antemano solo desde acá: más abajo suele ser otro tema (0.55-0.65)
 
 
 def norm(text):
@@ -57,7 +58,8 @@ def unrecognized(agent, records):
     groups = []
     for v, ks in clusters:
         entries = [e for k in ks for e in by_text[k]]
-        guess = Counter(e.get("intent") for e in entries if e.get("intent") in intents).most_common(1)
+        guess = Counter(e.get("intent") for e in entries if e.get("intent") in intents
+                        and float(e.get("confidence") or 0) >= SUGGEST).most_common(1)
         suggested = guess[0][0] if guess else None
         if suggested is None and v is not None:
             if ex_vecs is None:
@@ -65,7 +67,8 @@ def unrecognized(agent, records):
                 found = _encode([p for p, _ in pairs], cache=True)
                 ex_vecs = (pairs, [] if found is None else found)
             scored = [(float(x @ v), name) for (_, name), x in zip(*ex_vecs)]
-            suggested = max(scored)[1] if scored else None
+            best = max(scored) if scored else (0, None)
+            suggested = best[1] if best[0] >= SUGGEST else None
         entries.sort(key=lambda e: e.get("at") or "", reverse=True)
         groups.append({"label": Counter(e["text"] for e in entries).most_common(1)[0][0], "count": len(entries),
                        "texts": sorted({e["text"] for e in entries}),

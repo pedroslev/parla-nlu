@@ -82,6 +82,8 @@ EN = {
     # consejos del entrenamiento
     "«%s» tiene %d frase%s: sumale al menos %d más para que la reconozca bien.": "“%s” has %d phrase%s: add at least %d more so it's recognized reliably.",
     "Ningún flujo responde a «%s»: el bot la va a entender pero no va a hacer nada.": "No flow answers “%s”: the bot will understand it but won't do anything.",
+    "El umbral es %s: con menos de %s, frases que no tienen nada que ver («me llegó fría») caen en la intención más parecida. Subilo y sumá intenciones para lo que falte (reclamos, estado del pedido).":
+        "The threshold is %s: below %s, unrelated phrases (“it arrived cold”) land on the closest intent. Raise it and add intents for what's missing (complaints, order status).",
     "La entidad «%s» está marcada %d vez: con 3 o más ejemplos en distintas frases la reconoce mejor.":
         "Entity “%s” is marked %d time: with 3 or more examples in different phrases it's recognized better.",
     "La entidad «%s» está marcada %d veces: con 3 o más ejemplos en distintas frases la reconoce mejor.":
@@ -454,6 +456,8 @@ PT = {
     # consejos del entrenamiento
     "«%s» tiene %d frase%s: sumale al menos %d más para que la reconozca bien.": "“%s” tem %d frase%s: adicione pelo menos mais %d para que seja bem reconhecida.",
     "Ningún flujo responde a «%s»: el bot la va a entender pero no va a hacer nada.": "Nenhum fluxo responde a “%s”: o bot vai entender, mas não vai fazer nada.",
+    "El umbral es %s: con menos de %s, frases que no tienen nada que ver («me llegó fría») caen en la intención más parecida. Subilo y sumá intenciones para lo que falte (reclamos, estado del pedido).":
+        "O limiar é %s: abaixo de %s, frases sem relação (“chegou fria”) caem na intenção mais parecida. Aumente-o e adicione intenções para o que faltar (reclamações, status do pedido).",
     "La entidad «%s» está marcada %d vez: con 3 o más ejemplos en distintas frases la reconoce mejor.":
         "A entidade “%s” está marcada %d vez: com 3 ou mais exemplos em frases diferentes ela é reconhecida melhor.",
     "La entidad «%s» está marcada %d veces: con 3 o más ejemplos en distintas frases la reconoce mejor.":
