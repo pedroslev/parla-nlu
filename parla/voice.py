@@ -7,10 +7,12 @@ navegador, al widget y al <Play> del teléfono).
               "tts": {"provider": "local" | "openai" | "deepgram" | "elevenlabs" | "google", "voice", "model", "api_key_secret"}}
 """
 import base64
+import contextlib
 import hashlib
 import io
 import json
 import os
+import queue
 import re
 import secrets
 import subprocess
@@ -55,9 +57,25 @@ BCP47 = {"es": "es-US", "en": "en-US", "pt": "pt-BR"}
 MAX_UPLOAD = 25_000_000          # bytes: lo que aceptan los proveedores (OpenAI corta en 25 MB)
 TIMEOUT = 30                     # segundos por pedido a un proveedor de voz
 
-_lock = threading.Lock()   # ponytail: un lock global (cargar + inferir en serie); alcanza para un servidor local
-_stt = None
-_tts = {}                  # idioma -> PiperVoice
+# Un pool de PARLA_VOICE_WORKERS juegos de modelos (Whisper + voces de Piper): hasta N transcripciones o síntesis a la
+# vez; cada juego se usa de a uno (los modelos no son seguros entre hilos). Cada juego ocupa su RAM (~0.5 GB Whisper small).
+WORKERS = max(1, int(os.environ.get("PARLA_VOICE_WORKERS") or min(2, max(1, (os.cpu_count() or 4) // 4))))
+_pool = queue.Queue()
+_slots = [{"stt": None, "tts": {}} for _ in range(WORKERS)]
+for _s in _slots:
+    _pool.put(_s)
+_loading = threading.Lock()
+_stt = None                # el Whisper del primer juego (status)
+_tts = {}                  # idioma -> PiperVoice del primer juego (status)
+
+
+@contextlib.contextmanager
+def _slot():
+    slot = _pool.get()
+    try:
+        yield slot
+    finally:
+        _pool.put(slot)
 _errors = {}
 
 
@@ -78,15 +96,17 @@ def status():
                        "tts_voices": voices, "tts_loaded": sorted(_tts)}}
 
 
-def _whisper():
+def _whisper(slot):
     global _stt
-    if _stt is None:
+    if slot["stt"] is None:
         try:
             from faster_whisper import WhisperModel
         except ImportError:
             raise ValueError("La transcripción de voz no está instalada (faster-whisper).")
-        _stt = WhisperModel(STT_MODEL, device="cpu", compute_type="int8", download_root=str(MODELS / "whisper"))
-    return _stt
+        with _loading:
+            slot["stt"] = WhisperModel(STT_MODEL, device="cpu", compute_type="int8", download_root=str(MODELS / "whisper"))
+        _stt = _stt or slot["stt"]
+    return slot["stt"]
 
 
 def _to_wav(audio_bytes):
@@ -126,8 +146,8 @@ def _transcribe(audio_bytes, mime, language, hint, asr):
             raise ValueError("El audio es muy largo (máximo %d segundos)." % MAX_SECONDS)
         text = _remote_asr(asr, audio_bytes, mime, language or "es", hint)
         return {"text": text.strip(), "language": lang, "ms": int((time.time() - t0) * 1000), "provider": asr["provider"]}
-    with _lock:
-        model = _whisper()
+    with _slot() as slot:
+        model = _whisper(slot)
         samples = _decode(audio_bytes)
         seconds = len(samples) / 16000
         if seconds < 0.3:
@@ -146,9 +166,9 @@ def _transcribe(audio_bytes, mime, language, hint, asr):
     return {"text": text, "language": info.language, "ms": int((time.time() - t0) * 1000), "provider": "local"}
 
 
-def _voice(lang):
-    if lang in _tts:
-        return _tts[lang]
+def _voice(lang, slot):
+    if lang in slot["tts"]:
+        return slot["tts"][lang]
     try:
         from piper import PiperVoice
         from piper.download_voices import download_voice
@@ -158,11 +178,13 @@ def _voice(lang):
     for name in VOICES.get(lang, VOICES["es"]):
         onnx = PIPER_DIR / (name + ".onnx")
         try:
-            if not onnx.exists() or not (PIPER_DIR / (name + ".onnx.json")).exists():
-                download_voice(name, PIPER_DIR)
-            _tts[lang] = PiperVoice.load(str(onnx))
+            with _loading:      # descargar y cargar de a uno: dos juegos no bajan la misma voz a la vez
+                if not onnx.exists() or not (PIPER_DIR / (name + ".onnx.json")).exists():
+                    download_voice(name, PIPER_DIR)
+                slot["tts"][lang] = PiperVoice.load(str(onnx))
+            _tts.setdefault(lang, slot["tts"][lang])
             _errors.pop("tts", None)
-            return _tts[lang]
+            return slot["tts"][lang]
         except Exception as e:   # descarga cortada o voz rota: borro y pruebo la siguiente
             _errors["tts"] = "%s: %s" % (name, e)
             for p in (onnx, PIPER_DIR / (name + ".onnx.json")):
@@ -236,8 +258,8 @@ def speak(text, language="es", keep=True, tts=None):
         if tts and tts.get("provider", "local") != "local":
             return _remote_tts(tts, text, language or lang)
         buf = io.BytesIO()
-        with _lock:
-            v = _voice(lang)
+        with _slot() as slot:
+            v = _voice(lang, slot)
             with wave.open(buf, "wb") as w:
                 v.synthesize_wav(text, w)
         return buf.getvalue()

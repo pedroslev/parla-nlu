@@ -6,6 +6,8 @@ Los usuarios de SSO (oidc.py) no tienen hash ni salt: {"name", "role", "sso": tr
 «bots»: null (ve todos los agentes; el dueño siempre) o la lista de ids de agentes que ve. Ver allowed_bot().
 Interfaz: cookie `parla_session`. API/MCP: `Authorization: Bearer <clave>`.
 """
+import contextlib
+import copy
 import hashlib
 import hmac
 import http.cookies
@@ -31,10 +33,19 @@ def users_path():
     return os.environ.get("PARLA_USERS") or os.path.join(DATA, "users.json")
 
 
+_users = [None, []]      # ((ruta, mtime, tamaño), usuarios): cada pedido lee users.json; solo se parsea si cambió
+
+
 def _load():
+    """Los usuarios, sin lock: una copia (quien escribe la cambia y la guarda con _save, bajo LOCK)."""
     try:
-        with open(users_path(), encoding="utf-8") as f:
-            return json.load(f).get("users") or []
+        stat = os.stat(users_path())
+        stamp = (users_path(), stat.st_ino, stat.st_mtime_ns, stat.st_size)
+        if _users[0] != stamp:
+            with open(users_path(), encoding="utf-8") as f:
+                _users[1] = json.load(f).get("users") or []
+            _users[0] = stamp
+        return copy.deepcopy(_users[1])
     except (OSError, ValueError):
         return []
 
@@ -186,7 +197,7 @@ def handle(handler, method, url, data):
     """Rutas /api/auth/* y /api/users*. Devuelve (status, body, headers) o None si no es suya."""
     if not (url.startswith("/api/auth/") or url == "/api/users" or url.startswith("/api/users/")):
         return None
-    with LOCK:
+    with LOCK if method != "GET" else contextlib.nullcontext():    # leer no espera a nadie; escribir, de a uno
         try:
             return _handle(handler, method, url, data)
         except ValueError as error:

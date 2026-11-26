@@ -82,7 +82,7 @@ FAKE = "http://127.0.0.1:%d" % fake.server_address[1]
 SCRIPT, SEEN = [], []      # SCRIPT: respuestas en orden (dict, o "BAD" = JSON roto); SEEN: (mensajes, esquema)
 
 
-def fake_chat(cfg, messages, schema=None, timeout=45, max_tokens=300):
+def fake_chat(cfg, messages, schema=None, timeout=45, max_tokens=300, stream=None):
     SEEN.append((json.loads(json.dumps(messages)), schema))
     out = SCRIPT.pop(0) if SCRIPT else {"tool": "", "text": "listo"}
     if out == "BAD":

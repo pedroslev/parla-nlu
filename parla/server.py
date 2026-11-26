@@ -4,7 +4,9 @@
     .venv/bin/python app.py [puerto]   ->   http://127.0.0.1:8000
 """
 import base64
+import concurrent.futures
 import json
+import queue
 import random
 import os
 import re
@@ -17,9 +19,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 
-from . import DATA, ROOT, write_json, auth, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, mcp_client, outbound, phone, rasa_import, runner, telemetry, vault, voice
+from . import DATA, ROOT, write_json, auth, bus, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, mcp_client, outbound, phone, rasa_import, runner, telemetry, vault, voice
 
 import celpy
 import pycrfsuite
@@ -96,17 +98,53 @@ def hook(fn, *args, default=None):
 _model = None
 _model_lock = threading.Lock()   # dos pedidos a la vez no cargan el modelo dos veces
 _vectors = {}  # frase de entrenamiento -> vector. ponytail: nunca se vacía; purgar si hay miles de frases borradas
+CORES = os.cpu_count() or 2
+EMBED_WORKERS = int(os.environ.get("PARLA_EMBED_WORKERS") or max(1, CORES // 2))    # llamadas a ONNX en paralelo
+EMBED_THREADS = int(os.environ.get("PARLA_EMBED_THREADS") or 2)                     # hilos de ONNX por llamada (intra-op)
+EMBED_BATCH = int(os.environ.get("PARLA_EMBED_BATCH") or 16)                        # textos por llamada, como mucho
+EMBED_WAIT = float(os.environ.get("PARLA_EMBED_WAIT_MS") or 0) / 1000                # esperar a juntar más (0 = solo lo que ya está en la cola)
+_jobs = queue.Queue()
+EMBED_STATS = {"batches": 0, "items": 0}
+
+
+def _embed_worker():
+    """Micro-batching: junta los textos que esperan (todas las conversaciones a la vez) y hace UNA llamada a ONNX.
+    Con varios workers sobre el mismo modelo (ONNX suelta el GIL) se usan todos los núcleos."""
+    import numpy as np
+    while True:
+        batch = [_jobs.get()]
+        deadline = time.monotonic() + EMBED_WAIT
+        while len(batch) < EMBED_BATCH:
+            try:
+                left = deadline - time.monotonic()
+                batch.append(_jobs.get(timeout=left) if left > 0 else _jobs.get_nowait())
+            except queue.Empty:
+                break
+        try:
+            vectors = list(_model.embed([EMBED_PREFIX + t for t, _ in batch], batch_size=len(batch)))
+            EMBED_STATS["batches"] += 1
+            EMBED_STATS["items"] += len(batch)
+            for (_, future), v in zip(batch, vectors):
+                future.set_result(v / np.linalg.norm(v))
+        except Exception as error:  # noqa: BLE001 - se le devuelve a cada pedido
+            for _, future in batch:
+                future.set_exception(error)
 
 
 def _encode(texts):
     global _model
-    import numpy as np
     if _model is None:
         with _model_lock:
             if _model is None:
                 from fastembed import TextEmbedding
-                _model = TextEmbedding(MODEL, cache_dir=EMBED_CACHE)
-    return [v / np.linalg.norm(v) for v in _model.embed([EMBED_PREFIX + t for t in texts])]
+                model = TextEmbedding(MODEL, cache_dir=EMBED_CACHE, threads=EMBED_THREADS)
+                for _ in range(EMBED_WORKERS):
+                    threading.Thread(target=_embed_worker, daemon=True, name="parla-embed").start()
+                _model = model
+    futures = [concurrent.futures.Future() for _ in texts]
+    for text, future in zip(texts, futures):
+        _jobs.put((text, future))
+    return [f.result() for f in futures]
 
 
 _queries = {}   # texto de la persona -> (_encode que lo calculó, vector): classify y read_answer lo piden en el mismo turno
@@ -377,7 +415,11 @@ def parse(agent, text, tagger=None, index=None):
 # ---------- Entrenamiento: el chat usa la última versión entrenada, el resto del agente es en vivo ----------
 
 MODELS = {}  # agente -> {"data": frases y entidades entrenadas, "tagger": CRF o None, "index": nlu_index(data)}
-TRAINING = threading.RLock()   # ponytail: un lock global para entrenar/cargar modelos; por agente si entrenan muchos a la vez
+_training = {}   # agente -> RLock: entrenar o cargar un agente no frena a los demás
+
+
+def training(agent_id):
+    return _training.get(agent_id) or _training.setdefault(agent_id, threading.RLock())
 
 
 def model_entry(data, tagger):
@@ -392,7 +434,7 @@ def nlu_data(agent):
 def train(agent_id, fingerprint=None):
     """Toma una foto de las frases y entidades, entrena el CRF y deja listos los vectores.
     El bot sigue atendiendo con la versión anterior hasta que termina: entrenar no lo apaga."""
-    with TRAINING:          # dos chats a la vez sin modelo no entrenan dos veces ni pisan el .crfsuite
+    with training(agent_id):          # dos chats a la vez sin modelo no entrenan dos veces ni pisan el .crfsuite
         return _train(agent_id, fingerprint)
 
 
@@ -631,7 +673,7 @@ def diff(old, new):
 
 def model(agent_id):
     if agent_id not in MODELS:
-        with TRAINING:
+        with training(agent_id):
             if agent_id in MODELS:
                 pass                        # lo cargó otro pedido mientras esperaba
             elif not os.path.exists(path(agent_id, ".model.json")):
@@ -1610,6 +1652,9 @@ def save_session(agent_id, record):
     db.q("INSERT OR REPLACE INTO sessions (agent_id, session_id, channel, started, updated, handoff, record) VALUES (?, ?, ?, ?, ?, ?, ?)",
          (agent_id, record["sessionId"], record.get("channel"), record.get("started"), record.get("updated") or now(),
           int(bool((record.get("handoff") or {}).get("active"))), json.dumps(stored, ensure_ascii=False)))
+    bus.publish("session:%s:%s" % (agent_id, record["sessionId"]), {"type": "saved", "record": stored})   # WebSocket/SSE
+    if record.get("handoff"):
+        bus.publish("inbox:" + agent_id, {"type": "inbox"})
 
 
 def delete_session(agent_id, sid):
@@ -1745,7 +1790,12 @@ def converse(agent_id, record, text):
     was_handoff = bool((state.get("handoff") or {}).get("active"))
     with telemetry.span("parla.turn", **{"parla.agent.id": agent_id, "parla.channel": record.get("channel"),
                                          "parla.environment": record.get("environment"), "parla.version": number}) as sp:
-        result = handle(agent, state, text, parse=lambda a, t: parse(snap["data"], t, snap["tagger"], snap.get("index")))
+        topic = "session:%s:%s" % (agent_id, record["sessionId"])
+        llm.STREAM.sink = (lambda event: bus.publish(topic, event)) if bus.has(topic) else None   # tokens de la IA en vivo
+        try:
+            result = handle(agent, state, text, parse=lambda a, t: parse(snap["data"], t, snap["tagger"], snap.get("index")))
+        finally:
+            llm.STREAM.sink = llm.STREAM.last = None
         measure(agent, record, result, text, was_handoff, sp)
     nlu = result["nlu"]
     record["updated"] = now()
@@ -2138,6 +2188,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply({"error": "no existe" if status == 404 else "métricas: falta el token (PARLA_METRICS_TOKEN) o no coincide"}, status)
             telemetry.gauge("parla_active_sessions", active_sessions())
             telemetry.gauge("parla_campaign_recipients", outbound.gauge_rows())
+            if "parla.aserver" in sys.modules:
+                live = sys.modules["parla.aserver"].gauges()
+                telemetry.gauge("parla_connections", live["connections"])
+                telemetry.gauge("parla_queue_depth", live["queues"] + [({"queue": "db_write"}, db.pending()), ({"queue": "embed"}, _jobs.qsize())])
+            for name, value in (("parla_embed_batches_total", EMBED_STATS["batches"]), ("parla_embed_items_total", EMBED_STATS["items"]),
+                                ("parla_db_commits_total", db._stats["commits"]), ("parla_db_statements_total", db._stats["statements"])):
+                telemetry.gauge(name, [({}, value)])
             return self.reply(telemetry.render().encode(), ctype="text/plain; version=0.0.4; charset=utf-8")
         raw = self.headers.get("Content-Length") or "0"
         if not (raw.isascii() and raw.isdigit()):
@@ -2651,9 +2708,8 @@ def main():
     outbound.start()            # la cola de campañas y recordatorios (sigue lo que quedó en parla.db)
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     print("Listo: http://127.0.0.1:%d  (Ctrl+C para salir)" % port, flush=True)
-    # ponytail: un hilo por pedido (la IA y la voz tardan segundos); dos mensajes a la vez en la MISMA conversación
-    # por la API pueden pisarse. WhatsApp y Telegram ya se atienden con un lock por conversación (channels.py)
-    ThreadingHTTPServer((os.environ.get("PARLA_HOST", "127.0.0.1"), port), Handler).serve_forever()
+    from . import aserver       # asyncio: keep-alive, WebSocket/SSE, una fila por conversación (aserver.py)
+    aserver.serve(os.environ.get("PARLA_HOST", "127.0.0.1"), port)
 
 
 if __name__ == "__main__":

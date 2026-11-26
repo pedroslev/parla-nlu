@@ -119,19 +119,26 @@ window.inboxView = () => {
     }
   }
 
+  async function show(data) {
+    if (agent !== myAgent || !root.isConnected) return;
+    items = Array.isArray(data) ? data : data.sessions || data.conversations || data.inbox || [];
+    drawList(); await drawDetail();
+  }
   async function refresh() {
     try {
-      const data = await api('GET', '/' + myAgent.id + '/inbox');
-      if (agent !== myAgent || !root.isConnected) return;
-      items = Array.isArray(data) ? data : data.sessions || data.conversations || data.inbox || [];
-      drawList(); await drawDetail();
+      await show(await api('GET', '/' + myAgent.id + '/inbox'));
     } catch (e) {
       if (root.isConnected) body.replaceChildren(h('div', { class: 'notice warn', role: 'alert' }, t('No se pudo cargar la bandeja: {error}.', { error: e.message })));
     }
   }
 
-  // se actualiza sola cada 3 s, solo mientras la sección está a la vista
-  ibTimer = setInterval(() => { if (!root.isConnected || agent !== myAgent) clearInterval(ibTimer); else if (!document.hidden) refresh(); }, 3000);
+  // en vivo por SSE (el servidor avisa cuando cambia una charla con persona); si el stream no está abierto, cada 3 s como antes
+  const live = window.EventSource ? new EventSource('/api/agents/' + encodeURIComponent(myAgent.id) + '/inbox/stream') : null;
+  live?.addEventListener('inbox', (e) => { try { show(JSON.parse(e.data)); } catch {} });
+  ibTimer = setInterval(() => {
+    if (!root.isConnected || agent !== myAgent) { clearInterval(ibTimer); live?.close(); }
+    else if (!document.hidden && live?.readyState !== 1) refresh();
+  }, 3000);
   refresh();
   return root;
 };

@@ -104,7 +104,7 @@ def draft_model(app, agent):
         app.classify(data, "calentar")
         # ponytail: un archivo por agente en la carpeta temporal; dos corridas a la vez del mismo agente se pisan
         file = os.path.join(tempfile.gettempdir(), "parla-tests-%s.crfsuite" % agent["id"])
-        with app.TRAINING:
+        with app.training(agent["id"]):
             hit = _fresh[agent["id"]] = (key, app.model_entry(data, app.train_tagger(data, file)))
     return hit[1]
 

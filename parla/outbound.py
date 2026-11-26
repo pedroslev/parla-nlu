@@ -24,7 +24,7 @@ from collections import deque
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from . import auth, channels, db, pii, telemetry, vault
+from . import auth, bus, channels, db, pii, telemetry, vault
 
 WINDOW = 24 * 3600              # la ventana de atención de WhatsApp
 MAX_ATTEMPTS = 3
@@ -47,6 +47,8 @@ clock = time.time               # las pruebas lo cambian por un reloj propio
 _lock = threading.RLock()       # ponytail: un lock para toda la cola; con varias réplicas haría falta reservar filas en la base
 _next = {}                      # campaña -> cuándo puede salir el próximo envío (límite de velocidad)
 _api = {}                       # agente -> instantes de los últimos envíos por la API
+_wake = threading.Event()       # algo nuevo en la cola (encolar, arrancar una campaña): la vuelta no espera
+MAX_SLEEP = 5                   # segundos como mucho entre vueltas (horarios de silencio que se abren, reintentos)
 
 
 class OutboundError(ValueError):
@@ -375,7 +377,9 @@ def _enqueue(agent_id, kind, channel, address, spec, campaign=None, status="queu
         cur = conn.execute("INSERT OR IGNORE INTO campaign_recipients (campaign_id, agent_id, kind, channel, address, spec, status, next_at, created, updated) "
                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                            (campaign, agent_id, kind, channel, address, json.dumps(spec, ensure_ascii=False), status, next_at, _now_text(), _now_text()))
-        return cur.lastrowid if cur.rowcount else None
+        row = cur.lastrowid if cur.rowcount else None
+    _wake.set()
+    return row
 
 
 def _finish(row, agent_id, channel, status, error=None, sent=None, spec=None):
@@ -385,6 +389,7 @@ def _finish(row, agent_id, channel, status, error=None, sent=None, spec=None):
     if spec is not None:
         fields["spec"] = json.dumps(spec, ensure_ascii=False)
     db.q("UPDATE campaign_recipients SET %s WHERE id = ?" % ", ".join("%s = ?" % k for k in fields), tuple(fields.values()) + (row,))
+    bus.publish("campaign:" + agent_id, {"type": "campaign"})      # la pantalla de Campañas en vivo (SSE)
     outcome = {"sent": "sent", "queued": "retry"}.get(status, status)
     telemetry.count("parla_outbound_messages_total", channel=telemetry.channel(channel), outcome=outcome)
 
@@ -498,14 +503,29 @@ def recover():
          "WHERE status = 'sending'", (_now_text(),))
 
 
+def _sleep():
+    """Hasta el próximo envío que vence (fila con next_at o el límite de velocidad de una campaña), como mucho MAX_SLEEP.
+    Recordatorios y envíos de la API ya vencidos que no entraron en la vuelta (50 por vuelta): enseguida."""
+    now = clock()
+    if db.q("SELECT 1 FROM campaign_recipients WHERE status = 'queued' AND campaign_id IS NULL AND next_at <= ? LIMIT 1", (now,)):
+        return 0.05
+    due = db.q("SELECT min(r.next_at) FROM campaign_recipients r LEFT JOIN campaigns c ON c.id = r.campaign_id WHERE r.status = 'queued' "
+               "AND r.next_at > ? AND (r.campaign_id IS NULL OR c.status = 'running')", (now,))[0][0]
+    soon = [t for t in list(_next.values()) + [due] if t and t > now]
+    return max(0.05, min([MAX_SLEEP] + [t - now for t in soon]))
+
+
 def _loop():
     while True:
         try:
             tick()
+            wait = _sleep()
         except Exception:  # noqa: BLE001 - que la cola no se muera por una fila rara: sigue en un segundo
             import traceback
             traceback.print_exc(file=sys.stderr)
-        time.sleep(1)
+            wait = 1
+        _wake.wait(wait)
+        _wake.clear()
 
 
 def start():
@@ -759,6 +779,8 @@ def act(agent, cid, action):
         db.q("UPDATE campaigns SET status = ?, updated = ? WHERE id = ?", (status, _now_text(), cid))
         if action == "cancel":
             db.q("UPDATE campaign_recipients SET status = 'canceled', updated = ? WHERE campaign_id = ? AND status = 'queued'", (_now_text(), cid))
+    _wake.set()
+    bus.publish("campaign:" + agent["id"], {"type": "campaign"})
     return public(_campaign(cid))
 
 

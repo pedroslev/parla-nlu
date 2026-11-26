@@ -273,11 +273,22 @@ def _first_json(text):
     return found.group(0) if found else text
 
 
-def _openai(cfg, messages, schema, timeout, max_tokens, temperature):
+def _openai(cfg, messages, schema, timeout, max_tokens, temperature, sink=None):
     if schema:      # json_object + el esquema en el prompt: lo aceptan casi todos (json_schema strict es más exigente)
         messages = [_schema_prompt(schema)] + list(messages)
     body = {"model": cfg["model"], "messages": messages, "temperature": temperature, "max_tokens": max_tokens, "stream": False}
     url = cfg["url"] + "/chat/completions"
+    if sink:        # streaming (SSE): data: {"choices": [{"delta": {"content": "..."}}]} … data: [DONE]
+        text = ""
+        with _request(url, dict(body, stream=True), timeout, cfg) as r:
+            for data in _sse(r, timeout):
+                piece = ((data.get("choices") or [{}])[0].get("delta") or {}).get("content") or ""
+                text += piece
+                sink(piece)
+                usage = data.get("usage") or {}
+                if usage:
+                    telemetry.tokens(usage.get("prompt_tokens"), usage.get("completion_tokens"))
+        return _first_json(text) if schema else text
     if schema and url not in _no_json_mode:
         try:
             data = _json(url, dict(body, response_format={"type": "json_object"}), timeout, cfg)
@@ -350,7 +361,7 @@ def _strict(schema):
     return schema
 
 
-def _anthropic(cfg, messages, schema, timeout, max_tokens):
+def _anthropic(cfg, messages, schema, timeout, max_tokens, sink=None):
     client = _claude(cfg, timeout)
     system = "\n\n".join(m["content"] for m in messages if m.get("role") == "system")
     turns = [{"role": m["role"], "content": m["content"]} for m in messages if m.get("role") in ("user", "assistant")]
@@ -367,9 +378,16 @@ def _anthropic(cfg, messages, schema, timeout, max_tokens):
         args["system"] = system
     try:
         if cfg["model"] in FALLBACK_MODELS:      # si un clasificador de seguridad rechaza, el servidor reintenta con otro modelo
-            response = client.beta.messages.create(betas=[FALLBACK_BETA], fallbacks="default", **args)
+            api, args = client.beta.messages, dict(args, betas=[FALLBACK_BETA], fallbacks="default")
         else:
-            response = client.messages.create(**args)
+            api = client.messages
+        if sink:                                  # tokens a medida que llegan (WebSocket/SSE); el mensaje final igual que sin stream
+            with api.stream(**args) as stream:
+                for piece in stream.text_stream:
+                    sink(piece)
+                response = stream.get_final_message()
+        else:
+            response = api.create(**args)
     except Exception as error:  # noqa: BLE001
         raise _claude_error(error, cfg, timeout) from None
     usage = getattr(response, "usage", None)
@@ -388,7 +406,7 @@ GEMINI_BLOCKED = ("SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII", "RECITATI
 _gemini_plain = set()   # modelos que rechazaron responseJsonSchema (400): ahí el JSON se pide solo con el prompt
 
 
-def _gemini(cfg, messages, schema, timeout, max_tokens):
+def _gemini(cfg, messages, schema, timeout, max_tokens, sink=None):
     if not cfg.get("api_key"):
         raise LLMError("falta la API key: guardala en «Claves» como %s" % cfg.get("api_key_secret"), 401)
     system = "\n\n".join(m["content"] for m in messages if m.get("role") == "system")
@@ -405,12 +423,23 @@ def _gemini(cfg, messages, schema, timeout, max_tokens):
     if schema and not plain:
         body["generationConfig"].update(responseMimeType="application/json", responseJsonSchema=schema)
     try:
-        data = _json(url, body, timeout, cfg)
+        if sink:    # streamGenerateContent?alt=sse: cada evento es una respuesta parcial; se juntan como una sola
+            data, parts = {}, []
+            with _request(url.replace(":generateContent", ":streamGenerateContent") + "?alt=sse", body, timeout, cfg) as r:
+                for chunk in _sse(r, timeout):
+                    candidate = (chunk.get("candidates") or [{}])[0]
+                    for p in (candidate.get("content") or {}).get("parts") or []:
+                        if p.get("text") and not p.get("thought"):
+                            parts.append({"text": p["text"]})
+                            sink(p["text"])
+                    data = dict(chunk, candidates=[dict(candidate, content={"parts": parts})])
+        else:
+            data = _json(url, body, timeout, cfg)
     except LLMError as error:
         if not (error.code == 400 and schema and not plain):
             raise
         _gemini_plain.add(cfg["model"])
-        return _gemini(cfg, messages, schema, timeout, max_tokens)
+        return _gemini(cfg, messages, schema, timeout, max_tokens, sink)
     usage = data.get("usageMetadata") or {}
     telemetry.tokens(usage.get("promptTokenCount"), usage.get("candidatesTokenCount"))
     if (data.get("promptFeedback") or {}).get("blockReason"):
@@ -424,10 +453,12 @@ def _gemini(cfg, messages, schema, timeout, max_tokens):
     return _first_json(text) if schema else text
 
 
-def chat(cfg, messages, schema=None, timeout=45, max_tokens=300):
+def chat(cfg, messages, schema=None, timeout=45, max_tokens=300, stream=None):
     """Texto de la respuesta; con `schema` (JSON schema) pide salida estructurada y devuelve el dict. Un solo punto de
     entrada para todos los proveedores. Lanza LLMError si el servidor no está, tarda más de `timeout` segundos o
-    devuelve algo inválido (los mensajes nunca muestran la API key)."""
+    devuelve algo inválido (los mensajes nunca muestran la API key).
+    stream: True (texto) o el nombre del campo del JSON que ve la persona: si el turno tiene alguien escuchando por
+    WebSocket/SSE (STREAM.sink), los tokens salen como eventos «delta» mientras llegan; el valor devuelto es el mismo."""
     cfg = _cfg(cfg)
     temperature = float(cfg.get("temperature") or 0)
     provider = cfg["provider"] if cfg["provider"] in PROVIDERS else "other"
@@ -437,24 +468,35 @@ def chat(cfg, messages, schema=None, timeout=45, max_tokens=300):
                         labels={"provider": provider}, **{"gen_ai.operation.name": "chat", "gen_ai.system": system,
                         "gen_ai.provider.name": system, "gen_ai.request.model": cfg.get("model"),
                         "gen_ai.request.max_tokens": max_tokens, "gen_ai.request.temperature": temperature}):
-        return _chat(cfg, messages, schema, timeout, max_tokens, temperature)
+        return _chat(cfg, messages, schema, timeout, max_tokens, temperature, _streamer(stream))
 
 
-def _chat(cfg, messages, schema, timeout, max_tokens, temperature):
+def _chat(cfg, messages, schema, timeout, max_tokens, temperature, sink=None):
     if cfg["provider"] == "anthropic":
-        text = _anthropic(cfg, messages, schema, timeout, max_tokens)
+        text = _anthropic(cfg, messages, schema, timeout, max_tokens, sink)
     elif cfg["provider"] == "gemini":
-        text = _gemini(cfg, messages, schema, timeout, max_tokens)
+        text = _gemini(cfg, messages, schema, timeout, max_tokens, sink)
     elif cfg["compatible"]:
-        text = _openai(cfg, messages, schema, timeout, max_tokens, temperature)
+        text = _openai(cfg, messages, schema, timeout, max_tokens, temperature, sink)
     else:
-        body = {"model": cfg["model"], "messages": messages, "stream": False, "keep_alive": KEEP_ALIVE,
+        body = {"model": cfg["model"], "messages": messages, "stream": bool(sink), "keep_alive": KEEP_ALIVE,
                 "options": {"temperature": temperature, "num_predict": max_tokens, "num_ctx": 4096}}
         if schema:
             body["format"] = schema
-        data = _json(cfg["url"] + "/api/chat", body, timeout)
-        telemetry.tokens(data.get("prompt_eval_count"), data.get("eval_count"))
-        text = (data.get("message") or {}).get("content") or ""
+        if sink:        # Ollama: una línea JSON por pedazo, la última con done y los tokens
+            text = ""
+            with _request(cfg["url"] + "/api/chat", body, timeout) as r:
+                for line in _lines(r, timeout):
+                    data = json.loads(line)
+                    piece = (data.get("message") or {}).get("content") or ""
+                    text += piece
+                    sink(piece)
+                    if data.get("done"):
+                        telemetry.tokens(data.get("prompt_eval_count"), data.get("eval_count"))
+        else:
+            data = _json(cfg["url"] + "/api/chat", body, timeout)
+            telemetry.tokens(data.get("prompt_eval_count"), data.get("eval_count"))
+            text = (data.get("message") or {}).get("content") or ""
     if not schema:
         return text.strip()
     try:
@@ -464,3 +506,87 @@ def _chat(cfg, messages, schema, timeout, max_tokens, temperature):
     if not isinstance(out, dict):
         raise LLMError("el modelo no devolvió un objeto")
     return out
+
+
+# ---------- streaming: tokens a la persona mientras el modelo escribe ----------
+
+STREAM = threading.local()      # .sink = función(evento) del turno en curso (server.converse la pone si alguien escucha)
+_streams = [0]
+
+
+def _lines(response, timeout):
+    try:
+        for raw in response:
+            line = raw.decode("utf-8", "replace").strip()
+            if line:
+                yield line
+    except OSError:
+        raise LLMError("tardó más de %s s en contestar" % timeout) from None
+
+
+def _sse(response, timeout):
+    """Los «data:» de una respuesta text/event-stream, ya como JSON (sin el [DONE] final)."""
+    for line in _lines(response, timeout):
+        if line.startswith("data:") and line[5:].strip() != "[DONE]":
+            try:
+                yield json.loads(line[5:])
+            except ValueError:
+                continue
+
+
+def visible(raw, field):
+    """Lo que ya se puede mostrar de una salida a medio llegar: todo el texto (field None) o el valor del campo
+    `field` de un JSON incompleto («{"text": "Hola, qu» -> «Hola, qu»)."""
+    if field is None:
+        return raw
+    found = re.search(r'"%s"\s*:\s*"' % re.escape(field), raw)
+    if not found:
+        return ""
+    out, s, i = [], raw[found.end():], 0
+    while i < len(s) and s[i] != '"':
+        if s[i] == "\\":
+            if s[i + 1:i + 2] == "u":
+                if i + 6 > len(s):
+                    break
+                try:
+                    out.append(chr(int(s[i + 2:i + 6], 16)))
+                except ValueError:
+                    pass
+                i += 6
+                continue
+            if i + 1 >= len(s):
+                break
+            out.append({"n": "\n", "t": "\t", "r": "", "b": "", "f": ""}.get(s[i + 1], s[i + 1]))
+            i += 2
+            continue
+        out.append(s[i])
+        i += 1
+    return "".join(out)
+
+
+def _streamer(stream):
+    """El sink para el proveedor: junta lo crudo y manda {"type": "delta", "stream": n, "text"} con lo nuevo visible."""
+    emit = getattr(STREAM, "sink", None)
+    if not stream or not emit:
+        return None
+    _streams[0] += 1
+    sid, field, state = _streams[0], None if stream is True else stream, {"raw": "", "shown": ""}
+    STREAM.last = state
+    state["id"] = sid
+
+    def sink(piece):
+        state["raw"] += piece or ""
+        now = visible(state["raw"], field)
+        if len(now) > len(state["shown"]) and now.startswith(state["shown"]):
+            emit({"type": "delta", "stream": sid, "text": now[len(state["shown"]):]})
+            state["shown"] = now
+    return sink
+
+
+def settle(final):
+    """Después de los guardrails (que necesitan el texto entero): si lo que se mostró en vivo no es lo que queda,
+    un evento «replace» con el texto final ("" = no mostrar nada). Así el leak-regex y la regla del «?» siguen valiendo."""
+    state, emit = getattr(STREAM, "last", None), getattr(STREAM, "sink", None)
+    STREAM.last = None
+    if state and emit and state["shown"] and state["shown"].strip() != (final or "").strip():
+        emit({"type": "replace", "stream": state["id"], "text": final or ""})

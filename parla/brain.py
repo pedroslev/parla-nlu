@@ -277,13 +277,15 @@ def _from_knowledge(agent, st, text):
             answer = llm.chat(cfg, [{"role": "user", "content": (
                 '%sTexto:\n"""\n%s\n"""\n\nPregunta del cliente: %s\n\nRespondé la pregunta en una o dos oraciones '
                 'completas, en %s, usando solo datos del texto.' % (("Así habla el bot: " + persona + "\n") if persona else "",
-                                                                  context, text, _lang(st)))}], timeout=40, max_tokens=140)
+                                                                  context, text, _lang(st)))}], timeout=40, max_tokens=140, stream=True)
             answer = re.sub(r"^\s*¿[^?]{3,120}\?\s*", "", answer or "")      # sin repetir la pregunta («¿Qué es…? Es…»)
             leaked = re.search(r"(?im)^\s*(p|r|pregunta|respuesta|texto)\s*:|pregunta del cliente|\"\"\"", answer or "")
             if answer and not leaked and len(answer) <= 400 and _supported(answer, context, text):
+                llm.settle(answer)
                 return {"text": answer, "sources": sources, "via": "knowledge"}
         except Exception:
             pass
+    llm.settle(_snippet(good[0]["text"]))       # lo que se mostró en vivo no pasó los guardrails: «replace» con el fragmento
     return {"text": _snippet(good[0]["text"]), "sources": sources[:1], "via": "knowledge"}
 
 
@@ -307,7 +309,7 @@ def fallback(agent, st, text):
                   'forma?" / "Uy, no estoy seguro de qué necesitás, ¿me lo explicás con otras palabras?"'
                   % (("Así habla el bot: " + persona + "\n") if persona else "", text, _lang(st)))
         try:
-            out = llm.chat(cfg, [{"role": "user", "content": prompt}], timeout=30, max_tokens=60,
+            out = llm.chat(cfg, [{"role": "user", "content": prompt}], timeout=30, max_tokens=60, stream="respuesta",
                            schema={"type": "object", "properties": {"respuesta": {"type": "string"}}, "required": ["respuesta"]})
         except llm.LLMError:
             if not llm.status(cfg).get("ok"):
@@ -320,6 +322,7 @@ def fallback(agent, st, text):
                      "pt": "Desculpa, não entendi. Pode dizer de outro jeito?"}.get((st or {}).get("lang"), "Perdón, no te entendí bien. ¿Me lo decís de otra forma?")
         if can:   # lo que sabe hacer lo pone el motor, no el modelo: así no inventa
             reply += " " + {"en": "I can help with: ", "pt": "Posso ajudar com: "}.get((st or {}).get("lang"), "Puedo ayudarte con: ") + ", ".join(can) + "."
+        llm.settle(reply)
         return {"text": reply, "sources": [], "via": "ia"}
     except Exception:
         return None
@@ -418,7 +421,7 @@ def agent_turn(agent, step, st, text, ctx, call_tool, tools=None):
             schema = {"type": "object", "properties": props, "required": ["tool"] if can_call else ["text"]}
             timeout = 45 if not calls else max(5, min(45, deadline - time.time() + 5))
             try:
-                out = llm.chat(cfg, messages, schema=schema, timeout=timeout, max_tokens=250)
+                out = llm.chat(cfg, messages, schema=schema, timeout=timeout, max_tokens=250, stream="text")
             except llm.LLMError as error:
                 if rescued or "JSON" not in str(error) and "objeto" not in str(error):
                     raise
@@ -427,6 +430,7 @@ def agent_turn(agent, step, st, text, ctx, call_tool, tools=None):
             args = out.get("args") if isinstance(out.get("args"), dict) else out.get("inputs") if isinstance(out.get("inputs"), dict) else {}
             reply = str(out.get("text") or "").strip()[:400]
             if name and isinstance(name, str) and can_call:
+                llm.settle("")          # era una llamada a herramienta: lo que se mostró en vivo se retira
                 calls += 1
                 if name not in tools:
                     trace.append("IA pidió una herramienta que no tiene: %s" % name[:80])
@@ -463,6 +467,7 @@ def agent_turn(agent, step, st, text, ctx, call_tool, tools=None):
             if done:
                 st.pop("agent", None)
             trace.append("IA respondió%s" % (" y terminó" if done else ""))
+            llm.settle(reply)
             return {"messages": [reply] if reply else [], "done": done, "slots": slots, "trace": trace}
     except Exception as error:
         return {"messages": [], "done": True, "slots": {}, "trace": ["IA no disponible: %s" % error]}

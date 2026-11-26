@@ -62,13 +62,17 @@ function cpGo(tab, sel) {
   cpPaint();
   if (tab !== 'new') cpRefresh();
 }
+let cpStream = null;
 function cpTick() {                      // mientras hay una campaña enviando y la sección está abierta
-  clearInterval(cpTimer);
+  clearInterval(cpTimer); cpStream?.close();
   const myAgent = agent;
+  // el avance llega por SSE (cada envío avisa); sin el stream abierto, cada 3 s como antes
+  cpStream = window.EventSource ? new EventSource('/api/agents/' + encodeURIComponent(myAgent.id) + '/campaigns/stream') : null;
+  cpStream?.addEventListener('campaigns', () => { if (cpTab !== 'new' && !document.hidden && !cpBusy) cpRefresh(); });
   cpTimer = setInterval(() => {
-    if (section !== 'campaigns' || agent !== myAgent || !cpRoot?.isConnected) { clearInterval(cpTimer); cpTimer = null; return; }
+    if (section !== 'campaigns' || agent !== myAgent || !cpRoot?.isConnected) { clearInterval(cpTimer); cpTimer = null; cpStream?.close(); return; }
     const live = cpTab === 'detail' ? cpCur?.status === 'running' : cpTab === 'list' && cpList?.some((c) => c.status === 'running');
-    if (live && !document.hidden && !cpBusy) cpRefresh();
+    if (live && !document.hidden && !cpBusy && cpStream?.readyState !== 1) cpRefresh();
   }, 3000);
 }
 

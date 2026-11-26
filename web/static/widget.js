@@ -146,7 +146,45 @@
   });
 
   // ---------- servidor ----------
+  // WebSocket al mismo servidor: los turnos, lo que escribe la persona de la bandeja y la respuesta de la IA mientras
+  // se escribe llegan por una sola conexión. Si no conecta (proxy viejo, red), todo sigue como antes: fetch + polling.
+  let ws = null, wsOk = null, wsSeq = 0, live = null, humanOn = false;
+  const pending = new Map();
+  function socket() {
+    if (wsOk === false || !('WebSocket' in window)) return Promise.resolve(null);
+    if (ws?.readyState === 1) return Promise.resolve(ws);
+    return new Promise((res) => {
+      const s = new WebSocket(api.replace(/^http/, 'ws') + '/ws');
+      let opened = false;
+      s.onopen = () => { opened = true; ws = s; wsOk = true; res(s); };
+      s.onclose = () => {
+        if (!opened && wsOk === null) wsOk = false;          // nunca conectó: polling para siempre
+        ws = null; res(null);
+        pending.forEach((p) => p.reject(Object.assign(new Error('offline'), { status: 0 }))); pending.clear();
+        if (humanOn && !poller) poller = setInterval(poll, 3000);
+      };
+      s.onmessage = (e) => { try { onSocket(JSON.parse(e.data)); } catch {} };
+    });
+  }
+  function onSocket(m) {
+    if (m.type === 'reply') {
+      const p = pending.get(m.id); pending.delete(m.id);
+      if (p) m.status === 200 ? p.resolve(m.body) : p.reject(Object.assign(new Error(m.body?.error || String(m.status)), { status: m.status }));
+    } else if (m.type === 'delta') {                         // la IA escribiendo: una burbuja que crece
+      if (live?.stream !== m.stream) { live?.el.remove(); live = { stream: m.stream, el: h('div', { class: 'm bot' }) }; log.append(live.el); }
+      live.el.textContent += m.text; scroll();
+    } else if (m.type === 'replace' && live?.stream === m.stream) {   // un guardrail cambió el texto final
+      if (m.text) live.el.textContent = m.text; else { live.el.remove(); live = null; }
+    } else if (m.type === 'messages') {                      // la persona de la bandeja (o el bot cuando la devuelven)
+      (m.messages || []).filter((x) => x.from === 'human' || x.from === 'bot').forEach((x) => add('bot', x.text, x.from === 'human' ? (x.by || L.person) : null, x.file));
+      if (m.messages?.at(-1)?.buttons) showButtons(m.messages.at(-1).buttons);
+      if (Number.isInteger(m.next)) after = m.next;
+      if (m.handoff === false) handoff(false);
+    }
+  }
   async function call(method, path, body) {
+    const s = method === 'POST' && path === '/events' ? await socket() : null;
+    if (s) return new Promise((resolve, reject) => { const id = ++wsSeq; pending.set(id, { resolve, reject }); s.send(JSON.stringify({ ...body, id })); });
     let r;
     try {
       r = await fetch(api + path, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined });
@@ -167,6 +205,7 @@
   }
   let after = null, poller = null, ready = null;
   function turn(res) {
+    live?.el.remove(); live = null;
     (res.messages || []).forEach((m, i) => add('bot', typeof m === 'string' ? m : m.text, null, res.replies?.[i]?.file));
     showButtons(res.buttons);
     if (res.audio) try { new Audio('data:audio/wav;base64,' + res.audio).play().catch(() => {}); } catch {}
@@ -175,6 +214,8 @@
   }
   function handoff(on) {
     status.textContent = on ? L.human : '';
+    humanOn = on;
+    if (on && ws?.readyState === 1) return;                 // por el WebSocket llega solo, sin preguntar cada 3 s
     if (on && !poller) { poller = setInterval(poll, 3000); if (after == null) poll(true); }
     if (!on && poller) { clearInterval(poller); poller = null; }
   }
@@ -201,6 +242,7 @@
         list.forEach((m) => add(m.from === 'user' ? 'user' : 'bot', m.text, m.from === 'human' ? (m.by || L.person) : null, m.file));
         showButtons(list.at(-1).buttons);
         after = Number.isInteger(r.next) ? r.next : (r.messages || []).length;
+        if (r.handoff) (await socket())?.send(JSON.stringify({ type: 'follow', sessionId: sid, after }));
         return handoff(!!r.handoff);
       }
     } catch {}

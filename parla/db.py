@@ -10,8 +10,10 @@ campaign_recipients(id, campaign_id, agent_id, address, spec, status, error, att
     destinatarios de campañas, envíos de la API (campaign_id NULL, kind «api») y recordatorios (kind «remind»)
 optouts(agent_id, address, channel, keyword, at)    quien pidió que no le escriban más (por agente)
 """
+import concurrent.futures
 import contextlib
 import os
+import queue
 import sqlite3
 import threading
 import time
@@ -41,37 +43,116 @@ CREATE INDEX IF NOT EXISTS recipients_session ON campaign_recipients (agent_id, 
 CREATE TABLE IF NOT EXISTS optouts (agent_id TEXT NOT NULL, address TEXT NOT NULL, channel TEXT, keyword TEXT, at TEXT NOT NULL,
     PRIMARY KEY (agent_id, address));
 """
-# ponytail: una conexión y un lock para todo el proceso (ThreadingHTTPServer); alcanza para un servidor.
-# Con mucho tráfico: una conexión por hilo (WAL ya deja leer mientras otro escribe)
-LOCK = threading.RLock()
-_conn = None
+# Lecturas: una conexión por hilo, sin lock (WAL deja leer mientras otro escribe). Escrituras: un solo hilo escritor
+# con una cola y group commit (todo lo que se juntó va en una transacción). q() de escritura vuelve recién después del
+# COMMIT: lo que devolvió OK está en el WAL (synchronous=NORMAL: sobrevive a que se caiga el proceso; un corte de luz
+# puede perder las últimas transacciones). Si el proceso muere con escrituras en la cola, esas se pierden y sus pedidos
+# nunca recibieron respuesta. connect() (transacciones de varias sentencias) toma WRITE, el mismo lock del escritor.
+WRITE = threading.Lock()
+BATCH = 512                 # sentencias por group commit, como mucho
+_local = threading.local()
+_writes = queue.Queue()
+_ready = [False]
+_stats = {"commits": 0, "statements": 0}     # para /metrics: tamaño de los group commits
 
 
 def path():
     return os.path.join(DATA, "parla.db")
 
 
+def _open():
+    if not _ready[0]:
+        with WRITE:
+            if not _ready[0]:
+                os.makedirs(DATA, exist_ok=True)
+                os.close(os.open(path(), os.O_CREAT | os.O_WRONLY, 0o600))     # conversaciones y logins: solo el dueño del proceso
+                conn = sqlite3.connect(path(), timeout=10)
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.executescript(SCHEMA)
+                conn.close()
+                threading.Thread(target=_writer, daemon=True, name="parla-db-writer").start()
+                _ready[0] = True
+    conn = sqlite3.connect(path(), check_same_thread=False, timeout=10, isolation_level=None)   # autocommit: sin snapshot viejo
+    conn.execute("PRAGMA busy_timeout=10000")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    return conn
+
+
+def _conn():
+    conn = getattr(_local, "conn", None)
+    if conn is None:
+        conn = _local.conn = _open()
+    return conn
+
+
+def _writer():
+    conn = None
+    while True:
+        batch = [_writes.get()]
+        while len(batch) < BATCH:
+            try:
+                batch.append(_writes.get_nowait())
+            except queue.Empty:
+                break
+        try:
+            if conn is None:
+                conn = sqlite3.connect(batch[0][0], timeout=10, isolation_level=None)
+                conn.execute("PRAGMA busy_timeout=10000")
+                conn.execute("PRAGMA synchronous=NORMAL")
+            results = []
+            with WRITE:
+                conn.execute("BEGIN IMMEDIATE")
+                for where, sql, args, future in batch:
+                    try:        # un error (p. ej. UNIQUE) deshace solo esa sentencia: la transacción sigue
+                        results.append((future, conn.execute(sql, args).fetchall(), None))
+                    except Exception as error:  # noqa: BLE001 - se le devuelve al que la pidió
+                        results.append((future, None, error))
+                conn.execute("COMMIT")
+            _stats["commits"] += 1
+            _stats["statements"] += len(batch)
+        except Exception as error:  # noqa: BLE001 - el COMMIT falló (disco lleno): nadie quedó guardado
+            try:
+                conn.execute("ROLLBACK")
+            except Exception:  # noqa: BLE001
+                pass
+            results = [(job[3], None, error) for job in batch]
+        for future, rows, error in results:
+            future.set_exception(error) if error else future.set_result(rows)
+
+
 @contextlib.contextmanager
 def connect():
-    """La conexión, con el lock tomado y dentro de una transacción (commit al salir, rollback si falla)."""
-    global _conn
-    with LOCK:
-        if _conn is None:
-            os.makedirs(DATA, exist_ok=True)
-            os.close(os.open(path(), os.O_CREAT | os.O_WRONLY, 0o600))     # conversaciones y logins: solo el dueño del proceso
-            conn = sqlite3.connect(path(), check_same_thread=False, timeout=10)
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute("PRAGMA busy_timeout=10000")
-            conn.executescript(SCHEMA)
-            _conn = conn
-        with _conn:
-            yield _conn
+    """Una conexión de este hilo dentro de una transacción de escritura (commit al salir, rollback si falla)."""
+    conn = _conn()
+    if getattr(_local, "tx", False):        # anidada: ya estamos adentro
+        yield conn
+        return
+    with WRITE:
+        _local.tx = True
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            yield conn
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+        finally:
+            _local.tx = False
 
 
 def q(sql, args=()):
-    """Una consulta: devuelve las filas (lista vacía si no es un SELECT)."""
-    with connect() as conn:
+    """Una consulta: devuelve las filas. SELECT lee en la conexión del hilo; lo demás va por el escritor."""
+    conn = _conn()
+    if getattr(_local, "tx", False) or sql.lstrip()[:6].upper() == "SELECT":
         return conn.execute(sql, args).fetchall()
+    future = concurrent.futures.Future()
+    _writes.put((path(), sql, args, future))
+    return future.result()
+
+
+def pending():
+    """Escrituras esperando al escritor (gauge parla_db_write_queue)."""
+    return _writes.qsize()
 
 
 def audit(user, role, agent_id, action, detail=""):
