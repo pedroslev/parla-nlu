@@ -54,7 +54,8 @@ file there (`parla.db`). That shapes how it's deployed:
 | `PARLA_VOICE_MAX_SECONDS` | | Longest real-time voice stream (call, browser or widget) before Parla closes it (default `3600`). |
 | `PARLA_IDLE_TIMEOUT`, `PARLA_WS_MAX_MESSAGE` | | Seconds without data before a connection is closed (default `30`) and the largest WebSocket message (default `1000000` bytes). |
 | `PARLA_DATABASE_URL` | | `postgresql://user:password@host:5432/db`: Postgres instead of SQLite, needed for several replicas. See [Postgres and high availability](#postgres-and-high-availability). |
-| `PARLA_SECRET_KEY` | | A long random value, the same in every replica: signs the audio URLs of phone calls. Required with several replicas. |
+| `PARLA_SECRET_KEY` | | A long random value (`openssl rand -hex 32`), the same in every replica: signs the audio URLs of phone calls and encrypts the agents' secrets at rest (AES-256-GCM). Recommended always; required with several replicas. Back it up: losing it loses the secrets. See [security.md](security.md#secrets-encryption-at-rest). |
+| `PARLA_SECRET_KEY_OLD` | | Only while rotating: the previous key, tried when reading secrets (`python -m parla.vault rotate`). |
 | `PARLA_DB_POOL`, `PARLA_DB_LOCKS` | | Postgres connections per process for queries (default `20`) and for per-conversation locks (default `32`). |
 | `PARLA_DATABASE_SCHEMA`, `PARLA_LOCK_TIMEOUT`, `PARLA_LEADER_CHECK` | | Postgres schema (default: the user's `search_path`), seconds to wait for a conversation lock (default `30`) and between leader checks (default `2`). |
 

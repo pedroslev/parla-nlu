@@ -22,10 +22,11 @@ Until the first tagged release is on ghcr.io, set `image.tag: edge`.
 | `image.pullPolicy` | `IfNotPresent` | |
 | `imagePullSecrets` | `[]` | |
 | `nameOverride`, `fullnameOverride` | `""` | |
-| `replicaCount` | `1` | With SQLite `0` or `1` (`Recreate`; `0` stops Parla, restores). More than 1 needs `database`, `secretKey` and a ReadWriteMany volume: `RollingUpdate` + PDB ([high availability](../../../docs/kubernetes.md#high-availability)). |
+| `replicaCount` | `1` | With SQLite `0` or `1` (`Recreate`; `0` stops Parla, restores). More than 1 needs `database`, `secretKey` (or `secrets.encrypt`, the default) and a ReadWriteMany volume: `RollingUpdate` + PDB ([high availability](../../../docs/kubernetes.md#high-availability)). |
 | `database.url` / `database.existingSecret` / `database.secretKey` | `""` / `""` / `PARLA_DATABASE_URL` | Postgres (`postgresql://…`) instead of SQLite. `url` creates a Secret; better an existing one (CloudNativePG: `<cluster>-app`, key `uri`). |
 | `database.pool` | `null` | `PARLA_DB_POOL`: query connections per pod (default 20). |
-| `secretKey.value` / `secretKey.existingSecret` / `secretKey.secretKey` | `""` / `""` / `PARLA_SECRET_KEY` | Same random value in every replica (signs phone audio URLs). Required with more than 1 replica. |
+| `secretKey.value` / `secretKey.existingSecret` / `secretKey.secretKey` | `""` / `""` / `PARLA_SECRET_KEY` | Same random value in every replica: signs phone audio URLs and encrypts the agents' secrets at rest. |
+| `secrets.encrypt` | `true` | Encrypt per-agent secrets (AES-256-GCM). Without `secretKey.value`/`existingSecret` the chart generates `PARLA_SECRET_KEY` in `<release>-secret-key`, reuses it on upgrades (`lookup`) and keeps it on uninstall (`helm.sh/resource-policy: keep`). Back it up. |
 | `autoscaling.enabled`, `minReplicas`, `maxReplicas`, `targetCPUUtilizationPercentage` | `false`, `2`, `6`, `70` | HPA on CPU (needs Postgres, like `replicaCount > 1`). |
 | `podDisruptionBudget.maxUnavailable` | `1` | PDB created with more than one replica. |
 | `config.lang` | `""` | `PARLA_LANG`: `en`, `es` or `pt`. |

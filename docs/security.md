@@ -110,7 +110,8 @@ next to **Manage users**) or with `GET /api/audit` ([api.md](api.md)); other rol
   `channel.update` (a save that changed `channels`), `channel.telegram`, `inbox.take` / `inbox.release` /
   `inbox.reply`, `session.delete`, and for outbound messaging `outbound.send`, `campaign.create`, `campaign.update`,
   `campaign.delete`, `campaign.recipients`, `campaign.start` / `campaign.pause` / `campaign.resume` /
-  `campaign.cancel`, `optout.add` and `optout.remove` (phone numbers masked: `549••••••5678`).
+  `campaign.cancel`, `optout.add` and `optout.remove` (phone numbers masked: `549••••••5678`); A/B experiments:
+  `experiment.create` / `update` / `delete` / `start` / `pause` / `stop` (with the winner and deployed version).
 - The interface autosaves every ~400 ms: consecutive `agent.save` entries by the same user on the same agent
   within 5 minutes are merged into one.
 - Without users configured, entries have an empty user.
@@ -291,8 +292,8 @@ The bot can write first: the outbound API, campaigns and reminders ([outbound.md
 
 In **Publish → Secrets** you store tokens and passwords for external services, per agent.
 
-- They're stored separately, in `agents/<id>.secrets.json` (permissions 600), **unencrypted**: protect the data
-  folder as you would a `.env`. They're deleted when the agent is deleted.
+- They're stored separately, in `agents/<id>.secrets.json` (permissions 600), **encrypted when `PARLA_SECRET_KEY`
+  is set** (see below); without it, in plaintext as before. They're deleted when the agent is deleted.
 - They're never in the agent's JSON: they don't travel on export and don't end up in published versions.
 - The interface, the API and MCP only see the **names**; values never come back through the API, and MCP can't
   read or set them.
@@ -303,6 +304,28 @@ In **Publish → Secrets** you store tokens and passwords for external services,
   What the service or function returns is **not** masked: if a response contains the key and you save it in a
   slot, it stays in the conversation.
 
+### Secrets encryption at rest
+
+- With `PARLA_SECRET_KEY`, each secrets file is encrypted with **AES-256-GCM** (the pinned `cryptography` library,
+  in the core requirements): `{"enc": "AES-256-GCM", "nonce", "ct"}`, a fresh 96-bit nonce per write, and the agent
+  id as associated data (a file copied to another agent doesn't open). The AES key is derived with **HKDF-SHA256**
+  (RFC 5869) under its own label, so it's not the key that signs phone audio URLs.
+- Tampering or the wrong key is detected (GCM tag): the bot then runs with no secrets, logs one line per agent
+  (never a value) and refuses to save new secrets for that agent rather than overwrite the ones it can't read.
+- **Migration**: plaintext files keep working and are encrypted the next time that agent's secrets are saved; to
+  encrypt all of them now: `python -m parla.vault rotate --new "$PARLA_SECRET_KEY"`.
+- **Without a key**: plaintext, mode 600, and the **Secrets** screen shows a warning. Set it:
+  `openssl rand -hex 32`. The Helm chart generates one by default (`secrets.encrypt: true`).
+- **Losing the key loses the secrets** (re-enter them). Back it up apart from the data volume: a backup of the data
+  folder alone doesn't reveal them, which is the point.
+- **Rotation**: set `PARLA_SECRET_KEY_OLD=<old>` and `PARLA_SECRET_KEY=<new>` on every replica (both are tried when
+  reading; writes use the new one), restart, run `python -m parla.vault rotate` (reads the same two variables, or
+  `--old` / `--new`; it checks every file opens before rewriting any), then remove `PARLA_SECRET_KEY_OLD`.
+  Rotating also invalidates phone audio URLs signed in the last 10 minutes.
+- What it doesn't cover: the key lives in the process environment, so someone with shell access to a running Parla
+  (or to the Kubernetes Secret) can read both. Values in conversations (a slot that saved an API response) aren't
+  encrypted.
+
 ## Postgres and several replicas
 
 - `PARLA_DATABASE_URL` holds the database password: put it in a Secret (Helm `database.existingSecret`), not in a
@@ -310,10 +333,11 @@ In **Publish → Secrets** you store tokens and passwords for external services,
   user needs to create tables in its schema; nothing else (no superuser, no extensions).
 - Postgres holds the same data as `parla.db` (conversations, login session hashes, audit log): encrypt it at rest and
   restrict who can connect, as you would the data folder. Session tokens are stored hashed (SHA-256), as before.
-- `PARLA_SECRET_KEY` signs the audio URLs Parla gives the phone provider; every replica needs the same value, and
-  anyone who has it can forge those URLs for 10 minutes. Generate it with `openssl rand -hex 32` and keep it in a Secret.
-- The secrets vault stays in files on the shared data volume (mode 600, unencrypted, as on one server): a
-  ReadWriteMany volume must be as private as the database (an encrypted storage class, no other workloads).
+- `PARLA_SECRET_KEY` signs the audio URLs Parla gives the phone provider and encrypts the secrets vault; every
+  replica needs the same value, and anyone who has it can forge those URLs and decrypt the vault. Generate it with `openssl rand -hex 32` and keep it in a Secret.
+- The secrets vault stays in files on the shared data volume (mode 600, encrypted with the shared
+  `PARLA_SECRET_KEY`): a ReadWriteMany volume must still be as private as the database (an encrypted storage class,
+  no other workloads).
 
 ## Hosted AI and voice providers: data leaves the machine
 
@@ -497,8 +521,9 @@ All off by default ([observability.md](observability.md)).
   with its route template, status and duration but not who made it.
 - No second factor for local passwords (with [SSO](sso.md), your identity provider can require MFA), no password
   policy and no list of open sessions to end by hand.
-- Keys aren't encrypted on disk. Agents are saved with the system's normal permissions; `users.json`, the keys and
-  `parla.db` (conversations, login hashes and the audit log) are 600.
+- Only the secrets vault is encrypted by Parla (with `PARLA_SECRET_KEY`). Agents are saved with the system's normal
+  permissions; `users.json`, the keys and `parla.db` (conversations, login hashes and the audit log) are 600: use an
+  encrypted disk or storage class for the rest.
 - Masking personal data is a heuristic, and it's off by default.
 
 ## Reporting a vulnerability

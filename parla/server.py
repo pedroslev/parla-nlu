@@ -23,7 +23,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler
 
-from . import DATA, ROOT, write_json, auth, bus, cluster, costs, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, handoff, insights, knowledge, llm, mcp_client, outbound, phone, rasa_import, runner, telemetry, vault, voice
+from . import DATA, ROOT, write_json, auth, bus, cluster, costs, db, experiments, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, handoff, insights, knowledge, llm, mcp_client, outbound, phone, rasa_import, runner, telemetry, vault, voice
 
 import celpy
 import pycrfsuite
@@ -553,7 +553,7 @@ def training_warnings(agent, data):
 # con la que empezó, así una publicación no cambia los pasos a mitad de una charla.
 
 ENVIRONMENTS = {"production": "Producción", "staging": "Pruebas"}
-EDITABLE_ONLY = ("id", "trained", "environments", "deployments", "retention_days", "pii_redaction", "handoff", "webhooks")   # no son parte de la definición del bot
+EDITABLE_ONLY = ("id", "trained", "environments", "deployments", "retention_days", "pii_redaction", "handoff", "webhooks", "experiments")   # no son parte de la definición del bot
 
 
 def definition(agent):
@@ -1090,6 +1090,8 @@ def run(agent, st, nlu, text, out, trace):
     slots = st["slots"]
     for _ in range(MAX_STEPS):
         flow, steps = steps_of(agent, st.get("flow"))
+        if flow and flow["name"] not in st.setdefault("reached", []):
+            st["reached"].append(flow["name"])       # para el objetivo «llegó al flujo» de los experimentos (collect)
         if st["pc"] >= len(steps):
             if back(agent, st, out):
                 continue
@@ -1730,10 +1732,17 @@ def open_session(agent_id, sid, channel, environment="production"):
     Una conversación nueva (o que vuelve a empezar) queda atada a la versión que tiene ese entorno ahora."""
     record = load_session(agent_id, sid)
     if record is None or record["ended"]:
-        number, _ = target(load(agent_id), environment)
+        agent = load(agent_id)
+        number, _ = target(agent, environment)
         record = record or {"sessionId": sid, "channel": channel, "started": now(), "history": []}
         record.update(updated=now(), ended=False, state={}, environment=environment, version=number)
-        record.pop("handoff", None)
+        for key in ("handoff", "experiment", "variant", "flows"):
+            record.pop(key, None)
+        exp = experiments.running(agent, environment, record.get("channel"))
+        if exp:          # A/B: la variante sale del sessionId (igual en todas las réplicas) y queda para toda la charla
+            variant = experiments.assign(exp, sid)
+            record.update(version=variant["version"], experiment=exp["id"], variant=variant["name"])
+            telemetry.count("parla_experiment_conversations_total", agent=agent_id, experiment=exp["id"], variant=variant["name"])
         handoff.emit_by_id(agent_id, "conversation.started", record)
     return record
 
@@ -1799,6 +1808,9 @@ def collect(record, agent_id):
     """Pasa a la conversación las clasificaciones que aplicó el flujo en este turno (sin repetir) y deja en la cola
     de salida los recordatorios que programó (paso remind)."""
     marks = record.setdefault("classifications", [])
+    for name in record["state"].pop("reached", []):
+        if name not in record.setdefault("flows", []):
+            record["flows"].append(name)
     for name in record["state"].pop("classified", []):
         if name not in [m["name"] for m in marks]:
             marks.append({"name": name, "at": now()})
@@ -1881,6 +1893,7 @@ def converse(agent_id, record, text, media=None):
         topic = "session:%s:%s" % (agent_id, record["sessionId"])
         llm.STREAM.sink = (lambda event: bus.publish(topic, event)) if bus.has(topic) else None   # tokens de la IA en vivo
         llm.STREAM.topic = topic                        # voicestream corta el stream si la persona interrumpe
+        started = time.monotonic()
         try:
             result = handle(agent, state, text, parse=lambda a, t: parse(snap["data"], t, snap["tagger"], snap.get("index")))
         finally:
@@ -1893,7 +1906,7 @@ def converse(agent_id, record, text, media=None):
     record["history"].append({"from": "user", "text": text, "at": record["updated"], **({"media": media} if media else {}), "intent": nlu["intent"],
                               "confidence": round(nlu["confidence"], 3), "answer_to": result["answer_to"],
                               "entities": [{"entity": e["entity"], "value": e["value"]} for e in nlu["entities"]],
-                              "fallback": result["fallback"], "via": result["via"], **before,
+                              "fallback": result["fallback"], "via": result["via"], **before, "ms": round((time.monotonic() - started) * 1000),
                               **({"usage": costs.totals(used)} if used else {})})
     record["usage"] = costs.merge(record.get("usage") or {}, used)
     record["history"] += bot_entries(result, record["updated"])
@@ -1932,6 +1945,7 @@ def session_info(agent, record):
             "slots": dict(state.get("slots", {})), "waiting_for": state.get("waiting") if state.get("flow") else None,
             "flow": state.get("flow"), "classifications": [m["name"] for m in record.get("classifications", [])],
             "environment": record.get("environment", "production"), "version": record.get("version"),
+            "experiment": record.get("experiment"), "variant": record.get("variant"),
             "handoff": record.get("handoff"), "language": state.get("lang"), "next": len(record["history"])}
 
 
@@ -1949,7 +1963,8 @@ def session_summary(record):
             "last_message": record["history"][-1]["text"][:120] if record["history"] else None,
             "first_message": texts[0]["text"][:120] if texts else None, "data": preload,
             "classifications": [m["name"] for m in record.get("classifications", [])],
-            "environment": record.get("environment", "production"), "version": record.get("version")}
+            "environment": record.get("environment", "production"), "version": record.get("version"),
+            "experiment": record.get("experiment"), "variant": record.get("variant")}
 
 
 def sessions_of(agent_id, query):
@@ -1966,6 +1981,9 @@ def sessions_of(agent_id, query):
         sql += " AND handoff = 1"
     if query.get("campaign"):                     # las conversaciones que empezó una campaña (outbound.py)
         sql, args = sql + " AND json_extract(record, '$.campaign') = ?", args + [query["campaign"]]
+    for key in ("experiment", "variant"):           # A/B: las conversaciones de un experimento (y de una variante)
+        if query.get(key):
+            sql, args = sql + " AND json_extract(record, '$.%s') = ?" % key, args + [query[key]]
     # ponytail: lee y decodifica todas las del agente (reportes y analítica las recorren igual); paginar si son cientos de miles
     records = [json.loads(row[0]) for row in db.q(sql + " ORDER BY updated DESC", args)]
     marks = lambda r: [m["name"] for m in r.get("classifications", [])]
@@ -2006,8 +2024,63 @@ def cost_report(agent_id, query):
     if query.get("campaign"):
         query["sessions"] = [sid for (sid,) in db.q("SELECT DISTINCT session_id FROM campaign_recipients WHERE agent_id = ? AND campaign_id = ? "
                                                     "AND session_id IS NOT NULL", (agent_id, query["campaign"]))]
-    records = sessions_of(agent_id, {k: query[k] for k in ("from", "to", "channel", "campaign") if query.get(k)})
+    records = sessions_of(agent_id, {k: query[k] for k in ("from", "to", "channel", "campaign", "experiment", "variant") if query.get(k)})
+    if query.get("experiment"):
+        query["sessions"] = [r["sessionId"] for r in records]
     return costs.report(agent_id, query, records, insights._handed)
+
+
+def experiments_api(agent_id, method, rest, data):
+    """/api/agents/{id}/experiments[/{eid}[/start|pause|stop|results]] (y los resultados en la API pública). -> (status, cuerpo).
+    Se guardan en el agente, como los entornos: todas las réplicas leen el mismo archivo."""
+    def save(agent):
+        del agent["experiments"][:-50]
+        store(agent)
+    if not rest and method == "GET":
+        return 200, {"experiments": list(reversed(load(agent_id).get("experiments") or []))}
+    if len(rest) == 2 and rest[1] == "results" and method == "GET":
+        agent = load(agent_id)
+        try:
+            exp = experiments.find(agent, rest[0])
+        except LookupError:
+            return 404, {"error": "no existe ese experimento"}
+        spent = costs.by_session(agent_id)
+        out = experiments.results(agent, exp, sessions_of(agent_id, {"experiment": exp["id"]}), lambda sid: spent.get(sid, 0.0))
+        return 200, dict(out, currency=costs.table()["currency"])
+    with cluster.lock("experiments:" + agent_id):       # dos réplicas cambiando experimentos a la vez no se pisan
+        agent = load(agent_id)
+        agent.setdefault("experiments", [])
+        if not rest and method == "POST":
+            exp = experiments.validate(data, versions(agent_id), ENVIRONMENTS)
+            agent["experiments"].append(exp)
+            save(agent)
+            return 200, exp
+        try:
+            exp = experiments.find(agent, rest[0]) if rest else None
+        except LookupError:
+            return 404, {"error": "no existe ese experimento"}
+        if exp is None:
+            return 405, {"error": "método no permitido"}
+        if len(rest) == 1 and method == "GET":
+            return 200, exp
+        if len(rest) == 1 and method == "PUT":
+            if exp["status"] != "draft":
+                raise ValueError("un experimento que ya empezó no se puede cambiar: terminalo y creá otro")
+            exp.update(experiments.validate(data, versions(agent_id), ENVIRONMENTS, exp))
+            save(agent)
+            return 200, exp
+        if len(rest) == 1 and method == "DELETE":
+            if exp["status"] == "running":
+                raise ValueError("pausá o terminá el experimento antes de borrarlo")
+            agent["experiments"].remove(exp)
+            save(agent)
+            return 200, {"id": exp["id"], "deleted": True}
+        if len(rest) == 2 and rest[1] in ("start", "pause", "stop") and method == "POST":
+            winner = experiments.transition(agent, exp, rest[1], data.get("winner") if rest[1] == "stop" else None)
+            save(agent)
+            deployed = deploy(agent_id, exp["environment"], winner) if winner is not None else None    # el ganador queda en el entorno
+            return 200, {"experiment": exp, "deployed": deployed and deployed["version"]}
+    return 405, {"error": "método no permitido"}
 
 
 def api_v1(method, parts, data, query=None, user=None, public=False):
@@ -2125,6 +2198,8 @@ def api_v1(method, parts, data, query=None, user=None, public=False):
         return 200, report(agent, query)
     if rest == ["costs"] and method == "GET":
         return 200, cost_report(agent["id"], query)
+    if rest[:1] == ["experiments"] and method == "GET" and (len(rest) == 1 or len(rest) == 3 and rest[2] == "results"):
+        return (403, {"error": "pedido rechazado"}) if public else experiments_api(agent["id"], method, rest[1:], data)
     if len(rest) == 2 and rest[0] == "sessions":
         sid = urllib.parse.unquote(rest[1])
         record = load_session(agent["id"], sid)
@@ -2398,6 +2473,8 @@ AUDIT = (     # (método, ruta, acción): lo que queda en la auditoría cuando s
     ("POST", A + "/campaigns", "campaign.create"), ("PUT", A + "/campaigns/([0-9a-f]{12})", "campaign.update"),
     ("DELETE", A + "/campaigns/([0-9a-f]{12})", "campaign.delete"), ("POST", A + "/campaigns/([0-9a-f]{12})/recipients", "campaign.recipients"),
     ("POST", A + "/campaigns/([0-9a-f]{12})/(start|pause|resume|cancel)", "/campaign"),
+    ("POST", A + "/experiments", "experiment.create"), ("PUT", A + "/experiments/([0-9a-f]{8})", "experiment.update"),
+    ("DELETE", A + "/experiments/([0-9a-f]{8})", "experiment.delete"), ("POST", A + "/experiments/([0-9a-f]{8})/(start|pause|stop)", "/experiment"),
     ("POST", A + "/optouts", "optout.add"), ("DELETE", A + "/optouts", "optout.remove"),
     ("POST", r"/api/v1/bots/([^/]+)/outbound", "outbound.send"),
     ("POST", r"/api/v1/bots/([^/]+)/sessions/([^/]+)/handoff", "handoff.api"),
@@ -2597,7 +2674,8 @@ class Handler(BaseHTTPRequestHandler):
         match = re.fullmatch(r"/api/agents(?:/([0-9a-f]{8})(?:/(chat|reset|http|train|tests/run|versions|deploy|diff|versions/\d+|versions/\d+/restore|functions/test"
                              r"|knowledge/extract|knowledge/search|voice/transcribe|mcp/tools|secrets|files|files/[A-Za-z0-9_-]{22}|insights/unrecognized|insights/analytics|costs"
                              r"|inbox|channels|channels/telegram|sessions/[A-Za-z0-9_.@+-]+/(?:reply|release|take)|webhooks/test|webhooks/deliveries(?:/\d+/retry)?"
-                             r"|campaigns|campaigns/preview|campaigns/[0-9a-f]{12}(?:/(?:start|pause|resume|cancel|recipients|export))?|optouts))?)?", url)
+                             r"|campaigns|campaigns/preview|campaigns/[0-9a-f]{12}(?:/(?:start|pause|resume|cancel|recipients|export))?|optouts"
+                             r"|experiments(?:/[0-9a-f]{8}(?:/(?:start|pause|stop|results))?)?))?)?", url)
         if not match:
             return self.reply({"error": "no existe"}, 404)
         agent_id, action = match.groups()
@@ -2649,6 +2727,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(bottests.run_suite(agent_id, environment, names))
         elif action == "deploy" and method == "POST":
             return self.reply(deploy(agent_id, data.get("environment"), data.get("version")))
+        elif action and action.startswith("experiments"):            # A/B (experiments.py)
+            return self.reply(*reversed(experiments_api(agent_id, method, action.split("/")[1:], data)))
         elif action == "diff" and method == "GET":
             # ?from=production|staging|<n>&to=draft|<n>: qué cambia, para revisar antes de publicar
             agent = load(agent_id)
@@ -2697,7 +2777,7 @@ class Handler(BaseHTTPRequestHandler):
             files.delete(agent_id, action[6:])
             return self.reply({"files": files.listing(agent_id)})
         elif action == "secrets" and method == "GET":                # solo los nombres: los valores nunca vuelven
-            return self.reply({"secrets": vault.names(agent_id)})
+            return self.reply({"secrets": vault.names(agent_id), "encrypted": vault.encrypted()})
         elif action == "secrets" and method == "PUT":
             if not as_json:
                 return self.reply(NOT_JSON, 415)
@@ -2800,7 +2880,7 @@ class Handler(BaseHTTPRequestHandler):
             current = load(agent_id)     # la interfaz no maneja versiones: no puede pisar entornos ni el registro
             if self.code_blocked(current.get("functions"), data.get("functions")):
                 return self.reply({"error": CODE_ONLY_OWNER}, 403)
-            keep = {k: current[k] for k in ("environments", "deployments") if k in current}
+            keep = {k: current[k] for k in ("environments", "deployments", "experiments") if k in current}
             if (current.get("channels") or {}) != (data.get("channels") or {}):
                 self.audit_action = "channel.update"     # la configuración de WhatsApp/Telegram vive en el agente
             if (current.get("webhooks") or []) != (data.get("webhooks") or []) or (current.get("handoff") or {}) != (data.get("handoff") or {}):
@@ -2840,7 +2920,7 @@ class Handler(BaseHTTPRequestHandler):
             action = "user.role"
         action = self.audit_action or action
         if action.startswith("/"):                                  # bandeja: take | release | reply; campaña: start | pause…
-            action = ("campaign." if action == "/campaign" else "inbox.") + groups[-1]
+            action = {"/campaign": "campaign.", "/experiment": "experiment."}.get(action, "inbox.") + groups[-1]
         if action == "login":
             user, role = str(data.get("name") or "")[:40], (sent.get("user") or {}).get("role")
             detail = ("ok" if self.status == 200 else "falló (%s)" % self.status) + " desde " + self.client_address[0]
@@ -2857,6 +2937,10 @@ class Handler(BaseHTTPRequestHandler):
             detail = "%s (%s)" % (sent.get("name") or "", sent.get("id") or groups[1] if len(groups) > 1 else sent.get("id"))
             if action == "campaign.create":
                 detail += " · %s destinatarios" % ((sent.get("imported") or {}).get("added", 0))
+        elif action.startswith("experiment."):
+            exp = sent.get("experiment") or sent
+            detail = "%s (%s)" % (exp.get("name") or "", exp.get("id") or "") + (" · ganó %s → versión %s" % (exp["winner"], sent.get("deployed"))
+                                                                               if exp.get("winner") and sent.get("deployed") else "")
         elif action.startswith("optout.") or action == "outbound.send":     # el teléfono tapado, nunca entero
             detail = (str(data.get("channel") or "whatsapp") + " → " if action == "outbound.send" else "") + outbound.mask(
                 re.sub(r"[\s().+-]", "", str(data.get("to") or data.get("address") or "")))

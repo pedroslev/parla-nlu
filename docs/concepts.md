@@ -372,6 +372,17 @@ The conversation **tests** (section **Tests**) are part of the definition, so ea
 to `production` runs them against the draft first and stops if any fails; publishing to `staging` and `deploy`
 don't. See [testing-bots.md](testing-bots.md).
 
+### A/B experiments
+
+An **experiment** splits the *new* conversations of an environment (usually `production`) between 2 to 4 published
+versions by weight (A = usually the current one). The variant comes from `sha256(experiment id + sessionId)`, so every
+replica picks the same one, and the conversation stays on that version until it ends (the usual binding). Optional
+channel filter and goal (reached a flow, said an intent, got a classification). Start / pause / stop; when you stop it
+you may pick a winner, which is deployed to the environment. Results per variant (resolved, handoff, fallback, goal,
+CSAT, cost, turns, latency) with significance tests; it never picks a winner on its own. One running experiment per
+environment; the in-editor test chat is never assigned. Experiments live in the agent (like `environments`), not in
+versions. See [experiments.md](experiments.md).
+
 ## Retention and personal data
 
 Conversations are stored in `parla.db`, in the data folder. Both settings are in the agent's **Settings** →

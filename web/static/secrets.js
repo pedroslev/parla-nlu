@@ -1,8 +1,8 @@
 // Claves: contraseñas y API keys del agente. Se guardan aparte (agents/<id>.secrets.json, ver vault.py) y nunca vuelven a la interfaz.
-let scNames = null, scFor = null, scError = '';      // nombres cargados, de qué agente y el último error
+let scNames = null, scFor = null, scError = '', scPlain = false;      // nombres cargados, de qué agente, el último error y si se guardan sin cifrar
 
 async function scLoad() {
-  try { scNames = (await api('GET', '/' + agent.id + '/secrets')).secrets; }
+  try { const r = await api('GET', '/' + agent.id + '/secrets'); scNames = r.secrets; scPlain = r.encrypted === false; }
   catch (e) { scNames = []; scError = e.message; }
   if (section === 'secrets') render();
 }
@@ -35,6 +35,7 @@ window.secretsView = () => {
     h('p', { class: 'help' }, t('Guardá acá contraseñas y API keys que el bot necesita para hablar con otros sistemas. Usalas como '),
       h('code', {}, t('{{ secret.NOMBRE }}')), t(' en las consultas HTTP y en las funciones.')),
     h('p', { class: 'help' }, t('Una vez guardadas no se pueden volver a ver (solo cambiar o borrar), no viajan cuando exportás el agente y nunca se le muestran a quien chatea con el bot.')),
+    scPlain ? h('p', { class: 'notice warn' }, t('Las claves se guardan sin cifrar en el disco (solo protegidas por los permisos del archivo). Para cifrarlas, configurá PARLA_SECRET_KEY en el servidor: mirá docs/security.md.')) : null,
     scError ? h('p', { class: 'notice warn', role: 'alert' }, scError) : null,
     scEditing === '' ? scForm('', close) : null,
     scNames === null ? h('p', { class: 'help' }, t('Cargando…'))

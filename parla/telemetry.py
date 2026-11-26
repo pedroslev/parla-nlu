@@ -46,6 +46,7 @@ DEFS = {    # nombre -> (tipo, ayuda, buckets). La lista completa, con sus etiqu
     "parla_http_step_duration_seconds": ("histogram", "HTTP steps and HTTP tools by outcome (ok, http_error, unreachable, error).", LATENCY),
     "parla_function_duration_seconds": ("histogram", "Function runs by language and outcome.", LATENCY),
     "parla_knowledge_search_duration_seconds": ("histogram", "Knowledge base searches by outcome.", LATENCY),
+    "parla_experiment_conversations_total": ("counter", "Conversations assigned to an A/B experiment variant, by agent, experiment and variant (only while it runs).", None),
     "parla_handoffs_total": ("counter", "Conversations handed to a person by agent and channel.", None),
     "parla_csat_score": ("histogram", "CSAT survey answers (1 to 5) by agent.", (1, 2, 3, 4, 5)),
     "parla_connections": ("gauge", "Open client connections by kind (http, ws, sse, voice).", None),
@@ -220,7 +221,7 @@ def allowed(authorization, peer, host):
 
 _SEGMENT = re.compile(r"[a-z][a-z0-9_-]{0,30}")
 _PLACEHOLDER = {"bots": "{bot}", "sessions": "{session}", "files": "{file}", "users": "{user}", "keys": "{key}",
-                "versions": "{n}", "audio": "{audio}", "static": "{file}", "campaigns": "{campaign}"}
+                "versions": "{n}", "audio": "{audio}", "static": "{file}", "campaigns": "{campaign}", "experiments": "{experiment}"}
 
 
 def route_of(path):

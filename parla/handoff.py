@@ -121,6 +121,7 @@ def context(agent, record):
             "slots": cover({k: v for k, v in (state.get("slots") or {}).items() if v is not None}),
             "handoff": {k: hand.get(k) for k in ("active", "mode", "reason", "since", "by", "summary", "target")} if hand else None,
             "ended": bool(record.get("ended")),
+            **({"experiment": record["experiment"], "variant": record.get("variant")} if record.get("experiment") else {}),
             "messages": [dict({"from": m["from"], "text": cover(m.get("text")), "at": m.get("at")}, **({"by": m["by"]} if m.get("by") else {}))
                          for m in said],
             "links": links(agent, record["sessionId"])}

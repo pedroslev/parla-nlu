@@ -125,7 +125,8 @@ const SV_ENVS = { production: t('Producción'), staging: t('Pruebas'), draft: t(
 const svEnvOf = (s) => s.environment || 'production';
 function svEnvTag(s) {
   const env = svEnvOf(s);
-  const label = env === 'draft' ? t('Borrador') : (SV_ENVS[env] || env) + ' · ' + (s.version == null ? t('borrador') : 'v' + s.version);
+  const label = (env === 'draft' ? t('Borrador') : (SV_ENVS[env] || env) + ' · ' + (s.version == null ? t('borrador') : 'v' + s.version))
+    + (s.variant ? ' · ' + t('variante {v}', { v: s.variant }) : '');      // experimento A/B
   return h('span', { class: 'sv-env ' + env, title: s.version == null ? t('Contestó con el borrador (sin publicar)') : t('Contestó con la versión {n}', { n: s.version }) }, label);
 }
 // la versión elegida en el chat de prueba (testEnv, en index.html)

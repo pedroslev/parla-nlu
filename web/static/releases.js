@@ -278,6 +278,7 @@
       page.lastChild.replaceWith(
         info.environments.production == null ? h('p', { class: 'notice warn' }, t('Todavía no publicaste: la API responde con el borrador, así que cada cambio que hacés sale en vivo. Publicá para que tus clientes usen una versión fija.')) : '',
         h('div', { class: 'rl-envs' }, draftCard(draft, info), envCard('staging', info, info.versions, draft), envCard('production', info, info.versions, draft)),
+        window.experimentsPanel(info, () => { if (section === 'releases') render(); }),      // A/B (static/experiments.js)
         h('div', { class: 'panel' }, h('h2', {}, t('Historial de versiones')),
           info.versions.length ? h('div', { class: 'rl-list' }, info.versions.map((x) => versionRow(x, info, page)))
             : h('div', { class: 'empty' }, t('Todavía no hay versiones. Tocá «Publicar» para guardar la primera.'))),

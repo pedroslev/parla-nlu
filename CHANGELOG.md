@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Reports no longer fails to render on an agent without classifications (the costs panel was used before it existed).
 - The handoff AI summary no longer runs inside the turn (it could add up to 8 s): the reply goes out with the
   deterministic summary, the AI summary is computed in the background and the `handoff.requested` webhook waits up
   to 10 s for it (otherwise it is sent with the deterministic one). SIP headers and Flex tasks use the deterministic
@@ -31,6 +32,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **A/B experiments.** `/api/agents/{id}/experiments` (owner/editor write, analyst read; audited): 2 to 4 published
+  versions with weights on an environment, optional channel filter and goal (flow, intent or classification). New
+  conversations get a variant from `sha256(experiment id + sessionId)` (the same on every replica) and keep that
+  version; sessions, `events` responses and webhook payloads carry `experiment` and `variant`. Results per variant
+  (conversations, resolved, handoff, fallback, goal, CSAT, cost, turns, latency) with two-proportion z-tests and
+  Welch's t-tests, Bonferroni, CIs and a minimum-sample warning, no SciPy; never picks a winner on its own — stopping
+  with `winner` deploys it. `GET /api/v1/bots/{bot}/experiments/{eid}/results`; Reports, sessions and costs filter by
+  `experiment`/`variant`; `parla_experiment_conversations_total`. UI in **Versions** and **Reports**
+  ([docs/experiments.md](docs/experiments.md)).
+- **Secrets encrypted at rest.** With `PARLA_SECRET_KEY`, `agents/<id>.secrets.json` is AES-256-GCM (`cryptography`
+  pinned in `requirements.txt`) with an HKDF-SHA256 subkey and the agent id as associated data; tampering is detected;
+  plaintext files are read and encrypted on the next write; `PARLA_SECRET_KEY_OLD` + `python -m parla.vault rotate`
+  for rotation. Without a key, plaintext as before and a warning in **Secrets**. Helm `secrets.encrypt: true` (default)
+  generates and keeps the key when none is given ([docs/security.md](docs/security.md#secrets-encryption-at-rest)).
 - **Postgres and several replicas (high availability).** `PARLA_DATABASE_URL=postgresql://…` (psycopg 3,
   `requirements-postgres.txt`, `scripts/setup.sh --postgres`, included in the Docker image) moves conversations,
   logins, audit, usage, campaigns, queues and SSO state to Postgres, with a connection pool and versioned migrations

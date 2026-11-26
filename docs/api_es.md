@@ -183,8 +183,9 @@ voz instalada, con un audio que no se puede leer o sin palabras: 400 con el moti
 ### `GET /api/v1/bots/{bot}/sessions`
 
 Filtros: `channel`, `classification` (`__none__` = sin clasificar), `from` y `to` (`YYYY-MM-DD`, por el día en
-que empezó) y `campaign` (el id de la campaña que la empezó, ver [outbound_es.md](outbound_es.md#campañas)). La de
-actividad más reciente primero.
+que empezó), `campaign` (el id de la campaña que la empezó, ver [outbound_es.md](outbound_es.md#campañas)) y
+`experiment` / `variant` (A/B, más abajo). La de actividad más reciente primero. Cada conversación (también en las
+respuestas de `events` y en los webhooks) trae `experiment` y `variant` (`null` fuera de un experimento).
 
 ```sh
 curl -s 'http://127.0.0.1:8000/api/v1/bots/pizzeria/sessions?channel=ivr&from=2026-11-01'
@@ -301,7 +302,7 @@ este: ver [channels.md](channels_es.md#modo-stream-en-tiempo-real).
 
 ### `GET /api/v1/bots/{bot}/report`
 
-Cuántas conversaciones tuvieron cada clasificación. Filtros `from`, `to`, `channel`, `campaign`.
+Cuántas conversaciones tuvieron cada clasificación. Filtros `from`, `to`, `channel`, `campaign`, `experiment`, `variant`.
 
 ```json
 {"bot": {"id": "654a0008", "name": "Pizzería"}, "from": "2026-11-01", "to": null, "channel": null,
@@ -315,7 +316,7 @@ Cuántas conversaciones tuvieron cada clasificación. Filtros `from`, `to`, `cha
 ### `GET /api/v1/bots/{bot}/costs`
 
 Lo que costaron las conversaciones: el uso medido × la tabla de precios de ahora ([costs_es.md](costs_es.md)).
-Analista o más. Filtros `from`, `to` (días de uso), `channel`, `campaign`; `group=day|channel|provider` además
+Analista o más. Filtros `from`, `to` (días de uso), `channel`, `campaign`, `experiment`, `variant`; `group=day|channel|provider` además
 devuelve `groups`.
 
 ```json
@@ -328,6 +329,16 @@ devuelve `groups`.
  "resolved": {"count": 251, "cost_per": 0.049}, "top": [{"sessionId": "wa-5491112345678", "channel": "whatsapp", "cost": 0.91}],
  "missing_prices": [{"kind": "whatsapp", "provider": "meta", "model": "service"}]}
 ```
+
+### Experimentos A/B
+
+`GET /api/v1/bots/{bot}/experiments` los lista; `GET /api/v1/bots/{bot}/experiments/{eid}/results` da los resultados
+(analista o más; nunca desde el widget público). Ver [experiments_es.md](experiments_es.md). Respuesta: el experimento,
+`variants` (por variante: `conversations`, `resolved_rate`, `handoff_rate`, `fallback_rate`, `goal_rate` con
+`{count, rate}`; `csat`, `cost`, `turns` con `{count, avg}`; `latency_ms`), `comparisons` (cada variante contra A:
+`diff`, `ci`, `p`, `significant`, `enough_data`, `direction`), `alpha`, `confidence`, `min_sample`, `warnings`,
+`significant`, `summary` («sin diferencia significativa todavía» hasta que algo lo sea), `currency`. `winner` acá
+siempre es `null`: lo elige una persona al terminar. Ejemplo completo en [api.md](api.md#ab-experiments).
 
 ### `POST /api/v1/bots/{bot}/outbound`
 
@@ -499,6 +510,10 @@ nivel del agente) y, en cada paso `agent`, `tools`, `max_tool_calls` y `time_bud
 | `GET /api/agents/{id}/versions/{n}` | — | El resumen más `agent` (la definición congelada). |
 | `POST /api/agents/{id}/versions/{n}/restore` | — | Vuelve el borrador a esa versión (no toca entornos ni reentrena). Devuelve el agente. |
 | `POST /api/agents/{id}/deploy` | `{"environment": "production" \| "staging", "version": n \| null}` | `{"environment", "version", "previous"}`. `null` deja el entorno vacío. No corre las pruebas. |
+| `GET /api/agents/{id}/experiments` · `POST` | `{"name", "environment"?: "production", "variants": [{"version", "weight"?: 50}] (2-4), "channels"?: [...], "goal"?: {"type": "flow" \| "intent" \| "classification", "value"}}` | A/B ([experiments_es.md](experiments_es.md)): `{"experiments"}` el más nuevo primero / el experimento nuevo (`status: "draft"`). Dueño o editor escriben, analista lee. Auditado como `experiment.*`. |
+| `GET /api/agents/{id}/experiments/{eid}` · `PUT` · `DELETE` | Los mismos campos (`PUT` solo en `draft`) | El experimento; `DELETE` no mientras corre. |
+| `POST /api/agents/{id}/experiments/{eid}/start` · `/pause` · `/stop` | `stop`: `{"winner"?: "A" \| "B" \| …}` | `{"experiment", "deployed"}`. Uno corriendo por entorno. `stop` con `winner` despliega esa versión en el entorno del experimento (`deployed` = su número). |
+| `GET /api/agents/{id}/experiments/{eid}/results` | — | Como la ruta pública de resultados. |
 | `GET /api/agents/{id}/diff?from=&to=` | — | Qué cambia entre `production`, `staging`, `draft` o un número de versión (por defecto de `production` a `draft`): `{"changes", "settings", "intents", "entities", "slots", "flows", "classifications", "functions", "tests", "from", "to"}`. |
 
 ### Conocimiento, voz, archivos y claves
@@ -511,7 +526,7 @@ nivel del agente) y, en cada paso `agent`, `tools`, `max_tool_calls` y `time_bud
 | `GET /api/agents/{id}/files` | — | `{"files": [{"id", "name", "mime", "size", "url"}]}` |
 | `POST /api/agents/{id}/files` | `{"name", "data": base64}` | El archivo subido más `files`. Hasta 10 MB; extensiones: pdf, png, jpg, jpeg, gif, webp, txt, csv, doc, docx, xls, xlsx, ppt, pptx, zip. |
 | `DELETE /api/agents/{id}/files/{fileId}` | — | `{"files"}` |
-| `GET /api/agents/{id}/secrets` | — | `{"secrets": [nombres]}`. Los valores nunca vuelven. |
+| `GET /api/agents/{id}/secrets` | — | `{"secrets": [nombres], "encrypted": bool}`. Los valores nunca vuelven; `encrypted: false` = sin `PARLA_SECRET_KEY`, se guardan en texto plano ([security_es.md](security_es.md#claves-cifradas-en-disco)). |
 | `PUT /api/agents/{id}/secrets` | `{"name", "value"}`, con `Content-Type: application/json` | `{"secrets"}`. El nombre se normaliza (`api key` → `API_KEY`). |
 | `DELETE /api/agents/{id}/secrets` | `{"name"}` | `{"secrets"}` |
 

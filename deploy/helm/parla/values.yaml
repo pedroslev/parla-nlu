@@ -28,12 +28,18 @@ database:
   secretKey: PARLA_DATABASE_URL
   pool: null            # PARLA_DB_POOL: query connections per pod (default 20; plus up to 32 for per-conversation locks)
 
-# PARLA_SECRET_KEY: one random value shared by every replica (signs audio URLs for phone calls). Required with
-# replicaCount > 1. openssl rand -hex 32
+# PARLA_SECRET_KEY: one random value shared by every replica. Signs audio URLs for phone calls and encrypts the
+# per-agent secrets at rest (AES-256-GCM). openssl rand -hex 32
 secretKey:
   value: ""             # creates a Secret; better: existingSecret
   existingSecret: ""
   secretKey: PARLA_SECRET_KEY
+
+secrets:
+  # Encrypt the per-agent secrets (Claves) at rest. With no secretKey.value / existingSecret the chart generates a random
+  # PARLA_SECRET_KEY in <release>-secret-key, reuses it on every upgrade (lookup) and keeps it on uninstall: losing it
+  # means losing the secrets. Back it up. false: plaintext files (0600), as before.
+  encrypt: true
 
 # HorizontalPodAutoscaler (needs Postgres, like replicaCount > 1). replicaCount is ignored while it's on.
 autoscaling:

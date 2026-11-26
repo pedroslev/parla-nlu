@@ -102,6 +102,8 @@ The interface is available in English, Spanish and Portuguese (pick it next to t
 ### Publishing
 - Draft → immutable numbered versions → `staging` and `production` environments. Diff before publishing, rollback
   by pointing to an earlier version, and each conversation stays tied to the version it started with.
+- A/B experiments: split new conversations between published versions and compare resolution, handoffs, CSAT and
+  cost with significance tests ([docs/experiments.md](docs/experiments.md)).
 - Conversation test suites (**Tests**): expected conversations stored in the bot, run from the UI, the API, the MCP
   or the command line in CI, and run before every publish to production
   ([docs/testing-bots.md](docs/testing-bots.md)).
@@ -120,7 +122,8 @@ The interface is available in English, Spanish and Portuguese (pick it next to t
 - Users with roles (owner, editor, analyst, support agent), per-user bot visibility and API keys.
 - Single sign-on with OIDC (Keycloak, Entra ID, Google, Okta, Authentik, Auth0), with roles from your provider's
   groups ([docs/sso.md](docs/sso.md)).
-- Per-agent secret vault (`{{ secret.NOMBRE }}`): values don't travel in the bot JSON and are masked in traces.
+- Per-agent secret vault (`{{ secret.NOMBRE }}`): values don't travel in the bot JSON, are masked in traces and are
+  encrypted at rest with AES-256-GCM when `PARLA_SECRET_KEY` is set.
 - Listens on `127.0.0.1` (unless you change `PARLA_HOST`) and rejects requests from other websites except those
   authorized for the widget.
 - Audit log of who changed what (owner only), per-agent conversation retention and optional masking of personal

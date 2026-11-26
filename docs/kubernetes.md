@@ -24,6 +24,11 @@ the same file would overwrite each other, so:
 - The strategy is `Recreate`: the old pod stops before the new one starts. An upgrade or a config change has a
   few seconds of downtime, and a request in flight is dropped. Login sessions survive.
 - The data volume is `ReadWriteOnce`. Anything else that mounts it (the backup job) has to run on the same node.
+- The agents' secrets are encrypted at rest (`secrets.encrypt: true`, the default): without `secretKey.value` or
+  `secretKey.existingSecret`, the chart creates `<release>-secret-key` with a random `PARLA_SECRET_KEY`, reuses it on
+  every `helm upgrade` (`lookup`) and keeps it on uninstall. **Back it up** (losing it loses the secrets). With
+  `helm template` / Argo CD / Flux, `lookup` sees nothing and would make a new key on every render: use
+  `secretKey.existingSecret` there. See [security.md](security.md#secrets-encryption-at-rest).
 
 For no downtime on upgrades and node failures, move to Postgres and several replicas (next section).
 
@@ -42,7 +47,8 @@ Requirements:
 - **A ReadWriteMany volume** for `/data` (agents, versions, trained models, users, secrets, uploaded files): EFS,
   Filestore, Azure Files, NFS, CephFS, Longhorn RWX. The chart mounts `/data/models` (embeddings, voice) as a per-pod
   `emptyDir`, so bake the embedding model into the image (`BAKE_EMBED_DIR`) or each new pod downloads 1.2 GB.
-- **`secretKey`**: the same `PARLA_SECRET_KEY` in every pod (signs phone audio URLs).
+- **`secretKey`**: the same `PARLA_SECRET_KEY` in every pod (signs phone audio URLs, encrypts the secrets vault);
+  the generated one (`secrets.encrypt`) is shared too, but prefer `existingSecret` in HA.
 
 ```yaml
 # values-ha.yaml

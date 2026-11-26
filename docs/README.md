@@ -11,6 +11,7 @@
 | [HTTP API](api.md) | Developers | The public `/api/v1` API with `curl` examples, authentication and roles, and the internal API. |
 | [WhatsApp and Telegram](channels.md) | Whoever publishes the bot | Connect a bot to WhatsApp (Cloud API) and Telegram, step by step, limits and security. |
 | [External contact centers](contact-centers.md) | Whoever integrates the bot | Hand off to your own contact center: signed webhooks, the contact center API, SIP headers and Flex tasks, recipes for Genesys, Flex, Five9, Zendesk and Salesforce. |
+| [A/B experiments](experiments.md) | Whoever runs the bot | Compare published versions with real traffic: setup, metrics, significance, how to run a good test, pitfalls. |
 | [Costs per conversation](costs.md) | Whoever runs the bot | What each conversation costs: what is measured, the price table, reports and API, comparing with vendors, caveats. |
 | [Outbound and campaigns](outbound.md) | Whoever publishes the bot | The bot writes first: outbound API, WhatsApp templates and the 24-hour window, outbound calls, CSV campaigns, reminders, opt-outs, consent. |
 | [MCP and “Connect to AI”](mcp.md) | Everyone | Let Claude, Codex or Cursor build the bot for you. |

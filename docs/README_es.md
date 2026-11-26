@@ -11,6 +11,7 @@
 | [API HTTP](api_es.md) | Desarrolladores | La API pública `/api/v1` con ejemplos `curl`, autenticación y roles, y la API interna. |
 | [WhatsApp y Telegram](channels_es.md) | Quien publica el bot | Conectar un bot a WhatsApp (Cloud API) y Telegram, paso a paso, límites y seguridad. |
 | [Contact centers externos](contact-centers_es.md) | Quien integra el bot | Derivar a tu propio contact center: webhooks firmados, la API del contact center, encabezados SIP y tareas de Flex, recetas para Genesys, Flex, Five9, Zendesk y Salesforce. |
+| [Experimentos A/B](experiments_es.md) | Quien opera el bot | Comparar versiones publicadas con tráfico real: armado, métricas, significancia, cómo hacer una buena prueba, trampas. |
 | [Costos por conversación](costs_es.md) | Quien opera el bot | Cuánto cuesta cada conversación: qué se mide, la tabla de precios, reportes y API, comparar con proveedores, advertencias. |
 | [Mensajes salientes y campañas](outbound_es.md) | Quien publica el bot | El bot escribe primero: API de salida, plantillas de WhatsApp y la ventana de 24 horas, llamadas salientes, campañas con CSV, recordatorios, bajas, consentimiento. |
 | [MCP y «Conectar con IA»](mcp_es.md) | Todos | Que Claude, Codex o Cursor te armen el bot. |

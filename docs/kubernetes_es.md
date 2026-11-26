@@ -27,6 +27,12 @@ dos pods sobre el mismo archivo se pisarían, así que:
 - El volumen de datos es `ReadWriteOnce`. Lo que también lo monte (el job de copias) tiene que correr en el mismo
   nodo.
 
+- Las claves de los agentes van cifradas en disco (`secrets.encrypt: true`, por defecto): sin `secretKey.value` ni
+  `secretKey.existingSecret`, el chart crea `<release>-secret-key` con un `PARLA_SECRET_KEY` al azar, lo reusa en cada
+  `helm upgrade` (`lookup`) y lo conserva al desinstalar. **Hacele una copia** (perderlo es perder las claves). Con
+  `helm template` / Argo CD / Flux, `lookup` no ve nada y generaría una clave nueva en cada render: usá
+  `secretKey.existingSecret`. Ver [security_es.md](security_es.md#claves-cifradas-en-disco).
+
 Para upgrades sin corte y que se banque la caída de un nodo, pasá a Postgres y varias réplicas (sección siguiente).
 
 ## Alta disponibilidad
@@ -45,7 +51,8 @@ Requisitos:
   subidos): EFS, Filestore, Azure Files, NFS, CephFS, Longhorn RWX. El chart monta `/data/models` (embeddings, voz)
   como un `emptyDir` por pod: horneá el modelo de embeddings en la imagen (`BAKE_EMBED_DIR`) o cada pod nuevo baja
   1,2 GB.
-- **`secretKey`**: el mismo `PARLA_SECRET_KEY` en todos los pods (firma las direcciones de audio del teléfono).
+- **`secretKey`**: el mismo `PARLA_SECRET_KEY` en todos los pods (firma las direcciones de audio del teléfono y
+  cifra la bóveda de claves); la generada (`secrets.encrypt`) también se comparte, pero en HA mejor `existingSecret`.
 
 ```yaml
 # values-ha.yaml

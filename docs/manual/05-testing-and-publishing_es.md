@@ -162,6 +162,16 @@ Si algo sale mal después de publicar, no te asustes:
 
 Las conversaciones nuevas la usan desde ya. La versión con problemas queda guardada, así la arreglás con calma.
 
+### Comparar dos versiones (A/B)
+
+¿No estás seguro de que la versión nueva sea mejor? En **Versiones → Experimentos A/B**, tocá **Nuevo experimento**:
+elegí las versiones (A suele ser la de Producción), sus pesos (50/50 está bien), un objetivo opcional (llegó a un
+flujo, dijo una intención, quedó clasificada) y **Crear experimento**. Las conversaciones nuevas se reparten entre las
+versiones; cada una sigue con la suya hasta el final. **Ver resultados** muestra resueltas, derivadas, no entendidas,
+objetivo, CSAT y costo por variante, con etiquetas: **Sin diferencia significativa todavía** hasta que haya datos
+suficientes y una diferencia real. Cuando viste lo suficiente, **Terminar y elegir**: quedate con la ganadora (pasa a
+Producción) o terminá sin cambiar nada. Consejos en [experiments_es.md](../experiments_es.md).
+
 ## El control al publicar
 
 Si tu bot tiene tests, publicar en **Producción** primero los corre. Si alguno falla, **no se publica nada**:

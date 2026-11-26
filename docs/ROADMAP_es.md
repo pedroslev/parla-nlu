@@ -12,6 +12,11 @@ una edición paga que se guarde funciones.
 
 ## Recién salido
 
+- **Experimentos A/B**: reparte las conversaciones nuevas de un entorno entre 2 y 4 versiones publicadas según su peso
+  (determinístico por conversación, anda con varias réplicas), con resueltas, derivadas, no entendidas, objetivo, CSAT
+  y costo por variante, pruebas z / t de Welch y una persona que elige al ganador ([experiments_es.md](experiments_es.md)).
+- **Claves cifradas en disco**: AES-256-GCM con una clave derivada de `PARLA_SECRET_KEY`, migración de los archivos
+  planos y `python -m parla.vault rotate` ([security_es.md](security_es.md#claves-cifradas-en-disco)).
 - **Escalado horizontal y Postgres**: `PARLA_DATABASE_URL` lleva conversaciones, logins, auditoría, colas y contadores
   compartidos a Postgres; varias réplicas mantienen el orden de cada conversación (advisory locks), comparten los
   eventos en vivo (`LISTEN/NOTIFY`), reservan filas de las colas con `SKIP LOCKED` y eligen una líder para las
@@ -85,11 +90,11 @@ una edición paga que se guarde funciones.
 
 ## Después
 
+- **Canales validados con cuentas reales**: probar WhatsApp Cloud API, Telegram, Twilio y jambonz de punta a punta con
+  cuentas reales (hoy se prueban contra imitaciones fieles) y corregir lo que aparezca.
+- **Comunidad e integraciones**: más bots de ejemplo y conectores (CRM, mesas de ayuda), y documentación para
+  contribuirlos.
 - **Salientes, lo que sigue**: detección de contestadores en las llamadas y zona horaria por destinatario.
-
-## Más adelante
-
-- **Experimentos A/B** entre versiones de flujos o de bots.
 
 ## Lo que ya está
 

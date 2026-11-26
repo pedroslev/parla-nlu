@@ -69,7 +69,8 @@ server's monthly cost: it is spread over all the turns of that month (all agents
 conversation, cost per resolved conversation (the total divided by the conversations that were not handed to a
 person), by channel, by kind (AI, speech to text, text to speech, phone, messaging, engine), by provider and model,
 the most expensive conversations (click to open them) and **Export CSV**. A conversation in **Conversations** shows
-its own breakdown; a campaign shows its cost.
+its own breakdown; a campaign shows its cost; filtering Reports by an A/B experiment and variant shows that
+variant's cost, and the experiment results compare the average cost per conversation ([experiments.md](experiments.md)).
 
 ```sh
 curl -s 'http://127.0.0.1:8000/api/v1/bots/clinica/costs?from=2026-11-01&to=2026-11-30&group=channel' \

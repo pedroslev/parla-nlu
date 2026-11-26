@@ -301,6 +301,15 @@ def session_usage(agent_id, sid):
     return {"currency": prices["currency"], "estimated": True, "total": round(sum(i["cost"] or 0 for i in items), 6), "items": lines}
 
 
+def by_session(agent_id):
+    """{sessionId: costo estimado} de todas las conversaciones del agente (resultados de los experimentos A/B).
+    ponytail: suma todo el uso del agente; filtrar por fechas del experimento si la tabla usage crece mucho."""
+    out = {}
+    for i in _priced(_rows("agent_id = ? AND session_id IS NOT NULL", [agent_id]))[1]:
+        out[i["sessionId"]] = out.get(i["sessionId"], 0.0) + (i["cost"] or 0)
+    return out
+
+
 def _pct(values, q):
     if not values:
         return None

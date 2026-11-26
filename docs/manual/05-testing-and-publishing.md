@@ -159,6 +159,16 @@ If something goes wrong after publishing, don't panic:
 
 New conversations use it right away. The faulty version stays saved, so you can fix it calmly.
 
+### Comparing two versions (A/B)
+
+Not sure the new version is better? In **Versions → A/B experiments**, click **New experiment**: pick the versions
+(A is usually the one in Production), their weights (50/50 is fine), an optional goal (reached a flow, said an intent,
+got a classification) and **Create experiment**. New conversations are split between the versions; each keeps its
+version to the end. **See results** shows resolution, handoffs, not understood, goal, CSAT and cost per variant, with
+badges: **No significant difference yet** until there's enough data and a real difference. When you've seen enough,
+**Stop and choose**: keep the winner (it goes to Production) or stop without changing anything. Tips in
+[experiments.md](../experiments.md).
+
 ## The publish gate
 
 If your bot has tests, publishing to **Production** runs them first. If any fails, **nothing is published**:

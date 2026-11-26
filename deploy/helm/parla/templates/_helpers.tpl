@@ -51,6 +51,9 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- define "parla.secretKeySecret" -}}
 {{- default (printf "%s-secret-key" (include "parla.fullname" .)) .Values.secretKey.existingSecret }}
 {{- end }}
+{{- define "parla.secretKeyEnabled" -}}
+{{- if or .Values.secretKey.value .Values.secretKey.existingSecret .Values.secrets.encrypt }}true{{ end }}
+{{- end }}
 {{- define "parla.postgres" -}}
 {{- if or .Values.database.url .Values.database.existingSecret }}true{{ end }}
 {{- end }}
@@ -58,7 +61,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- define "parla.ha" -}}
 {{- if or (gt (int .Values.replicaCount) 1) .Values.autoscaling.enabled }}
 {{- if not (include "parla.postgres" .) }}{{ fail "replicaCount > 1 and autoscaling need Postgres: set database.url or database.existingSecret (docs/kubernetes.md#high-availability)" }}{{ end }}
-{{- if not (or .Values.secretKey.value .Values.secretKey.existingSecret) }}{{ fail "replicaCount > 1 and autoscaling need secretKey.value or secretKey.existingSecret (PARLA_SECRET_KEY, the same in every replica)" }}{{ end }}
+{{- if not (include "parla.secretKeyEnabled" .) }}{{ fail "replicaCount > 1 and autoscaling need secretKey.value, secretKey.existingSecret or secrets.encrypt (PARLA_SECRET_KEY, the same in every replica)" }}{{ end }}
 {{- if and .Values.persistence.enabled (not .Values.persistence.existingClaim) (not (has "ReadWriteMany" .Values.persistence.accessModes)) }}{{ fail "replicaCount > 1 and autoscaling share the data volume: persistence.accessModes must include ReadWriteMany (or use persistence.existingClaim)" }}{{ end }}
 true
 {{- end }}
@@ -150,7 +153,7 @@ true
 - {name: PARLA_DB_POOL, value: {{ .Values.database.pool | toString | quote }}}
 {{- end }}
 {{- end }}
-{{- if or .Values.secretKey.value .Values.secretKey.existingSecret }}
+{{- if include "parla.secretKeyEnabled" . }}
 - name: PARLA_SECRET_KEY
   valueFrom: {secretKeyRef: {name: {{ include "parla.secretKeySecret" . }}, key: {{ .Values.secretKey.secretKey }}}}
 {{- end }}

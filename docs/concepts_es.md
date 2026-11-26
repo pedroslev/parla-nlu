@@ -370,6 +370,17 @@ Las **pruebas** de conversación (sección «Tests») son parte de la definició
 Publicar a `production` las corre antes contra el borrador y frena si falla alguna; publicar a `staging` y `deploy`
 no. Ver [testing-bots_es.md](testing-bots_es.md).
 
+### Experimentos A/B
+
+Un **experimento** reparte las conversaciones *nuevas* de un entorno (casi siempre `production`) entre 2 y 4 versiones
+publicadas según su peso (A = normalmente la actual). La variante sale de `sha256(id del experimento + sessionId)`, así
+cada réplica elige la misma, y la conversación sigue con esa versión hasta terminar (la atadura de siempre). Filtro de
+canal y objetivo opcionales (llegó a un flujo, dijo una intención, quedó clasificada). Empezar / pausar / terminar; al
+terminar podés elegir un ganador, que se despliega en el entorno. Resultados por variante (resueltas, derivadas, no
+entendidas, objetivo, CSAT, costo, turnos, latencia) con pruebas de significancia; nunca elige un ganador solo. Un
+experimento corriendo por entorno; el chat de prueba del editor nunca entra. Los experimentos viven en el agente (como
+`environments`), no en las versiones. Ver [experiments_es.md](experiments_es.md).
+
 ## Retención y datos personales
 
 Las conversaciones se guardan en `parla.db`, en la carpeta de datos. Los dos ajustes están en **Ajustes** del

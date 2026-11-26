@@ -184,8 +184,9 @@ Without voice installed, with audio that can't be read, or with no words: 400 wi
 ### `GET /api/v1/bots/{bot}/sessions`
 
 Filters: `channel`, `classification` (`__none__` = unclassified), `from` and `to` (`YYYY-MM-DD`, by the day it
-started) and `campaign` (the id of the campaign that started it, see [outbound.md](outbound.md#campaigns)). Most
-recent activity first.
+started), `campaign` (the id of the campaign that started it, see [outbound.md](outbound.md#campaigns)) and
+`experiment` / `variant` (A/B, below). Most recent activity first. Each session (also in the `events` responses and
+the webhook payloads) carries `experiment` and `variant` (`null` outside an experiment).
 
 ```sh
 curl -s 'http://127.0.0.1:8000/api/v1/bots/pizzeria/sessions?channel=ivr&from=2026-11-01'
@@ -301,7 +302,7 @@ The phone streams (`/phone/twilio/stream`, `/phone/jambonz/stream`) are the prov
 
 ### `GET /api/v1/bots/{bot}/report`
 
-How many conversations had each classification. Filters `from`, `to`, `channel`, `campaign`.
+How many conversations had each classification. Filters `from`, `to`, `channel`, `campaign`, `experiment`, `variant`.
 
 ```json
 {"bot": {"id": "654a0008", "name": "Pizzería"}, "from": "2026-11-01", "to": null, "channel": null,
@@ -315,7 +316,7 @@ How many conversations had each classification. Filters `from`, `to`, `channel`,
 ### `GET /api/v1/bots/{bot}/costs`
 
 What the conversations cost: measured usage × the current price table ([costs.md](costs.md)). Analyst or above.
-Filters `from`, `to` (usage days), `channel`, `campaign`; `group=day|channel|provider` also returns `groups`.
+Filters `from`, `to` (usage days), `channel`, `campaign`, `experiment`, `variant`; `group=day|channel|provider` also returns `groups`.
 
 ```json
 {"currency": "USD", "estimated": true, "from": "2026-11-01", "to": null, "total": 12.41,
@@ -327,6 +328,27 @@ Filters `from`, `to` (usage days), `channel`, `campaign`; `group=day|channel|pro
  "resolved": {"count": 251, "cost_per": 0.049}, "top": [{"sessionId": "wa-5491112345678", "channel": "whatsapp", "cost": 0.91}],
  "missing_prices": [{"kind": "whatsapp", "provider": "meta", "model": "service"}]}
 ```
+
+### A/B experiments
+
+`GET /api/v1/bots/{bot}/experiments` lists them; `GET /api/v1/bots/{bot}/experiments/{eid}/results` returns the results
+(analyst or above; never from the public widget). See [experiments.md](experiments.md).
+
+```json
+{"experiment": {"id": "3f2a9c1d", "name": "Shorter greeting", "environment": "production", "status": "running",
+                "variants": [{"name": "A", "version": 3, "weight": 50}, {"name": "B", "version": 4, "weight": 50}],
+                "channels": [], "goal": {"type": "flow", "value": "Order"}, "started": "...", "winner": null},
+ "variants": [{"name": "A", "version": 3, "conversations": 812, "resolved_rate": {"count": 640, "rate": 0.7882},
+               "handoff_rate": {...}, "fallback_rate": {...}, "goal_rate": {...}, "csat": {"count": 95, "avg": 4.1},
+               "cost": {"count": 812, "avg": 0.0213}, "turns": {"count": 812, "avg": 5.2}, "latency_ms": 41.3}, ...],
+ "comparisons": [{"variant": "B", "vs": "A", "metrics": {"resolved_rate": {"diff": 0.041, "ci": [0.002, 0.08],
+                  "p": 0.039, "significant": true, "enough_data": true, "direction": "better", "better": "higher"}, ...}}],
+ "alpha": 0.05, "confidence": 0.95, "min_sample": {"conversations": 100, "csat": 30}, "warnings": [],
+ "significant": [{"variant": "B", "metric": "resolved_rate", "direction": "better"}], "winner": null,
+ "summary": "hay diferencias significativas", "currency": "USD"}
+```
+
+`winner` is always `null` here: a person picks it when stopping.
 
 ### `POST /api/v1/bots/{bot}/outbound`
 
@@ -496,6 +518,10 @@ level) and, in each `agent` step, `tools`, `max_tool_calls` and `time_budget`. S
 | `GET /api/agents/{id}/versions/{n}` | — | The summary plus `agent` (the frozen definition). |
 | `POST /api/agents/{id}/versions/{n}/restore` | — | Brings the draft back to that version (doesn't touch environments or retrain). Returns the agent. |
 | `POST /api/agents/{id}/deploy` | `{"environment": "production" \| "staging", "version": n \| null}` | `{"environment", "version", "previous"}`. `null` leaves the environment empty. Doesn't run the tests. |
+| `GET /api/agents/{id}/experiments` · `POST` | `{"name", "environment"?: "production", "variants": [{"version", "weight"?: 50}] (2-4), "channels"?: [...], "goal"?: {"type": "flow" \| "intent" \| "classification", "value"}}` | A/B ([experiments.md](experiments.md)): `{"experiments"}` newest first / the new experiment (`status: "draft"`). Owner or editor write, analyst reads. Audited as `experiment.*`. |
+| `GET /api/agents/{id}/experiments/{eid}` · `PUT` · `DELETE` | Same fields (`PUT` only while `draft`) | The experiment; `DELETE` not while running. |
+| `POST /api/agents/{id}/experiments/{eid}/start` · `/pause` · `/stop` | `stop`: `{"winner"?: "A" \| "B" \| …}` | `{"experiment", "deployed"}`. One running per environment. `stop` with `winner` deploys that version to the experiment's environment (`deployed` = its number). |
+| `GET /api/agents/{id}/experiments/{eid}/results` | — | Like the public results route. |
 | `GET /api/agents/{id}/diff?from=&to=` | — | What changes between `production`, `staging`, `draft` or a version number (by default from `production` to `draft`): `{"changes", "settings", "intents", "entities", "slots", "flows", "classifications", "functions", "tests", "from", "to"}`. |
 
 ### Knowledge, voice, files and secrets
@@ -508,7 +534,7 @@ level) and, in each `agent` step, `tools`, `max_tool_calls` and `time_budget`. S
 | `GET /api/agents/{id}/files` | — | `{"files": [{"id", "name", "mime", "size", "url"}]}` |
 | `POST /api/agents/{id}/files` | `{"name", "data": base64}` | The uploaded file plus `files`. Up to 10 MB; extensions: pdf, png, jpg, jpeg, gif, webp, txt, csv, doc, docx, xls, xlsx, ppt, pptx, zip. |
 | `DELETE /api/agents/{id}/files/{fileId}` | — | `{"files"}` |
-| `GET /api/agents/{id}/secrets` | — | `{"secrets": [names]}`. Values are never returned. |
+| `GET /api/agents/{id}/secrets` | — | `{"secrets": [names], "encrypted": bool}`. Values are never returned; `encrypted: false` = no `PARLA_SECRET_KEY`, stored in plaintext ([security.md](security.md#secrets-encryption-at-rest)). |
 | `PUT /api/agents/{id}/secrets` | `{"name", "value"}`, with `Content-Type: application/json` | `{"secrets"}`. The name is normalized (`api key` → `API_KEY`). |
 | `DELETE /api/agents/{id}/secrets` | `{"name"}` | `{"secrets"}` |
 

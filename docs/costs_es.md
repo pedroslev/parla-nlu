@@ -71,7 +71,9 @@ mensual del servidor de Parla: se reparte entre todos los turnos de ese mes (de 
 conversación, costo por conversación resuelta (el total dividido por las conversaciones que no pasaron a una
 persona), por canal, por tipo (IA, voz a texto, texto a voz, teléfono, mensajería, motor), por proveedor y modelo,
 las conversaciones más caras (se abren con un clic) y **Exportar CSV**. Una conversación en **Conversaciones**
-muestra su detalle; una campaña muestra su costo.
+muestra su detalle; una campaña muestra su costo; filtrar Reportes por un experimento A/B y una variante muestra
+el costo de esa variante, y los resultados del experimento comparan el costo promedio por conversación
+([experiments_es.md](experiments_es.md)).
 
 ```sh
 curl -s 'http://127.0.0.1:8000/api/v1/bots/clinica/costs?from=2026-11-01&to=2026-11-30&group=channel' \

@@ -47,6 +47,7 @@ y `_sum`, así que «llamadas por resultado» es `rate(<nombre>_count{outcome="e
 | `parla_http_step_duration_seconds` | histogram | `outcome` | Pasos `http` y herramientas HTTP del paso agente. |
 | `parla_function_duration_seconds` | histogram | `language`, `outcome` | Ejecuciones de funciones (pasos y herramientas del paso agente). |
 | `parla_knowledge_search_duration_seconds` | histogram | `outcome` | Búsquedas en la base de conocimiento. |
+| `parla_experiment_conversations_total` | counter | `agent`, `experiment`, `variant` | Conversaciones asignadas a una variante de un experimento A/B (solo mientras corre; los resultados salen de la base). |
 | `parla_handoffs_total` | counter | `agent`, `channel` | Conversaciones que el bot pasó a una persona. |
 | `parla_webhook_deliveries_total` | counter | `outcome` | Intentos de los webhooks de la derivación: `delivered`, `retry` (se va a reintentar), `dead` (sin más reintentos). |
 | `parla_webhook_delivery_duration_seconds` | histogram | | Ida y vuelta HTTP del webhook (cada intento que tuvo respuesta o venció). |

@@ -97,6 +97,8 @@ tema: inicio, menú ⋯ o pantalla de entrada).
 ### Publicación
 - Borrador → versiones numeradas inmutables → entornos `staging` y `production`. Diff antes de publicar,
   rollback apuntando a una versión anterior, y cada conversación queda atada a la versión con la que empezó.
+- Experimentos A/B: repartí las conversaciones nuevas entre versiones publicadas y compará resolución, derivaciones,
+  CSAT y costo con pruebas de significancia ([docs/experiments_es.md](docs/experiments_es.md)).
 - Suites de pruebas de conversación («Tests»): conversaciones esperadas guardadas en el bot, que se corren desde la
   interfaz, la API, el MCP o la línea de comandos en CI, y antes de cada publicación a producción
   ([docs/testing-bots_es.md](docs/testing-bots_es.md)).
@@ -116,8 +118,8 @@ tema: inicio, menú ⋯ o pantalla de entrada).
 - Usuarios con roles (dueño, editor, analista, atención), bots visibles por usuario y claves de API.
 - Inicio de sesión único con OIDC (Keycloak, Entra ID, Google, Okta, Authentik, Auth0), con roles desde los grupos
   de tu proveedor ([docs/sso_es.md](docs/sso_es.md)).
-- Bóveda de claves por agente (`{{ secret.NOMBRE }}`): los valores no viajan en el JSON del bot y se tapan en
-  las trazas.
+- Bóveda de claves por agente (`{{ secret.NOMBRE }}`): los valores no viajan en el JSON del bot, se tapan en las
+  trazas y se cifran en disco con AES-256-GCM si está `PARLA_SECRET_KEY`.
 - Escucha en `127.0.0.1` (salvo que cambies `PARLA_HOST`) y rechaza pedidos de otros sitios web salvo los
   autorizados para el widget.
 - Registro de auditoría de quién cambió qué (solo el dueño), retención de conversaciones por agente y tapado

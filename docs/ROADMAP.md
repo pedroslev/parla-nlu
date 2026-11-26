@@ -12,6 +12,11 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Shipped recently
 
+- **A/B experiments**: split an environment's new conversations between 2 to 4 published versions by weight
+  (deterministic per session, works across replicas), with resolution, handoff, fallback, goal, CSAT and cost per
+  variant, z-tests / Welch's t-tests and a person choosing the winner ([experiments.md](experiments.md)).
+- **Secrets encrypted at rest**: AES-256-GCM with a key derived from `PARLA_SECRET_KEY`, plaintext migration and
+  `python -m parla.vault rotate` ([security.md](security.md#secrets-encryption-at-rest)).
 - **Horizontal scaling and Postgres**: `PARLA_DATABASE_URL` moves conversations, logins, audit, queues and shared
   counters to Postgres; several replicas keep per-conversation order (advisory locks), share live events
   (`LISTEN/NOTIFY`), claim queue rows with `SKIP LOCKED` and elect a leader for singleton jobs. Helm `replicaCount > 1`
@@ -82,11 +87,10 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Next
 
+- **Channels validated with real accounts**: run WhatsApp Cloud API, Telegram, Twilio and jambonz end to end against
+  live accounts (today they're tested against faithful fakes) and fix what that shows.
+- **Community and integrations**: more example bots and connectors (CRMs, helpdesks), and contributor docs for them.
 - **Outbound, next steps**: answering machine detection on calls and a time zone per recipient.
-
-## Later
-
-- **A/B experiments** between flow or bot versions.
 
 ## Already there
 

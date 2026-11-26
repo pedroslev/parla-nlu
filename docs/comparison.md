@@ -42,6 +42,7 @@ English, Spanish and Portuguese. Parla has a **no-open-core pledge**: every feat
 | Analytics | Containment, handoffs, fallbacks, CSAT, drop-off | Built-in dashboard in Studio 1.16 [1] | Yes | Yes | Yes (Google Cloud) | Yes | Yes | Yes (observability) [13] |
 | Observability | Prometheus metrics, OpenTelemetry traces over OTLP (GenAI conventions, W3C trace context), JSON logs; privacy-first by default | Not checked for this page | Not checked for this page | Not checked for this page | Not checked for this page | Not checked for this page | Not checked for this page | Observability features [13] |
 | Testing | Conversation test suites (UI, CLI, CI, publish gate), self-evaluation, confusion matrix, replay against another version | Yes (E2E tests) | Simulator [3] | Yes | Yes | Yes | Yes | Yes |
+| A/B experiments | Yes: 2-4 published versions by weight, sticky per conversation, resolution/handoff/fallback/goal/CSAT/cost per variant with z-tests and Welch's t-tests; a person picks the winner | Not checked for this page | Not checked for this page | Not checked for this page | Not checked for this page | Not checked for this page | Not checked for this page | Not checked for this page |
 | SSO | Yes, OIDC (Keycloak, Entra ID, Google, Okta, Authentik, Auth0) | Not checked for this page | Not checked for this page | Not checked for this page | Google Cloud identity | Microsoft Entra ID | Not checked for this page | Not checked for this page |
 
 "Yes" without a source means the feature is widely documented by the vendor but was not re-checked for this page.

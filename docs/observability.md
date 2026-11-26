@@ -47,6 +47,7 @@ so "calls by outcome" is `rate(<name>_count{outcome="error"}[5m])`. `outcome` is
 | `parla_http_step_duration_seconds` | histogram | `outcome` | `http` steps and HTTP tools of the agent step. |
 | `parla_function_duration_seconds` | histogram | `language`, `outcome` | Function runs (steps and agent-step tools). |
 | `parla_knowledge_search_duration_seconds` | histogram | `outcome` | Knowledge base searches. |
+| `parla_experiment_conversations_total` | counter | `agent`, `experiment`, `variant` | Conversations assigned to an A/B experiment variant (counted only while the experiment runs; results come from the database). |
 | `parla_handoffs_total` | counter | `agent`, `channel` | Conversations the bot handed to a person. |
 | `parla_webhook_deliveries_total` | counter | `outcome` | Handoff webhook attempts: `delivered`, `retry` (will be retried), `dead` (no more retries). |
 | `parla_webhook_delivery_duration_seconds` | histogram | | Webhook HTTP round trip (each attempt that got an answer or timed out). |

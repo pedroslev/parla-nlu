@@ -115,7 +115,9 @@ lado de «Administrar usuarios») o con `GET /api/audit` ([api_es.md](api_es.md)
   `channel.update` (un guardado que cambió `channels`), `channel.telegram`, `inbox.take` / `inbox.release` /
   `inbox.reply`, `session.delete` y, para los mensajes salientes, `outbound.send`, `campaign.create`,
   `campaign.update`, `campaign.delete`, `campaign.recipients`, `campaign.start` / `campaign.pause` /
-  `campaign.resume` / `campaign.cancel`, `optout.add` y `optout.remove` (con el teléfono tapado: `549••••••5678`).
+  `campaign.resume` / `campaign.cancel`, `optout.add` y `optout.remove` (con el teléfono tapado: `549••••••5678`);
+  experimentos A/B: `experiment.create` / `update` / `delete` / `start` / `pause` / `stop` (con el ganador y la
+  versión desplegada).
 - La interfaz guarda sola cada ~400 ms: los `agent.save` seguidos del mismo usuario en el mismo agente dentro de 5
   minutos se juntan en una sola entrada.
 - Sin usuarios configurados, las entradas quedan con el usuario vacío.
@@ -298,8 +300,8 @@ El bot puede escribir primero: la API de salida, campañas y recordatorios ([out
 
 En **Publicar → Claves** cargás tokens y contraseñas de servicios externos por agente.
 
-- Se guardan aparte, en `agents/<id>.secrets.json` (permisos 600), **sin cifrar**: protegé la carpeta de datos
-  como protegerías un `.env`. Se borran al borrar el agente.
+- Se guardan aparte, en `agents/<id>.secrets.json` (permisos 600), **cifradas si está `PARLA_SECRET_KEY`** (ver
+  abajo); sin ella, en texto plano como antes. Se borran al borrar el agente.
 - Nunca están en el JSON del agente: no viajan al exportar ni quedan en las versiones publicadas.
 - La interfaz, la API y el MCP solo ven los **nombres**; los valores nunca vuelven por la API y el MCP no puede
   leerlos ni cargarlos.
@@ -310,6 +312,28 @@ En **Publicar → Claves** cargás tokens y contraseñas de servicios externos p
   `••••`. **No** se tapa lo que devuelve el servicio o la función: si una respuesta trae la clave y la guardás en
   un slot, queda en la conversación.
 
+### Claves cifradas en disco
+
+- Con `PARLA_SECRET_KEY`, cada archivo de claves va cifrado con **AES-256-GCM** (la librería `cryptography`, fijada
+  en los requisitos del núcleo): `{"enc": "AES-256-GCM", "nonce", "ct"}`, un nonce de 96 bits nuevo en cada
+  escritura y el id del agente como dato asociado (un archivo copiado a otro agente no abre). La clave AES sale de
+  **HKDF-SHA256** (RFC 5869) con su propia etiqueta: no es la que firma las direcciones de audio del teléfono.
+- Un archivo cambiado o una clave equivocada se detectan (la etiqueta de GCM): el bot sigue sin claves, anota una
+  línea por agente (nunca un valor) y no deja guardar claves nuevas en ese agente para no pisar las que no puede leer.
+- **Migración**: los archivos planos siguen andando y se cifran la próxima vez que se guardan las claves de ese
+  agente; para cifrar todos ya: `python -m parla.vault rotate --new "$PARLA_SECRET_KEY"`.
+- **Sin clave**: texto plano, permisos 600, y la pantalla **Claves** avisa. Configurala: `openssl rand -hex 32`. El
+  chart de Helm genera una por defecto (`secrets.encrypt: true`).
+- **Perder la clave es perder las claves** (hay que volver a cargarlas). Guardala aparte del volumen de datos: un
+  backup de la carpeta de datos solo no las revela, y esa es la idea.
+- **Rotación**: poné `PARLA_SECRET_KEY_OLD=<vieja>` y `PARLA_SECRET_KEY=<nueva>` en todas las réplicas (al leer se
+  prueban las dos; se escribe con la nueva), reiniciá, corré `python -m parla.vault rotate` (lee esas dos variables, o
+  `--old` / `--new`; revisa que abran todos los archivos antes de reescribir alguno) y sacá `PARLA_SECRET_KEY_OLD`.
+  Rotar también invalida las direcciones de audio firmadas en los últimos 10 minutos.
+- Lo que no cubre: la clave vive en el entorno del proceso, así que alguien con una consola en un Parla corriendo (o
+  acceso al Secret de Kubernetes) puede leer las dos cosas. Los valores que quedan en las conversaciones (un slot que
+  guardó la respuesta de una API) no se cifran.
+
 ## Postgres y varias réplicas
 
 - `PARLA_DATABASE_URL` lleva la contraseña de la base: va en un Secret (en Helm `database.existingSecret`), no en un
@@ -318,11 +342,13 @@ En **Publicar → Claves** cargás tokens y contraseñas de servicios externos p
 - Postgres tiene lo mismo que `parla.db` (conversaciones, hashes de las sesiones de login, auditoría): cifralo en
   reposo y limitá quién se conecta, como con la carpeta de datos. Los tokens de sesión se guardan hasheados
   (SHA-256), como antes.
-- `PARLA_SECRET_KEY` firma las direcciones de audio que Parla le da al proveedor de telefonía; todas las réplicas
-  necesitan el mismo valor, y quien lo tenga puede falsificar esas direcciones por 10 minutos. Generalo con
+- `PARLA_SECRET_KEY` firma las direcciones de audio que Parla le da al proveedor de telefonía y cifra la bóveda de
+  claves; todas las réplicas necesitan el mismo valor, y quien lo tenga puede falsificar esas direcciones y descifrar
+  la bóveda. Generalo con
   `openssl rand -hex 32` y guardalo en un Secret.
-- La bóveda de claves sigue en archivos en el volumen de datos compartido (permisos 600, sin cifrar, como en un
-  servidor): un volumen ReadWriteMany tiene que ser tan privado como la base (storage class cifrada, sin otras cargas).
+- La bóveda de claves sigue en archivos en el volumen de datos compartido (permisos 600, cifrada con la
+  `PARLA_SECRET_KEY` compartida): igual, un volumen ReadWriteMany tiene que ser tan privado como la base (storage
+  class cifrada, sin otras cargas).
 
 ## Proveedores de IA y de voz en la nube: los datos salen de la máquina
 
@@ -515,8 +541,9 @@ Todo apagado por defecto ([observability.md](observability_es.md)).
   pedido con su plantilla de ruta, estado y duración, pero no quién lo hizo.
 - Sin segundo factor para las contraseñas locales (con [SSO](sso_es.md), tu proveedor de identidad puede pedir
   MFA), sin política de contraseñas y sin lista de sesiones abiertas para cerrarlas a mano.
-- Las claves no se cifran en disco. Los agentes se guardan con los permisos normales del sistema; `users.json`, las
-  claves y `parla.db` (conversaciones, hashes de los logins y la auditoría) son 600.
+- Parla solo cifra la bóveda de claves (con `PARLA_SECRET_KEY`). Los agentes se guardan con los permisos normales
+  del sistema; `users.json`, las claves y `parla.db` (conversaciones, hashes de los logins y la auditoría) son 600:
+  para lo demás, un disco o storage class cifrado.
 - Tapar datos personales es una heurística, y viene apagado.
 
 ## Reportar una vulnerabilidad

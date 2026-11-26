@@ -28,7 +28,7 @@ services:
       PARLA_OTEL_ENDPOINT: ${PARLA_OTEL_ENDPOINT:-}     # OTLP/HTTP base URL, e.g. http://jaeger:4318 (empty = no traces)
       PARLA_LOG_FORMAT: ${PARLA_LOG_FORMAT:-}           # json = one JSON line per request with trace_id
       PARLA_DATABASE_URL: ${PARLA_DATABASE_URL:-}       # empty = SQLite in the volume; postgresql://… with --profile postgres
-      PARLA_SECRET_KEY: ${PARLA_SECRET_KEY:-}           # same value in every replica (signed audio URLs)
+      PARLA_SECRET_KEY: ${PARLA_SECRET_KEY:-}           # openssl rand -hex 32, in .env: encrypts the agents' secrets, signs audio URLs (same in every replica; back it up)
       # Behind an HTTPS proxy / with webhooks (docs/deployment.md, docs/channels.md):
       # PARLA_PUBLIC_URL: https://bots.example.com
       # PARLA_HOSTS: bots.example.com

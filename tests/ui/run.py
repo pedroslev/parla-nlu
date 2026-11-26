@@ -58,6 +58,11 @@ try:
             agents.append(api("POST", "/api/agents", {"import": json.load(f)})["id"])
     for aid in agents:
         api("POST", "/api/agents/%s/train" % aid, {})
+    for note in ("ui v1", "ui v2"):                                     # dos versiones y un experimento A/B corriendo
+        api("POST", "/api/agents/%s/versions" % agents[0], {"note": note, "environment": "production", "force": True})
+    exp = api("POST", "/api/agents/%s/experiments" % agents[0], {"name": "ui A/B", "variants": [{"version": 1}, {"version": 2}],
+                                                                  "goal": {"type": "classification", "value": "x"}})
+    api("POST", "/api/agents/%s/experiments/%s/start" % (agents[0], exp["id"]))
     talk = lambda aid, sid, texts: [api("POST", "/api/v1/bots/%s/events" % aid, {"sessionId": sid, "text": t}) for t in texts]
     talk(agents[0], "ui-pedido", ["hola", "Juan", "Pérez", "Corrientes 1234", "napo", "2"])
     talk(agents[0], "ui-reclamo", ["me llegó fría", "hola?"])                                # pasa a una persona: Bandeja

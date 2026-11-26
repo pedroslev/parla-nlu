@@ -55,7 +55,8 @@ auditoría van en un archivo SQLite ahí mismo (`parla.db`). Eso define cómo se
 | `PARLA_VOICE_MAX_SECONDS` | | El stream de voz en tiempo real más largo (llamada, navegador o widget) antes de que Parla lo cierre (por defecto `3600`). |
 | `PARLA_IDLE_TIMEOUT`, `PARLA_WS_MAX_MESSAGE` | | Segundos sin datos antes de cerrar una conexión (por defecto `30`) y el mensaje de WebSocket más grande (por defecto `1000000` bytes). |
 | `PARLA_DATABASE_URL` | | `postgresql://usuario:clave@host:5432/base`: Postgres en vez de SQLite, hace falta para varias réplicas. Ver [Postgres y alta disponibilidad](#postgres-y-alta-disponibilidad). |
-| `PARLA_SECRET_KEY` | | Un valor largo al azar, el mismo en todas las réplicas: firma las direcciones de audio de las llamadas. Obligatorio con varias réplicas. |
+| `PARLA_SECRET_KEY` | | Un valor largo al azar (`openssl rand -hex 32`), el mismo en todas las réplicas: firma las direcciones de audio de las llamadas y cifra en disco las claves de los agentes (AES-256-GCM). Recomendado siempre; obligatorio con varias réplicas. Guardalo aparte: perderlo es perder las claves. Ver [security_es.md](security_es.md#claves-cifradas-en-disco). |
+| `PARLA_SECRET_KEY_OLD` | | Solo mientras rotás: la clave anterior, que se prueba al leer las claves (`python -m parla.vault rotate`). |
 | `PARLA_DB_POOL`, `PARLA_DB_LOCKS` | | Conexiones a Postgres por proceso para consultas (por defecto `20`) y para los locks por conversación (por defecto `32`). |
 | `PARLA_DATABASE_SCHEMA`, `PARLA_LOCK_TIMEOUT`, `PARLA_LEADER_CHECK` | | Schema de Postgres (por defecto: el `search_path` del usuario), segundos de espera por el lock de una conversación (por defecto `30`) y entre chequeos de líder (por defecto `2`). |
 
