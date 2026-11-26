@@ -1290,7 +1290,8 @@ Necesita que la persona cargue la clave CRM_TOKEN en Claves para que ande la val
 # ---------- Servidor MCP ----------
 
 mcp = MCPServer("parla", instructions=(
-    "Parla es un armador de chatbots. get_report y list_sessions muestran cómo les va a los bots en producción. Para armar un bot: leé agent_format_guide, diseñá el JSON del agente, "
+    "Parla es un armador de chatbots. Buenas prácticas para armar bots: recursos parla://skills (leé "
+    "parla://skills/parla-build-bot/SKILL.md antes de empezar). get_report y list_sessions muestran cómo les va a los bots en producción. Para armar un bot: leé agent_format_guide, diseñá el JSON del agente, "
     "probá cada función con test_function, validate_agent, create_agent (valida, crea y entrena), y probalo con "
     "test_conversation; guardá las charlas que importan como pruebas en \"tests\" y corrélas con run_tests. Para cambiarlo: "
     "get_agent, editá el JSON completo y update_agent (reemplaza todo y reentrena). Editar cambia solo el BORRADOR: "
@@ -1328,6 +1329,48 @@ def agent_format_guide() -> str:
               description="Guía completa del formato JSON de agentes de Parla, con ejemplo.")
 def format_guide_resource() -> str:
     return GUIDE
+
+
+SKILLS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "skills")
+
+
+def skill_files():
+    """{skill: [rutas relativas]} de skills/<nombre>/ (SKILL.md primero). Vacío si el repo no trae skills/."""
+    out = {}
+    for name in sorted(os.listdir(SKILLS)) if os.path.isdir(SKILLS) else []:
+        folder = os.path.join(SKILLS, name)
+        if os.path.isfile(os.path.join(folder, "SKILL.md")):
+            files = sorted(os.path.relpath(os.path.join(d, f), folder) for d, _, fs in os.walk(folder) for f in fs
+                           if f.endswith((".md", ".json")))
+            out[name] = sorted(files, key=lambda f: f != "SKILL.md")
+    return out
+
+
+def skill_description(name):
+    head = open(os.path.join(SKILLS, name, "SKILL.md"), encoding="utf-8").read().split("---")[1]
+    return next((l.split(":", 1)[1].strip() for l in head.splitlines() if l.startswith("description:")), "")
+
+
+def skills_index():
+    lines = ["# Parla bot-building skills", "", "Read parla://skills/<skill>/SKILL.md first; it links its reference files.", ""]
+    for name, files in skill_files().items():
+        lines += ["## %s" % name, skill_description(name), ""] + ["- parla://skills/%s/%s" % (name, f) for f in files] + [""]
+    return "\n".join(lines)
+
+
+def register_skills():
+    from mcp.server.mcpserver.resources import FileResource, TextResource
+    mcp.add_resource(TextResource(uri="parla://skills", name="skills", mime_type="text/markdown", text=skills_index(),
+                                  description="Index of the Parla bot-building skills (best practices) and their files."))
+    for name, files in skill_files().items():
+        for rel in files:
+            mcp.add_resource(FileResource(
+                uri="parla://skills/%s/%s" % (name, rel), name="%s/%s" % (name, rel), path=os.path.join(SKILLS, name, rel),
+                mime_type="application/json" if rel.endswith(".json") else "text/markdown",
+                description=skill_description(name) if rel == "SKILL.md" else "Reference file of the %s skill." % name))
+
+
+register_skills()
 
 
 @mcp.tool()
@@ -1728,6 +1771,9 @@ def build_bot(description: str) -> str:
     return """Armá un bot de Parla que haga esto: %s
 
 Construí el bot ENTERO (intents, entidades, slots, funciones, flujos, clasificaciones) con las herramientas de Parla:
+0. Si tu cliente lee recursos MCP, leé primero las buenas prácticas: parla://skills (índice) y
+   parla://skills/parla-build-bot/SKILL.md; después la skill de cada parte que armes (parla-nlu-design,
+   parla-flow-design, parla-integrations, parla-testing-and-release; parla-migrate-from-rasa si viene de Rasa).
 1. Leé agent_format_guide completo (formato exacto, tipos de paso, entidades, funciones, consejos).
 2. Intents con frases balanceadas y variadas:
    - 6 a 12 frases por intent y cantidades parecidas entre intents (una con 12 y otra con 4 sesga la detección).
