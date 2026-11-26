@@ -12,6 +12,9 @@ una edición paga que se guarde funciones.
 
 ## Recién salido
 
+- **Telefonía**: llamadas entrantes por Twilio Programmable Voice o jambonz (código abierto, se puede instalar en
+  casa), con voz y teclado (DTMF), menús de teclas para los botones, interrupción (barge-in), transferencia a una
+  persona y la voz de Parla (piper) como opción. Ver [channels_es.md](channels_es.md#llamadas-telefónicas-twilio-y-jambonz).
 - **Interfaz en inglés y portugués**: toda la interfaz, los mensajes del servidor y el widget web en español, inglés
   o portugués (pt-BR), a elección de cada usuario (al lado del selector de tema: inicio, menú ⋯ o pantalla de
   entrada), con un idioma por defecto de la instalación en `PARLA_LANG` (`scripts/setup.sh --lang en|es|pt`); los bots con inglés como idioma principal traen en
@@ -36,7 +39,6 @@ una edición paga que se guarde funciones.
 
 ## Después
 
-- **Telefonía**: llamadas SIP / telefónicas con Jambonz y Twilio, con entrada DTMF, sobre la voz local que ya existe.
 - **Inicio de sesión único con OIDC** (Keycloak, Entra ID, Google, Okta y otros).
 
 ## Más adelante

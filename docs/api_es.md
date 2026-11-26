@@ -249,6 +249,24 @@ clave o la firma no coincide. Cuerpo hasta 1 MB. Configuración en [channels_es.
 Cada mensaje se atiende como un `POST …/events` con `environment: production`, `channel: whatsapp` o `telegram` y
 `sessionId` `wa-<teléfono>` o `tg-<chat_id>`; las `replies` vuelven por el canal.
 
+### Webhooks del teléfono (Twilio y jambonz)
+
+Los llaman Twilio o jambonz durante una llamada. Como los de arriba, no piden sesión ni chequean el `Host`, y
+responden 403 sin detalles si `channels.phone.enabled` está apagado, el proveedor de la ruta no es
+`channels.phone.provider`, falta una clave o la firma no coincide. Cuerpo de hasta 1 MB. Configuración en
+[channels_es.md](channels_es.md#llamadas-telefónicas-twilio-y-jambonz).
+
+| Ruta | Se autentica con | Respuesta |
+|---|---|---|
+| `POST /api/v1/bots/{bot}/phone/twilio` (empieza la llamada), `…/twilio/gather` (cada respuesta: `SpeechResult` / `Digits`) | `X-Twilio-Signature`: base64 del HMAC-SHA1 con `TWILIO_AUTH_TOKEN` de la URL pública + cada clave y valor del POST ordenados por clave | TwiML (`text/xml`): `<Gather input="speech dtmf">` con `<Say>` o `<Play>`, `<Dial>` o `<Hangup>`. |
+| `POST /api/v1/bots/{bot}/phone/twilio/status` | Igual | `200`; `CallStatus` `completed`, `busy`, `failed`, `no-answer` o `canceled` termina la conversación. |
+| `POST /api/v1/bots/{bot}/phone/jambonz`, `…/jambonz/gather` (`speech.alternatives[0].transcript` / `digits`) | `Jambonz-Signature: t=<unix>,v1=<HMAC-SHA256 de "<t>.<cuerpo>" con JAMBONZ_WEBHOOK_SECRET>` (5 minutos de tolerancia) y/o `Authorization: Basic` con `JAMBONZ_BASIC_USER` / `JAMBONZ_BASIC_PASSWORD`: cada una que esté cargada tiene que coincidir | Verbos de jambonz (lista JSON): `gather` (`input: ["speech", "digits"]`, `bargein`, `say` o `play` adentro), `say`/`play`, `dial`, `hangup`. |
+| `POST /api/v1/bots/{bot}/phone/jambonz/status` | Igual | `200 {}`; `call_status` como arriba termina la conversación. |
+| `GET /api/v1/bots/{bot}/phone/audio/<token>.wav` | El token: firmado por el servidor con HMAC-SHA256, nombra al bot y vence a los 10 minutos | La voz de Parla (piper) para `tts: "parla"`, `audio/wav`. 403 si no vale o venció. |
+
+Cada turno se atiende como un `POST …/events` con `environment: production`, `channel: phone` y `sessionId`
+`call-<CallSid>`. En el primero, `data` lleva `caller` (el número de quien llama) y `language`.
+
 ### Llamadas desde un navegador (CORS) y nombres permitidos
 
 Parla rechaza con 403 los pedidos a `/api/` que traen un encabezado `Origin` cuyo host no es
@@ -348,7 +366,7 @@ Las acciones que se anotan están en [security_es.md](security_es.md#registro-de
 | `POST /api/agents/{id}/sessions/{sid}/take` | — | Una persona toma la conversación. Devuelve el estado más `history`. |
 | `POST /api/agents/{id}/sessions/{sid}/reply` | `{"text"}` | Le escribe a la persona (si no estaba tomada, la toma). En una conversación `whatsapp` o `telegram` también se manda por ese canal. |
 | `POST /api/agents/{id}/sessions/{sid}/release` | — | La devuelve al bot (corta el flujo que estaba a medias). |
-| `GET /api/agents/{id}/channels` | — | «Canales»: `{"public_url", "env_public_url", "whatsapp"/"telegram": {"enabled", "webhook", "secrets": {nombre: ¿cargada?}, "status": {"last_in", "last_out", "error", "error_at"}}}`. El estado vive en memoria. |
+| `GET /api/agents/{id}/channels` | — | «Canales»: `{"public_url", "env_public_url", "whatsapp"/"telegram": {"enabled", "webhook", "secrets": {nombre: ¿cargada?}, "status": {"last_in", "last_out", "error", "error_at"}}, "phone": {"enabled", "provider", "webhook", "status_webhook", "secrets", "status"}}`. El estado vive en memoria. |
 | `POST /api/agents/{id}/channels/telegram` | `{"connect": true \| false}` | Llama a `setWebhook` de Telegram (crea `TELEGRAM_WEBHOOK_SECRET` si falta) o a `deleteWebhook`: `{"connected"}`. Dueño o editor. |
 | `GET /api/agents/{id}/insights/unrecognized` | Filtros `from`, `to`, `channel`, `classification` | `{"groups": [{"label", "count", "texts", "examples", "suggested_intent"}]}`: «Para enseñar». |
 | `GET /api/agents/{id}/insights/analytics` | Los mismos filtros | `{"sessions", "contained", "handoff", "contained_rate", "handoff_rate", "user_messages", "fallbacks", "fallback_rate", "csat", "abandoned", "drop_off", "flows", "by_day"}` |

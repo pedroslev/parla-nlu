@@ -32,8 +32,8 @@ English, Spanish and Portuguese. Parla has a **no-open-core pledge**: every feat
 | Self-hosting | Yes (single process, Docker, K8s, k3s) | Yes (Helm / Kubernetes) [2] | Offered per vendor materials; quote-based [3] | Private cloud / on-premise on enterprise tier, per third-party guides [5] | No (Google Cloud) | No (Microsoft cloud) | Not for new deployments (v12 sunset) [11] | Not mentioned on pricing page; hosted on Voiceflow [13] |
 | Pricing | Free | Not published [2] | Quote-based; a third-party guide cites a $43,080 list price [3] | Quote-based / not published [5] | Per request, published (e.g. $0.007 text, $0.012 with playbooks) [7] | Credit packs ($200 / 25,000 credits / month) or pay-as-you-go ($0.01 / credit) [9] | Free tier + published paid plans [12] | Usage-based for agencies; businesses on request [13] |
 | Local / offline models | Yes: embeddings, CRF and optional LLM all run locally | Configurable LLM providers; self-hosted models possible [2] | Not publicly documented as fully offline | Not publicly documented as fully offline | No (Google models) | No (Microsoft / Azure models) | No | No |
-| Voice | Local STT/TTS, interruptible voice call in test chat; no telephony yet | Yes, via AudioCodes, Jambonz, browser [1] | Yes, Voice Gateway [3] | Yes | Yes (audio billed per second) [7] | Yes, real-time voice [10] | Voice channel on enterprise plan, per third-party guide [12] | Yes (voice and chat) [13] |
-| Channels | HTTP API, web widget, WhatsApp, Telegram | Many connectors | Many | Many | Many integrations | Teams, web and Microsoft channels | Many | Many |
+| Voice | Local STT/TTS, interruptible voice call in test chat; phone calls via Twilio or jambonz (DTMF, transfer) | Yes, via AudioCodes, Jambonz, browser [1] | Yes, Voice Gateway [3] | Yes | Yes (audio billed per second) [7] | Yes, real-time voice [10] | Voice channel on enterprise plan, per third-party guide [12] | Yes (voice and chat) [13] |
+| Channels | HTTP API, web widget, WhatsApp, Telegram, phone (Twilio, jambonz) | Many connectors | Many | Many | Many integrations | Teams, web and Microsoft channels | Many | Many |
 | MCP | MCP server (27 tools) to build/test/publish bots | MCP tools server for IDEs (beta, 3.16) [1] | MCP tools in agents; MCP server endpoint (experimental) [4] | Not verified in official docs | Not verified in official docs | MCP tools in agents (GA) [10] | MCP in the ADK CLI, per third-party sources [12] | MCP tools in agents + hosted MCP server [14] |
 | Analytics | Containment, handoffs, fallbacks, CSAT, drop-off | Built-in dashboard in Studio 1.16 [1] | Yes | Yes | Yes (Google Cloud) | Yes | Yes | Yes (observability) [13] |
 | Testing | Self-evaluation, confusion matrix, test chat, replay against another version | Yes (E2E tests) | Simulator [3] | Yes | Yes | Yes | Yes | Yes |
@@ -118,8 +118,9 @@ you need everything on your own machine, including local voice.
 Being honest about gaps matters more than a long feature list. These are on the roadmap (see
 [ROADMAP.md](ROADMAP.md)):
 
-- **Channels:** HTTP API, web widget, WhatsApp (Cloud API) and Telegram. No telephony, Messenger, Teams or Slack yet.
-- **Telephony:** no direct SIP / phone integration (an IVR can call the HTTP API).
+- **Channels:** HTTP API, web widget, WhatsApp (Cloud API), Telegram and phone. No Messenger, Teams or Slack yet.
+- **Telephony:** inbound calls through Twilio or jambonz (speech recognized by the provider, request/response turns,
+  no outbound campaigns or audio streaming); no AudioCodes or contact-center (CCaaS) connectors.
 - **Horizontal scaling:** Parla is a single process with files on disk; it is designed for a small server.
 - **SSO** (SAML / OIDC).
 - **End-to-end conversation test suites** (replay against another version exists; full test suites do not).

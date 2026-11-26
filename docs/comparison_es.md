@@ -35,8 +35,8 @@ tiene un **compromiso de no open core**: todas las funciones siguen siendo de c�
 | Autoalojamiento | Sí (un proceso, Docker, K8s, k3s) | Sí (Helm / Kubernetes) [2] | Ofrecido según materiales del proveedor; a cotizar [3] | Nube privada / on-premise en el plan enterprise, según guías de terceros [5] | No (Google Cloud) | No (nube de Microsoft) | No para despliegues nuevos (v12 discontinuada) [11] | No figura en la página de precios; alojado en Voiceflow [13] |
 | Precio | Gratis | No publicado [2] | A cotizar; una guía de terceros cita un precio de lista de USD 43.080 [3] | A cotizar / no publicado [5] | Por solicitud, publicado (p. ej. USD 0,007 texto, USD 0,012 con playbooks) [7] | Paquetes de créditos (USD 200 / 25.000 créditos / mes) o pago por uso (USD 0,01 / crédito) [9] | Plan gratuito + planes pagos publicados [12] | Por uso para agencias; empresas a pedido [13] |
 | Modelos locales / sin conexión | Sí: embeddings, CRF y LLM opcional corren localmente | Proveedores de LLM configurables; es posible usar modelos propios [2] | No documentado públicamente como totalmente offline | No documentado públicamente como totalmente offline | No (modelos de Google) | No (modelos de Microsoft / Azure) | No | No |
-| Voz | STT/TTS local, llamada de voz interrumpible en el chat de prueba; sin telefonía todavía | Sí, vía AudioCodes, Jambonz, navegador [1] | Sí, Voice Gateway [3] | Sí | Sí (audio facturado por segundo) [7] | Sí, voz en tiempo real [10] | Canal de voz en el plan enterprise, según guía de terceros [12] | Sí (voz y chat) [13] |
-| Canales | API HTTP, widget web, WhatsApp, Telegram | Muchos conectores | Muchos | Muchos | Muchas integraciones | Teams, web y canales de Microsoft | Muchos | Muchos |
+| Voz | STT/TTS local, llamada de voz interrumpible en el chat de prueba; llamadas telefónicas por Twilio o jambonz (DTMF, transferencia) | Sí, vía AudioCodes, Jambonz, navegador [1] | Sí, Voice Gateway [3] | Sí | Sí (audio facturado por segundo) [7] | Sí, voz en tiempo real [10] | Canal de voz en el plan enterprise, según guía de terceros [12] | Sí (voz y chat) [13] |
+| Canales | API HTTP, widget web, WhatsApp, Telegram, teléfono (Twilio, jambonz) | Muchos conectores | Muchos | Muchos | Muchas integraciones | Teams, web y canales de Microsoft | Muchos | Muchos |
 | MCP | Servidor MCP (27 herramientas) para construir, probar y publicar bots | Servidor de herramientas MCP para IDE (beta, 3.16) [1] | Herramientas MCP en agentes; endpoint de servidor MCP (experimental) [4] | No verificado en la documentación oficial | No verificado en la documentación oficial | Herramientas MCP en agentes (GA) [10] | MCP en el ADK CLI, según fuentes de terceros [12] | Herramientas MCP en agentes + servidor MCP alojado [14] |
 | Analítica | Contención, derivaciones, fallbacks, CSAT, abandono | Panel integrado en Studio 1.16 [1] | Sí | Sí | Sí (Google Cloud) | Sí | Sí | Sí (observabilidad) [13] |
 | Pruebas | Autoevaluación, matriz de confusión, chat de prueba, reproducción contra otra versión | Sí (pruebas E2E) | Simulador [3] | Sí | Sí | Sí | Sí | Sí |
@@ -127,8 +127,9 @@ si** necesitás todo en tu propia máquina, incluida la voz local.
 Ser honestos con lo que falta importa más que una lista larga de funciones. Esto está en la hoja de ruta (ver
 [ROADMAP_es.md](ROADMAP_es.md)):
 
-- **Canales:** API HTTP, widget web, WhatsApp (Cloud API) y Telegram. Todavía no hay telefonía, Messenger, Teams ni Slack.
-- **Telefonía:** sin integración directa SIP / telefónica (un IVR puede llamar a la API HTTP).
+- **Canales:** API HTTP, widget web, WhatsApp (Cloud API), Telegram y teléfono. Todavía no hay Messenger, Teams ni Slack.
+- **Telefonía:** llamadas entrantes por Twilio o jambonz (la voz la reconoce el proveedor, turnos pedido/respuesta,
+  sin campañas salientes ni audio en streaming); sin conectores de AudioCodes ni de centros de contacto (CCaaS).
 - **Escalado horizontal:** Parla es un solo proceso con archivos en disco; está pensado para un servidor chico.
 - **SSO** (SAML / OIDC).
 - **Suites de pruebas de conversación de punta a punta** (existe la reproducción contra otra versión; las suites

@@ -9,6 +9,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Telephony: inbound phone calls through Twilio Programmable Voice (TwiML, `X-Twilio-Signature`) or jambonz (verbs
+  JSON, `Jambonz-Signature` and/or HTTP basic). One conversation per call (`call-<CallSid>`, channel `phone`), speech
+  or DTMF each turn, buttons announced as a keypad menu («Marcá 1 para…», es/en/pt), digits as answers for
+  numeric questions, barge-in, voice-friendly text (no emojis, Markdown or URLs), a notice instead of files,
+  silence reprompts, an `end` step hangs up, handoff transfers to `handoff_to` (number or SIP URI), and optional
+  Parla (piper) voice from HMAC-signed URLs that expire in 10 minutes. **Phone** card in **Channels**; calls in the
+  Inbox are transferred instead of typed to ([docs/channels.md](docs/channels.md#phone-calls-twilio-and-jambonz)).
 - English and Portuguese (pt-BR) UI: every screen of the web interface in English, Spanish or Portuguese
   (`web/static/i18n.js`, `t()` with the Spanish text as key), chosen next to the theme picker (the ⋯ menu, the home
   screen or the sign-in screen; `?lang=en` also works) and remembered per browser. `PARLA_LANG` sets the install
