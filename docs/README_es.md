@@ -16,7 +16,8 @@
 | [IA local y voz](ai-and-voice_es.md) | Todos | Modelo de vectores, Ollama, qué hace cada función de IA y sus guardas, voz y llamada. |
 | [Seguridad](security_es.md) | Quien lo instala | Usuarios, roles, claves, funciones, qué hacer antes de exponerlo. |
 | [Inicio de sesión único (OIDC)](sso_es.md) | Quien lo instala | Entrar con Keycloak, Entra ID, Google Workspace, Okta, Authentik o Auth0: variables, mapa de roles, pasos por proveedor, problemas comunes. |
-| [Despliegue](deployment_es.md) | Quien lo instala | Local, Docker, Kubernetes, detrás de un proxy, copias de seguridad. |
+| [Despliegue](deployment_es.md) | Quien lo instala | Local, Docker, detrás de un proxy, todas las variables de entorno, copias de seguridad. |
+| [Kubernetes y Helm](kubernetes_es.md) | Quien lo instala | Chart de Helm, arranque rápido en k3s, copias y restauración, NetworkPolicy, lista para producción. |
 | [Observabilidad](observability_es.md) | Quien lo instala | Métricas de Prometheus, trazas de OpenTelemetry, logs JSON: cada métrica, el árbol de spans, Grafana, Jaeger, Tempo, Datadog, Honeycomb, privacidad. |
 | [Desarrollo](development_es.md) | Desarrolladores | Comandos, variables de entorno, código, internals del motor, cómo sumar un tipo de paso, pruebas, estilo. |
 | [Preguntas frecuentes](faq_es.md) | Todos | Dudas comunes. |

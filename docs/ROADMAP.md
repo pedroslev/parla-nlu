@@ -60,7 +60,7 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Later
 
-- **Horizontal scaling and Postgres**: several replicas on shared storage, with Postgres as an alternative to
+- **Horizontal scaling and Postgres** (the Helm chart keeps `replicaCount` at 1 until then): several replicas on shared storage, with Postgres as an alternative to
   SQLite.
 - **A/B experiments** between flow or bot versions.
 

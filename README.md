@@ -205,8 +205,9 @@ follows `main`, and `-voice` tags include local voice):
 docker run -d -p 127.0.0.1:8000:8000 -v parla-data:/data ghcr.io/pedroslev/parla-nlu:latest
 ```
 
-There are also Kubernetes (and k3s) manifests in `deploy/`. How to use them, the proxy and backups are covered in
-[docs/deployment.md](docs/deployment.md).
+For Kubernetes there is a **Helm chart** in [deploy/helm/parla](deploy/helm/parla) (Ingress with only the public routes, SSO,
+metrics, nightly backups, NetworkPolicy egress lockdown, optional Ollama) and plain Kustomize manifests for k8s and k3s:
+see [docs/kubernetes.md](docs/kubernetes.md). The proxy, variables and backups are in [docs/deployment.md](docs/deployment.md).
 
 ## Architecture
 
@@ -257,7 +258,7 @@ web/static/*.js         interface sections and the widget
 tests/                  test_*.py and run_all.py
 examples/               sample bots to import: pizzeria.json and turnos-clinica.json (buttons, knowledge, handoff, dates)
 data/                   runtime data (not versioned)
-deploy/                 Kubernetes (k8s/) and k3s (k3s/) manifests
+deploy/                 Helm chart (helm/), Kubernetes (k8s/) and k3s (k3s/) manifests, observability
 Dockerfile, docker-compose.yml
 scripts/setup.sh, Makefile, requirements*.txt, .env.example
 ```

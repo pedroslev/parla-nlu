@@ -61,7 +61,7 @@ una edición paga que se guarde funciones.
 
 ## Más adelante
 
-- **Escalado horizontal y Postgres**: varias réplicas sobre almacenamiento compartido, con Postgres como
+- **Escalado horizontal y Postgres** (el chart de Helm mantiene `replicaCount` en 1 hasta entonces): varias réplicas sobre almacenamiento compartido, con Postgres como
   alternativa a SQLite.
 - **Experimentos A/B** entre versiones de flujos o de bots.
 

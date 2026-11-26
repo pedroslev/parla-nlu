@@ -204,8 +204,9 @@ etiquetada, `edge` sigue a `main` y las etiquetas `-voice` traen la voz local):
 docker run -d -p 127.0.0.1:8000:8000 -v parla-data:/data ghcr.io/pedroslev/parla-nlu:latest
 ```
 
-Hay también manifiestos de Kubernetes (y k3s) en `deploy/`. Cómo usarlos, el proxy y las copias de seguridad
-están en [docs/deployment.md](docs/deployment_es.md).
+Para Kubernetes hay un **chart de Helm** en [deploy/helm/parla](deploy/helm/parla) (Ingress solo con las rutas públicas, SSO,
+métricas, copias nocturnas, NetworkPolicy que limita las salidas, Ollama opcional) y manifiestos de Kustomize para k8s y k3s:
+ver [docs/kubernetes_es.md](docs/kubernetes_es.md). El proxy, las variables y las copias están en [docs/deployment_es.md](docs/deployment_es.md).
 
 ## Arquitectura
 
@@ -256,7 +257,7 @@ web/static/*.js         secciones de la interfaz y el widget
 tests/                  test_*.py y run_all.py
 examples/               bots de ejemplo para importar: pizzeria.json y turnos-clinica.json (botones, conocimiento, pase a persona, fechas)
 data/                   datos en tiempo de ejecución (no se versiona)
-deploy/                 manifiestos de Kubernetes (k8s/) y k3s (k3s/)
+deploy/                 chart de Helm (helm/), manifiestos de Kubernetes (k8s/) y k3s (k3s/), observabilidad
 Dockerfile, docker-compose.yml
 scripts/setup.sh, Makefile, requirements*.txt, .env.example
 ```

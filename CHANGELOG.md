@@ -9,6 +9,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Helm chart (`deploy/helm/parla`): single replica with Recreate, hardened pod, every `PARLA_*` setting as values with
+  secrets via `existingSecret` (OIDC secret as a file), Ingress publishing only `/api/v1/`, `/files/` and
+  `/static/widget.js` unless `exposeAdmin`, optional ServiceMonitor, NetworkPolicy (egress limited to DNS + HTTPS to
+  public addresses), nightly backup CronJob with a consistent SQLite snapshot and a restore script, optional Ollama
+  with model pre-pull, embedding model preload, values schema ([docs/kubernetes.md](docs/kubernetes.md)).
 - Outbound messaging: the bot writes first ([docs/outbound.md](docs/outbound.md)). `POST /api/v1/bots/{bot}/outbound`
   (owner/editor; `channel` `whatsapp`, `telegram`, `phone` or `web`, `to`, `data`, `flow`, `template`) starts a
   production conversation with the same session id an inbound message would use, the data preloaded in the slots and
