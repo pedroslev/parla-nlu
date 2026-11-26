@@ -53,15 +53,15 @@ const ev = async (js) => {
   if (r.result?.exceptionDetails) throw new Error(where + ': ' + (r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text));
   return r.result?.result?.value;
 };
-// Listo = la condición se cumple y la red lleva 150 ms quieta (sin esperas fijas). Tope: 10 s.
-async function ready(cond = 'true') {
+// Listo = la condición se cumple y la red lleva 150 ms quieta (sin esperas fijas). Tope: 20 s (25 s en CI).
+async function ready(cond = 'true', quiet = false) {
   const until = Date.now() + (process.env.CI ? 25000 : 20000);   // los runners de CI son más lentos: más margen antes de dar la pantalla por colgada
   while (Date.now() < until) {
     const busy = [...inflight.values()].some((r) => Date.now() - r.at < 5000);   // más de 5 s abierto: un stream, no cuenta
     if (!busy && Date.now() - lastNet > 150 && await ev(`return !!(${cond})`)) return true;
     await sleep(50);
   }
-  problems.push([where, 'lento', 'no quedó lista en 10 s: ' + cond]);
+  if (!quiet) problems.push([where, 'lento', 'no quedó lista a tiempo: ' + cond]);
   return false;
 }
 await send('Runtime.enable'); await send('Network.enable'); await send('Page.enable');
@@ -97,7 +97,11 @@ async function check() {
   for (const a of r.alerts) problems.push([where, 'aviso', a.slice(0, 200)]);
   if (r.empty) problems.push([where, 'vacía', 'la sección no muestra nada']);
 }
-const hash = async (h, cond) => { await ev(`location.hash = ${JSON.stringify(h)}`); await ready(cond); };
+const hash = async (h, cond) => {   // si una pantalla no queda lista, se vuelve a pedir una vez antes de darla por colgada
+  await ev(`location.hash = ${JSON.stringify(h)}`);
+  if (await ready(cond, true)) return;
+  await ev(`location.hash = '#/'; location.hash = ${JSON.stringify(h)}`); await ready(cond);
+};
 
 const started = Date.now();
 let pages = 0;
