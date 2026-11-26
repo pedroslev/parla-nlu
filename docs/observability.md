@@ -37,6 +37,8 @@ so "calls by outcome" is `rate(<name>_count{outcome="error"}[5m])`. `outcome` is
 | `parla_nlu_duration_seconds` | histogram | `stage`, `outcome` | NLU latency: `classify` (intent) and `extract` (entities). |
 | `parla_llm_request_duration_seconds` | histogram | `provider`, `outcome` | LLM calls (`ollama`, `openai`, `openai_compatible`, `anthropic`, `gemini`). |
 | `parla_llm_tokens_total` | counter | `provider`, `type` | Tokens (`input`, `output`) when the provider reports them. |
+| `parla_usage_total` | counter | `agent`, `kind`, `provider`, `unit` | Billable usage: `kind` is `llm_input`, `llm_output`, `llm_cached`, `llm_compute`, `asr`, `tts`, `phone`, `phone_call`, `whatsapp`, `telegram`, `turn` ([costs.md](costs.md)). `agent="none"` outside a conversation. |
+| `parla_cost_total` | counter | `agent`, `kind`, `provider`, `currency` | The same usage priced with the price table at the moment it happened (unpriced usage and the spread server cost aren't counted; the Costs report recalculates with today's prices). |
 | `parla_asr_duration_seconds` | histogram | `provider`, `outcome` | Speech to text (`local`, `openai`, `deepgram`, `elevenlabs`, `google`). |
 | `parla_tts_duration_seconds` | histogram | `provider`, `outcome` | Text to speech. Cached fixed phrases aren't counted. |
 | `parla_http_step_duration_seconds` | histogram | `outcome` | `http` steps and HTTP tools of the agent step. |
@@ -73,6 +75,8 @@ sum by (agent) (rate(parla_intent_outcomes_total{outcome="fallback"}[15m]))
 histogram_quantile(0.95, sum by (le) (rate(parla_http_request_duration_seconds_bucket{route="/api/v1/bots/{bot}/events"}[5m])))
 # LLM errors per provider
 sum by (provider) (rate(parla_llm_request_duration_seconds_count{outcome!="ok"}[5m]))
+# estimated spend per agent, last 24 h
+sum by (agent, currency) (increase(parla_cost_total[1d]))
 # average CSAT today
 sum(increase(parla_csat_score_sum[1d])) / sum(increase(parla_csat_score_count[1d]))
 ```

@@ -87,6 +87,9 @@ tema: inicio, menú ⋯ o pantalla de entrada).
   prueba contra otra versión o seguir hablando como ese cliente.
 - «Para enseñar»: lo que la gente escribió y el bot no entendió, agrupado por parecido y con la intención sugerida.
 - Analítica: contención, derivaciones, fallbacks, CSAT y abandono por flujo y pregunta.
+- **Costos por conversación**: tokens, minutos de audio, caracteres, minutos de teléfono y mensajes medidos × tu
+  propia tabla de precios (valores de fábrica verificados, con fuente), por día, canal, proveedor y conversación
+  resuelta, para comparar con proveedores cerrados ([docs/costs_es.md](docs/costs_es.md)).
 - Observabilidad: métricas de Prometheus en `/metrics`, trazas de OpenTelemetry por OTLP/HTTP (con atributos GenAI
   y contexto de traza W3C hacia tus APIs) y logs de pedidos en JSON; apagado por defecto y sin el contenido de las
   conversaciones ([docs/observability_es.md](docs/observability_es.md)).

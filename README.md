@@ -92,6 +92,9 @@ The interface is available in English, Spanish and Portuguese (pick it next to t
 - **Improve**: what people wrote that the bot didn't understand, grouped by similarity and with a
   suggested intent.
 - Analytics: containment, handoffs, fallbacks, CSAT and drop-off by flow and question.
+- **Costs per conversation**: measured tokens, audio minutes, characters, phone minutes and messages × your own price
+  table (verified defaults with sources), per day, channel, provider and resolved conversation, to compare with
+  closed vendors ([docs/costs.md](docs/costs.md)).
 - Observability: Prometheus metrics at `/metrics`, OpenTelemetry traces over OTLP/HTTP (with GenAI attributes and
   W3C trace context to your APIs) and JSON request logs; off by default and without conversation content
   ([docs/observability.md](docs/observability.md)).

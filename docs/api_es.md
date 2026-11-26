@@ -208,6 +208,10 @@ de `bot`, `buttons` y `file` si tenían; las de `human`, `by`; las de `event` pu
 inicio) o `classification`. Se guardan los últimos 500 mensajes. Con `pii_redaction` prendido, los textos, los
 valores de las entidades y `data` vienen con los datos personales tapados («[email]», «[teléfono]», …).
 
+`usage` es el uso medido y el costo estimado de la conversación (`{"currency", "estimated": true, "total", "items":
+[{"kind", "group", "provider", "model", "qty", "unit", "cost", "priced"}]}`); las entradas `user` del historial traen
+el `usage` del turno (`{"kind|provider|model": cantidad}`). Ver [costs_es.md](costs_es.md).
+
 ### `GET /api/v1/bots/{bot}/sessions/{sessionId}/messages?after=N`
 
 Lo nuevo desde el índice `N` (el `next` de la respuesta anterior). Sirve para recibir lo que escribe una persona
@@ -279,6 +283,23 @@ Cuántas conversaciones tuvieron cada clasificación. Filtros `from`, `to`, `cha
 ```
 
 `configured: false` = una clasificación que ya no existe en el bot.
+
+### `GET /api/v1/bots/{bot}/costs`
+
+Lo que costaron las conversaciones: el uso medido × la tabla de precios de ahora ([costs_es.md](costs_es.md)).
+Analista o más. Filtros `from`, `to` (días de uso), `channel`, `campaign`; `group=day|channel|provider` además
+devuelve `groups`.
+
+```json
+{"currency": "USD", "estimated": true, "from": "2026-11-01", "to": null, "total": 12.41,
+ "by_day": [{"date": "2026-11-01", "cost": 0.52}], "by_channel": [{"channel": "whatsapp", "cost": 8.1}],
+ "by_kind": [{"group": "llm", "cost": 6.2}],
+ "by_provider": [{"kind": "llm_input", "group": "llm", "provider": "anthropic", "model": "claude-sonnet-5-5",
+                  "qty": 1830000, "unit": "tokens", "cost": 3.66, "priced": true}],
+ "conversations": {"count": 310, "avg": 0.04, "median": 0.021, "p95": 0.13},
+ "resolved": {"count": 251, "cost_per": 0.049}, "top": [{"sessionId": "wa-5491112345678", "channel": "whatsapp", "cost": 0.91}],
+ "missing_prices": [{"kind": "whatsapp", "provider": "meta", "model": "service"}]}
+```
 
 ### `POST /api/v1/bots/{bot}/outbound`
 
@@ -464,6 +485,8 @@ nivel del agente) y, en cada paso `agent`, `tools`, `max_tool_calls` y `time_bud
 | `POST /api/agents/{id}/channels/telegram` | `{"connect": true \| false}` | Llama a `setWebhook` de Telegram (crea `TELEGRAM_WEBHOOK_SECRET` si falta) o a `deleteWebhook`: `{"connected"}`. Dueño o editor. |
 | `GET /api/agents/{id}/insights/unrecognized` | Filtros `from`, `to`, `channel`, `classification` | `{"groups": [{"label", "count", "texts", "examples", "suggested_intent"}]}`: «Para enseñar». |
 | `GET /api/agents/{id}/insights/analytics` | Los mismos filtros | `{"sessions", "contained", "handoff", "contained_rate", "handoff_rate", "user_messages", "fallbacks", "fallback_rate", "csat", "abandoned", "drop_off", "flows", "by_day"}` |
+| `GET /api/agents/{id}/costs` | Los mismos filtros, `campaign`; `?sid=` una conversación; `?format=csv` | Como `GET /api/v1/bots/{bot}/costs`; el CSV tiene una fila por día, conversación, canal, proveedor, modelo y tipo. |
+| `GET /api/prices` · `PUT /api/prices` | `{"currency", "prices": [{"kind", "provider", "model", "price", "source"?, "checked"?, "note"?}]}` | La tabla de precios ([costs_es.md](costs_es.md#precios)). `PUT` solo el dueño (si no, 403), queda en la auditoría como `prices.update`. |
 
 ### Campañas y bajas
 

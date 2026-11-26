@@ -181,5 +181,7 @@ Docs: [Omni-Channel developer guide](https://developer.salesforce.com/docs/atlas
 
 - Un solo hilo de entrega: un webhook lento (hasta 10 s) demora a los demás.
 - El orden es por conversación y webhook; un evento dead no frena los siguientes.
-- El resumen con IA suma hasta ~8 s al turno del handoff (si falla: intención + slots).
+- El resumen con IA no demora el turno: la conversación y la transferencia telefónica (encabezados SIP, tarea de
+  Flex) tienen enseguida el resumen fijo (intención + slots); `handoff.requested` espera hasta 10 s el resumen de la
+  IA y, si no llega, sale con el fijo.
 - La salida a internet sigue las mismas reglas que los pasos `http` (ver [security_es.md](security_es.md#webhooks-salientes)).

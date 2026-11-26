@@ -12,6 +12,11 @@ una edición paga que se guarde funciones.
 
 ## Recién salido
 
+- **Costos por conversación**: tokens, minutos de audio, caracteres, minutos de teléfono y mensajes de
+  WhatsApp/Telegram medidos por turno, con una tabla de precios que edita el dueño (valores de fábrica verificados,
+  con fuente y fecha), en Reportes, el visor de conversaciones, las campañas, una API de costos, CSV y Prometheus. El
+  resumen de la IA del handoff ya no demora el turno. Ver [costs_es.md](costs_es.md).
+
 - **Contact centers externos**: modos de derivación (la Bandeja de Parla, un contact center externo o ambos),
   webhooks firmados con reintentos, una API para que el contact center acepte, responda, devuelva o cierre, búsqueda
   por teléfono o chat, y transferencias telefónicas con contexto en encabezados SIP o tareas de Twilio Flex. Recetas

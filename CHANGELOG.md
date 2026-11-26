@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- The handoff AI summary no longer runs inside the turn (it could add up to 8 s): the reply goes out with the
+  deterministic summary, the AI summary is computed in the background and the `handoff.requested` webhook waits up
+  to 10 s for it (otherwise it is sent with the deterministic one). SIP headers and Flex tasks use the deterministic
+  summary.
 - «Repetir» no longer takes longer questions: «¿cómo puedo pagar?» matched the «¿cómo?» example and answered with an
   empty reply. The message has to be almost the closest example (one extra word at most, politeness aside), and
   with nothing to repeat it's handled as usual ([docs/concepts.md](docs/concepts.md#system-flows)).
@@ -27,6 +31,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Costs per conversation ([docs/costs.md](docs/costs.md)): usage measured per turn and per conversation (LLM input,
+  output and cached tokens by provider and model, Ollama compute time, ASR minutes, TTS characters, phone minutes from
+  Twilio/jambonz status callbacks, outbound calls, WhatsApp service and template messages, Telegram, engine turns),
+  stored raw in a SQLite `usage` table (written through the DB writer queue, never waited on) and in the
+  conversation record; an owner-editable price table in `DATA/prices.json` with verified defaults (source and
+  `checked` date) and empty prices where unverified; a **Costs** panel in Reports (total, per day, per conversation
+  avg/median/p95, per resolved conversation, by channel, kind and provider, most expensive conversations, CSV), the
+  cost in the conversation viewer and the campaign detail; `GET /api/v1/bots/{bot}/costs`, `usage` in
+  `GET …/sessions/{sid}`, `GET|PUT /api/prices`; metrics `parla_usage_total` and `parla_cost_total`. Costs are
+  recalculated with the current prices.
+- In-app API docs: the contact-center routes (`…/handoff`, `…/messages`, `…/lookup`), webhook events and signature,
+  WebSocket/SSE and the costs route.
 - External contact centers ([docs/contact-centers.md](docs/contact-centers.md)): per-agent `handoff.mode`
   (`inbox`, `external`, `both`) with a timeout that returns the conversation to the bot or closes it; outbound
   webhooks (`handoff.*`, `conversation.*`, `message.*`, `csat.received`, `campaign.finished`) signed with

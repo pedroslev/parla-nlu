@@ -201,5 +201,7 @@ Docs: [Omni-Channel developer guide](https://developer.salesforce.com/docs/atlas
 
 - One delivery thread: a slow webhook (up to 10 s) delays the others.
 - Order is per conversation and webhook; a dead event doesn't block the next ones.
-- The summary with AI adds up to ~8 s to the handoff turn (fallback: intent + slots).
+- The AI summary doesn't delay the turn: the conversation and the phone transfer (SIP headers, Flex task) get the
+  deterministic summary (intent + slots) at once; `handoff.requested` waits up to 10 s for the AI summary and is
+  sent with the deterministic one if it doesn't arrive.
 - Outbound egress follows the same rules as `http` steps (see [security.md](security.md#outbound-webhooks)).

@@ -86,6 +86,15 @@ clasificación, por eso los porcentajes pueden sumar más de 100%. **Por día** 
 Si la mayoría queda **Sin clasificar**, sumá pasos **Clasificar la conversación** en los puntos clave de tus flujos:
 así vas a saber qué logra el bot.
 
+### Costos
+
+**Costos** muestra lo que costaron las conversaciones, estimado con los precios actuales: el **Total**, **Por
+conversación** (con mediana y p95), **Por conversación resuelta** (las que no pasaron a una persona) y el costo por
+tipo, canal y día. **Las conversaciones más caras** se abren con un clic; **Exportar CSV** baja el detalle. Una fila
+con **completá el precio** todavía no tiene precio: lo carga el dueño en **Precios**. Cada conversación en
+**Conversaciones** muestra su **Costo estimado**, y cada campaña su costo. La factura de cada proveedor es la fuente
+de verdad. Más en [costs_es.md](../costs_es.md).
+
 ## Una rutina semanal de mejora
 
 Reservá 30 minutos por semana (el lunes a la mañana va bien):

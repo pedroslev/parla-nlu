@@ -85,6 +85,15 @@ classification, so the percentages can add up to more than 100%. **By day** show
 If most conversations are **Unclassified**, add **Classify the conversation** steps at the key points of your flows:
 that's how you'll know what the bot achieves.
 
+### Costs
+
+**Costs** shows what the conversations cost, estimated with the current prices: the **Total**, **Per conversation**
+(with median and p95), **Per resolved conversation** (the ones that didn't go to a person), and the cost by type,
+channel and day. **The most expensive conversations** open with a click; **Export CSV** downloads the detail. A row
+marked **fill in the price** («completá el precio») has no price yet: the owner sets it in **Prices**. Each
+conversation in **Conversations** shows its own **Estimated cost**, and each campaign its cost. Your providers'
+invoices are the source of truth. More in [costs.md](../costs.md).
+
 ## A weekly improvement routine
 
 Block 30 minutes a week (Monday morning works well):

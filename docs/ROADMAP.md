@@ -12,6 +12,11 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Shipped recently
 
+- **Costs per conversation**: tokens, audio minutes, characters, phone minutes and WhatsApp/Telegram messages
+  measured per turn, priced with an owner-editable table (verified defaults with source and date), in Reports, the
+  conversation viewer, campaigns, a costs API, CSV and Prometheus. The handoff AI summary no longer delays the turn.
+  See [costs.md](costs.md).
+
 - **External contact centers**: handoff modes (Parla's Inbox, an external contact center or both), signed and
   retried webhooks, an API for the contact center to accept, reply, release or close, lookup by phone or chat, and
   phone transfers with context in SIP headers or Twilio Flex tasks. Recipes for Genesys Cloud, Twilio Flex, Five9,
