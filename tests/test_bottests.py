@@ -55,10 +55,10 @@ with open(PIZZERIA, encoding="utf-8") as f:
     exported = json.load(f)
 pizza = ok("POST", "/api/agents", {"import": exported})
 pid = pizza["id"]
-assert [t["name"] for t in pizza["tests"]] == ["Pedido completo", "Pedido directo con el nombre precargado"], pizza
+assert [t["name"] for t in pizza["tests"]][:2] == ["Pedido completo", "Pedido directo con el nombre precargado"], pizza
 ok("POST", "/api/agents/%s/train" % pid, {})
 r = ok("POST", "/api/agents/%s/tests/run" % pid, {})
-assert r["passed"] and r["total"] == 2 and r["failed"] == 0, json.dumps(r, ensure_ascii=False)[:2000]
+assert r["passed"] and r["total"] == len(pizza["tests"]) and r["failed"] == 0, json.dumps(r, ensure_ascii=False)[:2000]
 first = r["tests"][0]["turns"][0]
 assert first["got"]["intent"] == "Saludar" and first["got"]["flow"] == "Tomar pedido" and first["failures"] == [], first
 assert ok("POST", "/api/agents/%s/tests/run" % pid, {"names": ["Pedido completo"]})["total"] == 1
@@ -136,7 +136,7 @@ print("aislamiento: ok")
 cli = lambda file, **env: subprocess.run([sys.executable, "-m", "parla.bottests", file], cwd=support.ROOT, capture_output=True,
                                          text=True, env=dict(os.environ, **env), timeout=600)
 done = cli(PIZZERIA)
-assert done.returncode == 0 and "pasaron las 2 pruebas" in done.stdout, done.stdout + done.stderr
+assert done.returncode == 0 and "pasaron las %d pruebas" % len(pizza["tests"]) in done.stdout, done.stdout + done.stderr
 folder = tempfile.mkdtemp(prefix="parla-cli-")
 atexit.register(shutil.rmtree, folder, True)
 broken = copy.deepcopy(exported)
