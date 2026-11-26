@@ -27,7 +27,7 @@ import urllib.request
 import uuid
 from collections import OrderedDict
 
-from . import auth, files, telemetry, vault
+from . import auth, files, outbound, telemetry, vault
 
 CHANNELS = ("whatsapp", "telegram")
 SECRETS = {"whatsapp": ("WHATSAPP_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN"),
@@ -40,7 +40,18 @@ OPTIONS = {"es": "Opciones", "pt": "Opções", "en": "Options"}     # el botón 
 
 
 class ChannelError(Exception):
-    pass
+    """status: el HTTP que contestó el otro lado (0 = no contestó); code: el código de error de Meta, si vino."""
+    status, code = None, None
+
+
+def _failed(agent_id, detail, status, raw=b""):
+    error = ChannelError(vault.mask(detail, agent_id))
+    error.status = status
+    try:
+        error.code = (json.loads(raw or b"{}").get("error") or {}).get("code")
+    except (ValueError, AttributeError):
+        pass
+    return error
 
 
 def _wa_api():
@@ -104,11 +115,11 @@ def _log(agent_id, channel, message):
 
 # ---------- HTTP de salida ----------
 
-def _post(agent_id, url, payload=None, body=None, ctype="application/json", token=None):
+def _post(agent_id, url, payload=None, body=None, ctype="application/json", token=None, authorization=None):
     """POST con tiempo máximo. Un reintento si el otro lado da 5xx o no contesta; los 4xx no se reintentan."""
     headers = {"Content-Type": ctype}
-    if token:
-        headers["Authorization"] = "Bearer " + token
+    if token or authorization:
+        headers["Authorization"] = authorization or "Bearer " + token
     data = json.dumps(payload, ensure_ascii=False).encode() if payload is not None else body
     for attempt in (1, 2):
         try:
@@ -119,12 +130,13 @@ def _post(agent_id, url, payload=None, body=None, ctype="application/json", toke
             except ValueError:
                 return {}
         except urllib.error.HTTPError as error:
-            detail = "HTTP %d %s" % (error.code, error.read(300).decode("utf-8", "replace"))
+            raw = error.read(2000)
+            detail = "HTTP %d %s" % (error.code, raw[:300].decode("utf-8", "replace"))
             if error.code < 500 or attempt == 2:
-                raise ChannelError(vault.mask(detail, agent_id)) from None
+                raise _failed(agent_id, detail, error.code, raw) from None
         except OSError as error:             # sin red, DNS, timeout
             if attempt == 2:
-                raise ChannelError(vault.mask("sin respuesta: %s" % getattr(error, "reason", error), agent_id)) from None
+                raise _failed(agent_id, "sin respuesta: %s" % getattr(error, "reason", error), 0) from None
 
 
 def _multipart(fields, field, name, mime, content):
@@ -180,7 +192,7 @@ def _wa_send(agent, to, reply, lang):
         message = dict(base, type="interactive", interactive={"type": kind, "body": {"text": text[:1024]}, "action": action})
     else:
         message = dict(base, type="text", text={"body": text[:4096]})
-    _post(agent["id"], "%s/%s/messages" % (_wa_api(), phone_id), message, token=token)
+    return _post(agent["id"], "%s/%s/messages" % (_wa_api(), phone_id), message, token=token)
 
 
 def _tg_base(agent_id):
@@ -201,21 +213,37 @@ def _tg_send(agent, chat_id, reply, lang):
     if buttons:
         message["reply_markup"] = {"inline_keyboard": [[{"text": b["label"][:64], "callback_data": _button_id(b, i, 64)}]
                                                        for i, b in enumerate(buttons)]}
-    _post(agent["id"], base + "sendMessage", message)
+    return _post(agent["id"], base + "sendMessage", message)
 
 
 def _send(agent, channel, sid, replies, lang):
-    to = sid.split("-", 1)[1]
+    """Manda las respuestas; devuelve el id del último mensaje (wamid de WhatsApp o message_id de Telegram)."""
+    to, last = sid.split("-", 1)[1], None
     for reply in replies:
-        (_wa_send if channel == "whatsapp" else _tg_send)(agent, to, reply, lang)
+        sent = (_wa_send if channel == "whatsapp" else _tg_send)(agent, to, reply, lang) or {}
+        last = ((sent.get("messages") or [{}])[0].get("id") if channel == "whatsapp"
+                else (sent.get("result") or {}).get("message_id") if isinstance(sent.get("result"), dict) else None) or last
     if replies:
         _note(agent["id"], channel, last_out=time.strftime("%Y-%m-%dT%H:%M:%S"))
+    return last
 
 
 # ---------- Entrada ----------
 
+def parse_statuses(agent, payload):
+    """[(wamid, estado, código de error)] de los «statuses» de un webhook (sent, delivered, read, failed)."""
+    out, phone_id = [], str(config(agent, "whatsapp").get("phone_number_id") or "")
+    for entry in payload.get("entry") or []:
+        for change in (entry or {}).get("changes") or []:
+            value = (change or {}).get("value") or {}
+            if phone_id and str((value.get("metadata") or {}).get("phone_number_id") or "") == phone_id:
+                out += [(str(s.get("id") or ""), s.get("status"), ((s.get("errors") or [{}])[0] or {}).get("code"))
+                        for s in value.get("statuses") or [] if isinstance(s, dict)]
+    return out
+
+
 def parse_whatsapp(agent, payload):
-    """Los mensajes de un webhook de WhatsApp para el número configurado. Los «statuses» (entregado, leído) se ignoran."""
+    """Los mensajes de un webhook de WhatsApp para el número configurado (los «statuses» van por parse_statuses)."""
     out, phone_id = [], str(config(agent, "whatsapp").get("phone_number_id") or "")
     for entry in payload.get("entry") or []:
         for change in (entry or {}).get("changes") or []:
@@ -333,6 +361,8 @@ def webhook(headers, rfile, method, ref, channel, query, length):
     try:
         payload = json.loads(raw or b"{}")
         items = (parse_whatsapp(agent, payload) if channel == "whatsapp" else parse_telegram(payload)) if isinstance(payload, dict) else []
+        for wamid, state, code in (parse_statuses(agent, payload) if channel == "whatsapp" else []):
+            outbound.delivery(agent_id, wamid, state, code)     # entregado, leído o falló: el estado de cada envío
     except (ValueError, TypeError, AttributeError):    # firmado pero con otra forma: no reintentar en loop
         items = []
     _note(agent_id, channel, last_in=time.strftime("%Y-%m-%dT%H:%M:%S"))

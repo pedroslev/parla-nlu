@@ -19,7 +19,7 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import DATA, ROOT, write_json, auth, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, mcp_client, phone, rasa_import, runner, telemetry, vault, voice
+from . import DATA, ROOT, write_json, auth, db, i18n, oidc, pii, bottests, brain, channels, connect, dates, files, insights, knowledge, llm, mcp_client, outbound, phone, rasa_import, runner, telemetry, vault, voice
 
 import celpy
 import pycrfsuite
@@ -40,7 +40,7 @@ STEP_NAMES = {"message": "Enviar un mensaje", "ask": "Hacer una pregunta", "set"
               "http": "Consultar un servicio", "if": "Tomar un camino", "goto": "Seguir con otro flujo",
               "classify": "Clasificar la conversación",
               "function": "Ejecutar una función", "handoff": "Pasar con una persona", "call": "Llamar a otro flujo",
-              "agent": "Dejar que la IA converse", "file": "Enviar un archivo"}
+              "agent": "Dejar que la IA converse", "file": "Enviar un archivo", "remind": "Programar un recordatorio"}
 MAX_DEPTH = 5                                        # flujos apilados: subflujos e interrupciones
 # "flujos del sistema": reparaciones de la charla que el dueño puede editar (agent["system"])
 SYSTEM_DEFAULTS = {
@@ -1095,6 +1095,18 @@ def run(agent, st, nlu, text, out, trace):
             elif kind == "agent":
                 if agent_step(agent, st, step, text, ctx, out, trace):
                     return "wait"
+            elif kind == "remind":          # lo deja en la cola de salida al guardar el turno (collect -> outbound.remind)
+                if step.get("flow") and not any(f["name"] == step["flow"] for f in agent["flows"]):
+                    raise ValueError("no existe el flujo «%s»" % step["flow"])
+                if not step.get("flow") and not str(step.get("text") or "").strip():
+                    raise ValueError("elegí qué flujo correr en el recordatorio (o escribí un texto)")
+                at = outbound.remind_at(step, ctx, agent)
+                if at <= outbound.clock():
+                    trace.append("la hora del recordatorio ya pasó: no se programa")
+                else:
+                    st.setdefault("reminders", []).append({"at": at, "flow": step.get("flow") or None, "template": step.get("template") or None,
+                                                           "text": render(localized(step, st), ctx) if step.get("text") else None})
+                    trace.append("programa un recordatorio para %s" % time.strftime("%Y-%m-%d %H:%M", time.localtime(at)))
             elif kind == "end":
                 if back(agent, st, out):                     # "end" en un subflujo vuelve al que lo llamó
                     continue
@@ -1195,6 +1207,7 @@ def handle(agent, st, text, parse=parse):
     empty = {"intent": None, "confidence": 0.0, "ranking": [], "entities": []}
     if (st.get("handoff") or {}).get("active"):         # la charla la tiene una persona: el bot no habla
         return turn(agent, st, out, empty, ["la conversación la atiende una persona"])
+    on_reply = st.pop("on_reply", None)                 # contestó a una plantilla de WhatsApp (outbound.py): corre ese flujo
     kept = {k: st[k] for k in ("waiting", "clarify", "csat_waiting", "buttons") if st.get(k) is not None}
     button = pressed(st.pop("buttons", None), text)
     said = button or text
@@ -1343,6 +1356,10 @@ def handle(agent, st, text, parse=parse):
                     out.append(REJECT.get(st["lang"], REJECT["es"]))
                 st["pc"] -= 1
     else:
+        forced = next((f for f in agent["flows"] if on_reply and f["name"] == on_reply), None)
+        if forced:
+            picked = True
+            trace.append("contesta al mensaje que le mandamos: empieza «%s»" % forced["name"])
         unsure = None if picked else doubt(agent, nlu, threshold)
         ai = agent.get("ai") or {}
         if ai.get("enabled") and ai.get("rescue_intents", True) and not picked and (nlu["confidence"] < threshold or unsure):
@@ -1354,7 +1371,7 @@ def handle(agent, st, text, parse=parse):
             st["clarify"] = unsure
             question = localized(conf["clarify"], st).replace("…", " %s o %s" % tuple(unsure))
             return turn(agent, st, [{"text": question, "buttons": [{"label": i, "value": i} for i in unsure]}], nlu, trace)
-        flow = flow_for(agent, nlu, threshold)
+        flow = forced or flow_for(agent, nlu, threshold)
         if not flow:
             answer = hook(brain.fallback, agent, st, text)
             if answer and answer.get("text"):
@@ -1380,7 +1397,7 @@ def handle(agent, st, text, parse=parse):
 START = "__start__"   # trigger de un flujo que corre apenas empieza la conversación
 
 
-def begin(agent, st, data=None):
+def begin(agent, st, data=None, flow=START):
     """Empieza una conversación: guarda los datos que vienen de afuera (un IVR, un CRM) en los slots que se
     llaman igual y corre el flujo de inicio, si hay. Devuelve el resultado del turno y los datos ignorados.
     «idioma» / «language» / «lang» eligen el idioma de la charla (si el agente lo tiene)."""
@@ -1398,7 +1415,7 @@ def begin(agent, st, data=None):
     nlu = {"intent": None, "confidence": 0.0, "ranking": [], "entities": []}
     used = ["%s = %s" % (k, json.dumps(v, ensure_ascii=False)) for k, v in data.items() if k in names]
     out, trace = [], (["datos iniciales: " + ", ".join(used)] if used else [])
-    flow = next((f for f in agent["flows"] if f.get("trigger") == START), None)
+    flow = next((f for f in agent["flows"] if (f.get("trigger") == START if flow == START else f["name"] == flow)), None) if flow else None
     if flow:
         st["flow"], st["pc"], st["stack"] = flow["name"], 0, []
         trace.append("empieza el flujo «%s»" % flow["name"])
@@ -1628,13 +1645,53 @@ def end_session(agent_id, sid):
     return record
 
 
-def collect(record):
-    """Pasa a la conversación las clasificaciones que aplicó el flujo en este turno (sin repetir)."""
+def outbound_session(agent_id, sid, channel, data, flow=START, campaign=None, on_reply=None, note=None, text=None):
+    """El bot escribe primero (outbound.py): la conversación de producción empieza de nuevo (conserva lo charlado y la
+    hora del último mensaje de la persona), con los datos en los slots y el flujo pedido (None = el «Al empezar»; ""
+    = ninguno). on_reply: el flujo que corre cuando la persona conteste (después de una plantilla de WhatsApp)."""
+    end_session(agent_id, sid)
+    record = open_session(agent_id, sid, channel, "production")
+    result, ignored = begin(session_agent(agent_id, record)[1], record["state"], data, START if flow is None else flow)
+    if text:
+        said = render(text, dict(record["state"].get("slots") or {}))
+        result["replies"].append({"text": said, "buttons": []})
+        result["messages"].append(said)
+    if on_reply:
+        record["state"]["on_reply"] = on_reply
+    if campaign:
+        record["campaign"] = record["state"]["campaign"] = campaign
+    telemetry.count("parla_conversations_started_total", agent=agent_id, channel=telemetry.channel(channel))
+    record["updated"] = now()
+    record["history"].append({"from": "event", "text": note or "Mensaje proactivo", "at": record["updated"], "outbound": True,
+                              "data": {k: v for k, v in (data or {}).items() if k not in ignored}, **({"campaign": campaign} if campaign else {})})
+    record["history"] += bot_entries(result, record["updated"])
+    collect(record, agent_id)
+    save_session(agent_id, record)
+    return record, result
+
+
+def optout_turn(agent, record, text, reply):
+    """Pidió la baja (STOP, BAJA…): se anota, se confirma y el bot no corre."""
+    record["updated"] = now()
+    record["history"] += [{"from": "user", "text": text, "at": record["updated"], "intent": None, "optout": True},
+                          {"from": "event", "text": "Pidió no recibir más mensajes", "at": record["updated"]},
+                          {"from": "bot", "text": reply, "at": record["updated"]}]
+    save_session(agent["id"], record)
+    result = {"messages": [reply], "buttons": [], "replies": [{"text": reply, "buttons": []}], "handoff": False,
+              "language": (record["state"].get("lang") or languages(agent)[0]), "via": None, "sources": []}
+    return dict(session_info(agent, record), messages=[reply], understood=None, optout=True, **turn_fields(result, record))
+
+
+def collect(record, agent_id):
+    """Pasa a la conversación las clasificaciones que aplicó el flujo en este turno (sin repetir) y deja en la cola
+    de salida los recordatorios que programó (paso remind)."""
     marks = record.setdefault("classifications", [])
     for name in record["state"].pop("classified", []):
         if name not in [m["name"] for m in marks]:
             marks.append({"name": name, "at": now()})
             record["history"].append({"from": "event", "text": "Clasificada como «%s»" % name, "at": now(), "classification": name})
+    for item in record["state"].pop("reminders", []):           # pasos «remind» de este turno: a la cola de salida
+        record["history"].append({"from": "event", "text": outbound.remind(agent_id, record, item), "at": now(), "reminder": True})
 
 
 def bot_entries(result, at):
@@ -1698,7 +1755,7 @@ def converse(agent_id, record, text):
                               "fallback": result["fallback"], "via": result["via"], **before})
     record["history"] += bot_entries(result, record["updated"])
     sync(record)
-    collect(record)
+    collect(record, agent_id)
     del record["history"][:-MAX_HISTORY]
     save_session(agent_id, record)
     return result
@@ -1749,6 +1806,8 @@ def sessions_of(agent_id, query):
         sql, args = sql + " AND substr(started, 1, 10) <= ?", args + [query["to"]]
     if query.get("handoff"):
         sql += " AND handoff = 1"
+    if query.get("campaign"):                     # las conversaciones que empezó una campaña (outbound.py)
+        sql, args = sql + " AND json_extract(record, '$.campaign') = ?", args + [query["campaign"]]
     # ponytail: lee y decodifica todas las del agente (reportes y analítica las recorren igual); paginar si son cientos de miles
     records = [json.loads(row[0]) for row in db.q(sql + " ORDER BY updated DESC", args)]
     marks = lambda r: [m["name"] for m in r.get("classifications", [])]
@@ -1814,16 +1873,22 @@ def api_v1(method, parts, data, query=None, user=None, public=False):
             initial = {} if public else data.get("data") or {}
             if not isinstance(initial, dict):
                 return 400, {"error": "«data» tiene que ser un objeto, por ejemplo {\"dni\": \"30123456\"}"}
+            flow = None if public else data.get("flow")       # otro flujo en vez del «Al empezar» (llamadas salientes)
+            if flow is not None and not isinstance(flow, str):
+                return 400, {"error": "«flow» tiene que ser el nombre de un flujo"}
             sid = sid or uuid.uuid4().hex[:16]
             end_session(agent["id"], sid)                 # si ya existía, arranca de cero pero conserva lo charlado
             record = open_session(agent["id"], sid, channel, environment)
-            result, ignored = begin(session_agent(agent["id"], record)[1], record["state"], initial)
+            defn = session_agent(agent["id"], record)[1]
+            if flow and not any(f["name"] == flow for f in defn["flows"]):
+                return 400, {"error": "no existe el flujo «%s»" % flow}
+            result, ignored = begin(defn, record["state"], initial, flow or START)
             telemetry.count("parla_conversations_started_total", agent=agent["id"], channel=telemetry.channel(channel))
             record["updated"] = now()
             record["history"].append({"from": "event", "text": "Empezó la conversación", "at": record["updated"],
                                       "data": {k: v for k, v in initial.items() if k not in ignored}})
             record["history"] += bot_entries(result, record["updated"])
-            collect(record)
+            collect(record, agent["id"])
             save_session(agent["id"], record)
             body = dict(session_info(agent, record), messages=result["messages"], understood=None,
                         ignored_data=ignored, trace=result["trace"], **turn_fields(result, record))
@@ -1836,6 +1901,9 @@ def api_v1(method, parts, data, query=None, user=None, public=False):
                 return 400, {"error": "falta «text» con el mensaje de la persona"}
             sid = sid or uuid.uuid4().hex[:16]
             record = open_session(agent["id"], sid, channel, environment)
+            stopped = outbound.inbound(agent, record, text)    # ventana de 24 h, «respondió» y bajas (STOP, BAJA…)
+            if stopped:
+                return 200, optout_turn(agent, record, text.strip()[:4000], stopped)
             result = converse(agent["id"], record, text.strip()[:4000])
             return 200, dict(session_info(agent, record), messages=result["messages"], understood={
                 key: next(h for h in reversed(record["history"]) if h["from"] == "user")[key]
@@ -1848,6 +1916,10 @@ def api_v1(method, parts, data, query=None, user=None, public=False):
         return 400, {"error": "«type» tiene que ser start (u online), message o end"}
     if rest == ["audio"] and method == "POST":
         return audio_event(agent, data, public)
+    if rest == ["outbound"] and method == "POST":     # el bot escribe primero (outbound.py); el widget público no
+        if public:
+            return 403, {"error": "pedido rechazado"}
+        return outbound.api_send(agent, data)
     if len(rest) == 3 and rest[0] == "sessions" and rest[2] == "messages" and method == "GET":
         # lo nuevo desde el índice «after»: así el widget recibe lo que escribe la persona de la bandeja
         # ponytail: el historial se recorta a MAX_HISTORY y corre los índices; usar ids si las charlas son muy largas
@@ -2014,6 +2086,11 @@ AUDIT = (     # (método, ruta, acción): lo que queda en la auditoría cuando s
     ("POST", A + "/channels/telegram", "channel.telegram"),
     ("POST", A + r"/sessions/([A-Za-z0-9_.@+-]+)/(take|release|reply)", "/inbox"),
     ("DELETE", r"/api/v1/bots/([^/]+)/sessions/([^/]+)", "session.delete"),
+    ("POST", A + "/campaigns", "campaign.create"), ("PUT", A + "/campaigns/([0-9a-f]{12})", "campaign.update"),
+    ("DELETE", A + "/campaigns/([0-9a-f]{12})", "campaign.delete"), ("POST", A + "/campaigns/([0-9a-f]{12})/recipients", "campaign.recipients"),
+    ("POST", A + "/campaigns/([0-9a-f]{12})/(start|pause|resume|cancel)", "/campaign"),
+    ("POST", A + "/optouts", "optout.add"), ("DELETE", A + "/optouts", "optout.remove"),
+    ("POST", r"/api/v1/bots/([^/]+)/outbound", "outbound.send"),
 )
 
 
@@ -2060,6 +2137,7 @@ class Handler(BaseHTTPRequestHandler):
             if status != 200:
                 return self.reply({"error": "no existe" if status == 404 else "métricas: falta el token (PARLA_METRICS_TOKEN) o no coincide"}, status)
             telemetry.gauge("parla_active_sessions", active_sessions())
+            telemetry.gauge("parla_campaign_recipients", outbound.gauge_rows())
             return self.reply(telemetry.render().encode(), ctype="text/plain; version=0.0.4; charset=utf-8")
         raw = self.headers.get("Content-Length") or "0"
         if not (raw.isascii() and raw.isdigit()):
@@ -2179,7 +2257,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(*reversed(api_v1(method, [p for p in url[len("/api/v1/"):].split("/") if p], data, query, self.user, self.public)))
         match = re.fullmatch(r"/api/agents(?:/([0-9a-f]{8})(?:/(chat|reset|http|train|tests/run|versions|deploy|diff|versions/\d+|versions/\d+/restore|functions/test"
                              r"|knowledge/extract|knowledge/search|voice/transcribe|mcp/tools|secrets|files|files/[A-Za-z0-9_-]{22}|insights/unrecognized|insights/analytics"
-                             r"|inbox|channels|channels/telegram|sessions/[A-Za-z0-9_.@+-]+/(?:reply|release|take)))?)?", url)
+                             r"|inbox|channels|channels/telegram|sessions/[A-Za-z0-9_.@+-]+/(?:reply|release|take)"
+                             r"|campaigns|campaigns/preview|campaigns/[0-9a-f]{12}(?:/(?:start|pause|resume|cancel|recipients|export))?|optouts))?)?", url)
         if not match:
             return self.reply({"error": "no existe"}, 404)
         agent_id, action = match.groups()
@@ -2314,6 +2393,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply({"error": mask(agent, str(error))}, 502)
         elif action == "inbox" and method == "GET":
             return self.reply(inbox(agent_id))
+        elif action and (action.startswith("campaigns") or action == "optouts"):     # campañas y bajas (outbound.py)
+            try:
+                out = outbound.admin(method, load(agent_id), action, data, query, self.user)
+            except outbound.OutboundError as error:
+                return self.reply({"error": str(error)}, error.status)
+            if len(out) == 4:                                       # el CSV de resultados
+                self.extra_headers = {"Content-Disposition": 'attachment; filename="%s"' % out[3]}
+                return self.reply(out[1], out[0], out[2])
+            return self.reply(out[1], out[0])
         elif action == "channels" and method == "GET":                # pantalla «Canales»: webhooks, claves que faltan, estado
             return self.reply(dict(channels.info(load(agent_id)), phone=phone.info(load(agent_id))))
         elif action == "channels/telegram" and method == "POST":      # {"connect": true|false}: setWebhook / deleteWebhook
@@ -2348,6 +2436,8 @@ class Handler(BaseHTTPRequestHandler):
                 if os.path.exists(path(agent_id, ext)):
                     os.remove(path(agent_id, ext))
             db.q("DELETE FROM sessions WHERE agent_id = ?", (agent_id,))
+            for table in ("campaign_recipients", "campaigns", "optouts"):
+                db.q("DELETE FROM %s WHERE agent_id = ?" % table, (agent_id,))
             shutil.rmtree(os.path.join(AGENTS, agent_id + ".versions"), ignore_errors=True)
             shutil.rmtree(os.path.join(AGENTS, agent_id + ".files"), ignore_errors=True)
             for key in [k for k in MODELS if k.startswith(agent_id + "@")]:
@@ -2374,8 +2464,8 @@ class Handler(BaseHTTPRequestHandler):
         if action == "user.update" and "role" in data:
             action = "user.role"
         action = self.audit_action or action
-        if action.startswith("/"):                                  # bandeja: take | release | reply
-            action = "inbox." + groups[-1]
+        if action.startswith("/"):                                  # bandeja: take | release | reply; campaña: start | pause…
+            action = ("campaign." if action == "/campaign" else "inbox.") + groups[-1]
         if action == "login":
             user, role = str(data.get("name") or "")[:40], (sent.get("user") or {}).get("role")
             detail = ("ok" if self.status == 200 else "falló (%s)" % self.status) + " desde " + self.client_address[0]
@@ -2388,6 +2478,13 @@ class Handler(BaseHTTPRequestHandler):
                 (" · clave «%s»" % (sent.get("label") or groups[-1]) if action.startswith("key.") else "")
         elif action.startswith("secret."):
             detail = str(data.get("name") or "")[:60]                # el nombre; el valor nunca
+        elif action.startswith("campaign."):
+            detail = "%s (%s)" % (sent.get("name") or "", sent.get("id") or groups[1] if len(groups) > 1 else sent.get("id"))
+            if action == "campaign.create":
+                detail += " · %s destinatarios" % ((sent.get("imported") or {}).get("added", 0))
+        elif action.startswith("optout.") or action == "outbound.send":     # el teléfono tapado, nunca entero
+            detail = (str(data.get("channel") or "whatsapp") + " → " if action == "outbound.send" else "") + outbound.mask(
+                re.sub(r"[\s().+-]", "", str(data.get("to") or data.get("address") or "")))
         elif action.startswith("inbox.") or action in ("agent.restore", "session.delete"):
             detail = ("versión " if action == "agent.restore" else "") + urllib.parse.unquote(groups[1])     # la conversación o la versión
         else:
@@ -2528,6 +2625,7 @@ def cleanup():
                 record = json.loads(raw)
                 record.update(ended=True, state={})      # sin tocar «updated»: la retención sigue contando desde la última charla
                 save_session(agent_id, record)
+    outbound.cleanup(lambda agent_id: (lambda d: default if d is None else d)(_days(settings_of(agent_id).get("retention_days"))))
     db.q("DELETE FROM logins WHERE expires < ?", (time.time(),))
     db.q("DELETE FROM audit WHERE at < ?", (ago(_days(os.environ.get("PARLA_AUDIT_DAYS")) or 365),))
 
@@ -2550,6 +2648,7 @@ def main():
         create(DEMO)
     cleanup()
     threading.Thread(target=_hourly, daemon=True).start()
+    outbound.start()            # la cola de campañas y recordatorios (sigue lo que quedó en parla.db)
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     print("Listo: http://127.0.0.1:%d  (Ctrl+C para salir)" % port, flush=True)
     # ponytail: un hilo por pedido (la IA y la voz tardan segundos); dos mensajes a la vez en la MISMA conversación

@@ -34,7 +34,7 @@ PARLA_TOKEN = os.environ.get("PARLA_TOKEN", "")
 # ---------- Lo que acepta el motor (copiado de server.py / web/index.html) ----------
 
 START = "__start__"
-STEP_TYPES = {"message", "ask", "set", "http", "if", "goto", "classify", "function", "end", "handoff", "call", "agent", "file"}
+STEP_TYPES = {"message", "ask", "set", "http", "if", "goto", "classify", "function", "end", "handoff", "call", "agent", "file", "remind"}
 SYSTEM_KEYS = ("cancel", "repeat", "clarify", "anything_else", "resume", "correction", "handoff", "csat")   # app.SYSTEM_DEFAULTS
 LANG_OK = re.compile(r"[a-z]{2}")
 SECRET_REF = re.compile(r"\bsecret\.([A-Za-z_]\w*)")
@@ -307,8 +307,9 @@ def validate(data, files=None):
         else:
             if chans.get("public_url") not in (None, "") and not re.fullmatch(r"https://[^/\s]+(/[^\s]*)?", str(chans["public_url"])):
                 errors.append("channels: «public_url» tiene que ser https://dominio")
-            for name, keys in (("whatsapp", {"enabled", "phone_number_id"}), ("telegram", {"enabled"}),
-                               ("phone", {"enabled", "provider", "language", "voice", "handoff_to", "tts", "finish_on_key", "greeting"})):
+            for name, keys in (("whatsapp", {"enabled", "phone_number_id", "templates"}), ("telegram", {"enabled"}),
+                               ("phone", {"enabled", "provider", "language", "voice", "handoff_to", "tts", "finish_on_key", "greeting",
+                                          "from", "api_url", "application_sid"})):
                 conf = chans.get(name)
                 if conf is None:
                     continue
@@ -329,6 +330,14 @@ def validate(data, files=None):
                 errors.append("channels: «whatsapp.phone_number_id» son solo números (el «Phone number ID» de Meta)")
             if wa.get("enabled") and not wa.get("phone_number_id"):
                 warnings.append("channels: WhatsApp prendido sin «phone_number_id»: no va a poder contestar")
+            templates = wa.get("templates")
+            if templates is not None and (not isinstance(templates, list) or any(
+                    not isinstance(t, dict) or not re.fullmatch(r"[a-z0-9_]{1,512}", str(t.get("name") or ""))
+                    or not isinstance(t.get("params") or [], list) or any(p not in {x.get("name") for x in agent.get("slots") or [] if isinstance(x, dict)} for p in t.get("params") or []) for t in templates)):
+                errors.append("channels: «whatsapp.templates» es [{name (como en Meta: minúsculas y _), language (es, en_US, pt_BR), "
+                              "params: [slots para {{1}}, {{2}}…]}] y cada param tiene que ser un slot que exista")
+            if tel.get("from") not in (None, "") and not re.fullmatch(r"\+?[0-9]{6,15}|sips?:\S+", str(tel["from"])):
+                errors.append("channels: «phone.from» es el número desde el que se llama, con código de país (+5491112345678)")
 
     def unique(kind, items):
         seen = set()
@@ -794,6 +803,27 @@ def validate(data, files=None):
                     errors.append("%s: falta «cond» {var, op, value} o «expr» (sin eso nunca se cumple)" % w)
                 steps(w + " → then", step.get("then") or [])
                 steps(w + " → else", step.get("else") or [])
+            elif kind == "remind":
+                if bool(step.get("after")) == bool(step.get("at")):
+                    errors.append("%s: poné «after» (30m, 24h, 2d) o «at» («{{ fecha }} 09:00»), uno de los dos" % w)
+                elif step.get("after") and not re.fullmatch(r"\s*\d+\s*[mhd]\s*", str(step["after"])):
+                    errors.append("%s: «after» tiene que ser algo como 30m, 24h o 2d" % w)
+                else:
+                    check_template(w + " at", step.get("at"))
+                target = step.get("flow")
+                if target:
+                    gotos.add(target)
+                    if target not in flow_names:
+                        errors.append("%s: el flujo «%s» no existe" % (w, target))
+                elif not str(step.get("text") or "").strip():
+                    errors.append("%s: falta «flow» (el flujo que corre el recordatorio) o «text»" % w)
+                tpl = step.get("template")
+                catalog = {t.get("name") for t in ((agent.get("channels") or {}).get("whatsapp") or {}).get("templates") or [] if isinstance(t, dict)}
+                if tpl and tpl not in catalog:
+                    errors.append("%s: la plantilla «%s» no está en channels.whatsapp.templates" % (w, tpl))
+                if not tpl and ((agent.get("channels") or {}).get("whatsapp") or {}).get("enabled"):
+                    warnings.append("%s: sin «template», en WhatsApp el recordatorio solo sale si la persona escribió en las "
+                                    "últimas 24 horas: poné una plantilla aprobada" % w)
             elif kind == "classify":
                 name = step.get("classification")
                 used_classifications.add(name)
@@ -1221,6 +1251,13 @@ values, la aprende el CRF por contexto de las frases marcadas. "kind" lo usa la 
      mensaje es el nombre del archivo). En la API, el mensaje va en messages como siempre y replies[i].file trae
      {id, name, mime, size, url}; url es relativa al servidor de Parla y se abre sin sesión. Los archivos son del
      agente, no de una versión: borrarlo rompe el paso también en lo publicado. Para «pasame la lista de precios».
+  - {"type": "remind", "after": "24h", "flow": "Recordatorio", "template": "recordatorio_turno"}  o
+    {"type": "remind", "at": "{{ fecha }} 09:00", "flow": "Recordatorio"}   programa un mensaje para MÁS TARDE a la
+     misma persona y canal (WhatsApp, Telegram, widget; en teléfono llama al slot «caller»). after: 30m, 24h, 2d; at:
+     texto con plantillas que quede «AAAA-MM-DD HH:MM» (zona: agent.outbound.timezone o la del servidor). flow corre
+     con los slots de ahora precargados (o «text» si no hay flujo). template: nombre del catálogo de WhatsApp: hace falta
+     si sale más de 24 h después del último mensaje de la persona. Respeta las bajas (STOP/BAJA). Con consentimiento,
+     uno solo por cosa (un turno = un recordatorio), y no a la madrugada.
 - Máximo 200 pasos seguidos por turno (corta loops de goto). Un paso que falla muestra "⚠ Hay un problema..." en el chat.
 
 ## classifications: [{name, color?, description?}]
@@ -1337,7 +1374,11 @@ propias para cancelar o pedir un humano: ya están.
   los carga la persona en «Claves»; vos nunca. Contesta lo publicado en Producción; sesiones wa-<teléfono> / tg-<chat>.
   Botones: WhatsApp muestra hasta 3 como botones (título ≤20 letras) y hasta 10 como lista.
 
-## Teléfono: channels.phone {enabled, provider: "twilio"|"jambonz", language, voice, handoff_to, tts: "provider"|"parla", finish_on_key, greeting}
+- Plantillas aprobadas (para escribir primero, campañas y recordatorios): channels.whatsapp.templates =
+  [{"name": "recordatorio_turno", "language": "es", "params": ["nombre", "fecha"]}] (params = slots para {{1}}, {{2}}…;
+  la plantilla se aprueba en Meta, acá solo se nombra). Bajas: agent.outbound.optout_keywords {es: [...], en, pt}.
+
+## Teléfono: channels.phone {enabled, provider: "twilio"|"jambonz", language, voice, handoff_to, tts: "provider"|"parla", finish_on_key, greeting, from, api_url, application_sid}
 - Llamadas por Twilio o jambonz. Claves en «Claves»: TWILIO_AUTH_TOKEN, o JAMBONZ_WEBHOOK_SECRET y/o
   JAMBONZ_BASIC_USER + JAMBONZ_BASIC_PASSWORD. Sesiones call-<CallSid>, canal phone. Botones: se anuncian
   «Marcá 1 para…» (hasta 9). Un paso «end» corta la llamada; pasar a una persona transfiere a handoff_to.

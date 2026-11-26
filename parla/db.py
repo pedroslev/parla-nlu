@@ -5,6 +5,10 @@ sessions(agent_id, session_id, channel, started, updated, handoff, record)   rec
 logins(token, name, expires)        token = SHA-256 del valor de la cookie (el valor no se guarda)
 audit(id, at, user, role, agent_id, action, detail)
 oidc(state, nonce, verifier, expires)   logins de SSO a medio camino (oidc.py); state = su SHA-256, de un solo uso
+campaigns(id, agent_id, name, channel, status, config, created, updated, created_by)        envíos salientes (outbound.py)
+campaign_recipients(id, campaign_id, agent_id, address, spec, status, error, attempts, next_at, ...)   la cola de envíos:
+    destinatarios de campañas, envíos de la API (campaign_id NULL, kind «api») y recordatorios (kind «remind»)
+optouts(agent_id, address, channel, keyword, at)    quien pidió que no le escriban más (por agente)
 """
 import contextlib
 import os
@@ -23,6 +27,19 @@ CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY, at TEXT NOT NULL, user
     action TEXT NOT NULL, detail TEXT);
 CREATE INDEX IF NOT EXISTS audit_at ON audit (at);
 CREATE TABLE IF NOT EXISTS oidc (state TEXT PRIMARY KEY, nonce TEXT NOT NULL, verifier TEXT NOT NULL, expires REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS campaigns (id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, name TEXT NOT NULL, channel TEXT NOT NULL,
+    status TEXT NOT NULL, config TEXT NOT NULL, created TEXT NOT NULL, updated TEXT NOT NULL, created_by TEXT);
+CREATE INDEX IF NOT EXISTS campaigns_agent ON campaigns (agent_id, created);
+CREATE TABLE IF NOT EXISTS campaign_recipients (id INTEGER PRIMARY KEY, campaign_id TEXT, agent_id TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'campaign', channel TEXT NOT NULL, address TEXT NOT NULL, spec TEXT NOT NULL,
+    status TEXT NOT NULL, error TEXT, attempts INTEGER NOT NULL DEFAULT 0, next_at REAL NOT NULL DEFAULT 0,
+    session_id TEXT, message_id TEXT, token TEXT, created TEXT NOT NULL, updated TEXT NOT NULL, sent_at TEXT,
+    UNIQUE (campaign_id, address));
+CREATE INDEX IF NOT EXISTS recipients_due ON campaign_recipients (status, next_at);
+CREATE INDEX IF NOT EXISTS recipients_message ON campaign_recipients (message_id);
+CREATE INDEX IF NOT EXISTS recipients_session ON campaign_recipients (agent_id, session_id);
+CREATE TABLE IF NOT EXISTS optouts (agent_id TEXT NOT NULL, address TEXT NOT NULL, channel TEXT, keyword TEXT, at TEXT NOT NULL,
+    PRIMARY KEY (agent_id, address));
 """
 # ponytail: una conexión y un lock para todo el proceso (ThreadingHTTPServer); alcanza para un servidor.
 # Con mucho tráfico: una conexión por hilo (WAL ya deja leer mientras otro escribe)

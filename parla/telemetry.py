@@ -44,6 +44,8 @@ DEFS = {    # nombre -> (tipo, ayuda, buckets). La lista completa, con sus etiqu
     "parla_handoffs_total": ("counter", "Conversations handed to a person by agent and channel.", None),
     "parla_csat_score": ("histogram", "CSAT survey answers (1 to 5) by agent.", (1, 2, 3, 4, 5)),
     "parla_active_sessions": ("gauge", "Open conversations with activity in the last 30 minutes, by agent.", None),
+    "parla_outbound_messages_total": ("counter", "Outbound messages and calls (API, campaigns, reminders) by channel and outcome.", None),
+    "parla_campaign_recipients": ("gauge", "Campaign recipients by status (queued, sent, delivered, read, replied, failed, opted_out, canceled).", None),
     "parla_test_runs_total": ("counter", "Conversation test suite runs by agent and outcome.", None),
     "parla_telemetry_dropped_total": ("counter", "Spans or metric series Parla dropped (queue full, export failed, too many series).", None),
 }
@@ -202,7 +204,7 @@ def allowed(authorization, peer, host):
 
 _SEGMENT = re.compile(r"[a-z][a-z0-9_-]{0,30}")
 _PLACEHOLDER = {"bots": "{bot}", "sessions": "{session}", "files": "{file}", "users": "{user}", "keys": "{key}",
-                "versions": "{n}", "audio": "{audio}", "static": "{file}"}
+                "versions": "{n}", "audio": "{audio}", "static": "{file}", "campaigns": "{campaign}"}
 
 
 def route_of(path):

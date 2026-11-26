@@ -25,12 +25,12 @@ import unicodedata
 import urllib.parse
 from xml.sax.saxutils import escape, quoteattr
 
-from . import auth, channels, telemetry, vault, voice
+from . import auth, channels, outbound, telemetry, vault, voice
 from .channels import ChannelError
 
 PROVIDERS = ("twilio", "jambonz")
-SECRETS = {"twilio": ("TWILIO_AUTH_TOKEN",),
-           "jambonz": ("JAMBONZ_WEBHOOK_SECRET", "JAMBONZ_BASIC_USER", "JAMBONZ_BASIC_PASSWORD")}
+SECRETS = {"twilio": ("TWILIO_AUTH_TOKEN", "TWILIO_ACCOUNT_SID"),          # el Account SID solo hace falta para llamar (outbound.py)
+           "jambonz": ("JAMBONZ_WEBHOOK_SECRET", "JAMBONZ_BASIC_USER", "JAMBONZ_BASIC_PASSWORD", "JAMBONZ_API_KEY", "JAMBONZ_ACCOUNT_SID")}
 LANGS = {"es": "es-US", "en": "en-US", "pt": "pt-BR"}        # si el agente no dice otra variante
 ENDED = ("completed", "busy", "failed", "no-answer", "canceled")
 MAX_SILENCE = 3                 # respuestas vacías seguidas antes de cortar
@@ -172,7 +172,7 @@ def jambonz_ok(agent_id, headers, raw, now=None):
     """Jambonz-Signature «t=<unix>,v1=<hex>» = HMAC-SHA256(secreto, "<t>.<cuerpo>") y/o HTTP basic. Las que estén
     cargadas tienen que dar bien todas; sin ninguna cargada, nada pasa."""
     keys = vault.values(agent_id)
-    secret, user, password = (keys.get(n) or "" for n in SECRETS["jambonz"])
+    secret, user, password = (keys.get(n) or "" for n in ("JAMBONZ_WEBHOOK_SECRET", "JAMBONZ_BASIC_USER", "JAMBONZ_BASIC_PASSWORD"))
     if not secret and not (user and password):
         return False
     if secret:
@@ -196,7 +196,7 @@ def _hook(agent, provider, action=""):
     return "%s/api/v1/bots/%s/phone/%s%s" % (channels.public_url(agent), agent["id"], provider, "/" + action if action else "")
 
 
-def plan(agent, conf, sid, kind, text=None, caller=None):
+def plan(agent, conf, sid, kind, text=None, caller=None, pending=None):
     """Corre un turno y decide: {"say": [frases], "then": "gather"|"dial"|"hangup", "lang", "digits": n, "to"}."""
     app = auth._app()
     record = app.load_session(agent["id"], sid)
@@ -215,12 +215,18 @@ def plan(agent, conf, sid, kind, text=None, caller=None):
         data = {"type": kind, "sessionId": sid, "channel": "phone", "environment": "production"}
         if kind == "start":
             data["data"] = {k: v for k, v in (("caller", caller), ("language", conf.get("language"))) if v}
+            if pending:          # llamada que hizo Parla (outbound.py): sus datos y su flujo
+                data["data"].update(pending["data"])
+                data["flow"] = pending["flow"]
         else:
             data["text"] = text
         status, body = app.api_v1("POST", ["bots", agent["id"], "events"], data)
         if status != 200:
             raise ChannelError(body.get("error"))
         record = app.load_session(agent["id"], sid)
+        if pending and pending.get("campaign"):
+            record["campaign"] = pending["campaign"]
+            app.save_session(agent["id"], record)
         lang, handoff = body.get("language") or "es", body.get("handoff")
         finished = record["state"].get("finished")
         say = lines(body.get("replies") or [], lang)
@@ -333,7 +339,7 @@ def webhook(headers, rfile, method, ref, provider, action, path, length):
                          headers.get("X-Twilio-Signature")):
             return deny
         params = dict(params)
-        call, status, caller = params.get("CallSid"), params.get("CallStatus"), params.get("From")
+        call, status, caller, callee = params.get("CallSid"), params.get("CallStatus"), params.get("From"), params.get("To")
         speech, digits = params.get("SpeechResult"), params.get("Digits")
     else:
         if not jambonz_ok(agent_id, headers, raw):
@@ -343,7 +349,7 @@ def webhook(headers, rfile, method, ref, provider, action, path, length):
             params = params if isinstance(params, dict) else {}
         except ValueError:
             params = {}
-        call, status, caller = params.get("call_sid"), params.get("call_status"), params.get("from")
+        call, status, caller, callee = params.get("call_sid"), params.get("call_status"), params.get("from"), params.get("to")
         alternatives = (params.get("speech") or {}).get("alternatives") if isinstance(params.get("speech"), dict) else None
         speech = (alternatives[0] or {}).get("transcript") if isinstance(alternatives, list) and alternatives else None
         digits = params.get("digits")
@@ -351,7 +357,11 @@ def webhook(headers, rfile, method, ref, provider, action, path, length):
     if not isinstance(call, str) or not CALL_ID.fullmatch(call):
         return 400, b"", "text/plain"
     sid = "call-" + call
+    # ?o=<token>: una llamada que hizo Parla (outbound.py). La firma del proveedor cubre la URL entera, también esto
+    pending = outbound.pending(agent_id, dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(path).query)).get("o"))
     if action == "status":           # cortó (o no atendió): la conversación termina
+        if pending:
+            outbound.call_status(pending["id"], status)
         if status in ENDED:
             with channels._session_lock(agent_id + "/" + sid):
                 if (app.load_session(agent_id, sid) or {}).get("ended") is False:
@@ -365,7 +375,10 @@ def webhook(headers, rfile, method, ref, provider, action, path, length):
                 said = pick(app.load_session(agent_id, sid), speech, digits)
                 p = plan(agent, conf, sid, "message" if said else "silence", said)
             else:
-                p = plan(agent, conf, sid, "start", caller=caller if isinstance(caller, str) else None)
+                who = callee if pending else caller       # en una llamada saliente, la persona es a quien se llamó
+                p = plan(agent, conf, sid, "start", caller=who if isinstance(who, str) else None, pending=pending)
+                if pending:
+                    outbound.call_status(pending["id"], "answered")
         except Exception as error:  # noqa: BLE001 - que quede en Canales y la persona no se quede colgada en silencio
             channels._log(agent_id, "phone", error)
             lang = ((app.load_session(agent_id, sid) or {}).get("state") or {}).get("lang") or "es"
