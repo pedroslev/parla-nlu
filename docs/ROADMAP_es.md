@@ -12,6 +12,11 @@ una edición paga que se guarde funciones.
 
 ## Recién salido
 
+- **Archivos entrantes**: las fotos, documentos y notas de voz de WhatsApp/Telegram se descargan y quedan con la
+  conversación; las notas de voz se transcriben y se contestan; ubicaciones y contactos llegan como texto; descripción
+  opcional de imágenes para la IA (`ai.vision`). Plantillas desde la Bandeja y la API del contact center después de
+  24 horas, y API de estado de los envíos (`GET …/outbound[/{id}]`).
+
 - **Costos por conversación**: tokens, minutos de audio, caracteres, minutos de teléfono y mensajes de
   WhatsApp/Telegram medidos por turno, con una tabla de precios que edita el dueño (valores de fábrica verificados,
   con fuente y fecha), en Reportes, el visor de conversaciones, las campañas, una API de costos, CSV y Prometheus. El
@@ -75,8 +80,7 @@ una edición paga que se guarde funciones.
 
 ## Después
 
-- **Salientes, lo que sigue**: detección de contestadores en las llamadas, zona horaria por destinatario y estado
-  de entrega de los envíos sueltos por la API.
+- **Salientes, lo que sigue**: detección de contestadores en las llamadas y zona horaria por destinatario.
 
 ## Más adelante
 

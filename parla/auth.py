@@ -159,6 +159,15 @@ def current(handler, users=None):
     return {"name": user["name"], "role": role, "bots": _scope(user)}
 
 
+def sees(handler, agent_id):
+    """¿Quien pide puede ver las conversaciones de ese agente? Sin usuarios (ni SSO), sí. Para /files/ de las personas."""
+    users = _load()
+    if not users and not oidc.enabled():
+        return True
+    user = current(handler, users)
+    return bool(user) and allowed_bot(user, agent_id)
+
+
 def cookie_value(handler, name):
     cookie = http.cookies.SimpleCookie()
     try:
@@ -340,7 +349,7 @@ AGENT_ROUTES = (     # rol «agent» (atención): solo la Bandeja
 
 INTEGRATION_ROUTES = (     # clave con scope «integration» (contact center externo): solo esto
     ("POST", r"/api/v1/bots/[^/]+/sessions/[^/]+/(handoff|messages)"),
-    ("GET", r"/api/v1/bots/[^/]+/(lookup|sessions/[^/]+(/messages)?)"),
+    ("GET", r"/api/v1/bots/[^/]+/(lookup|sessions/[^/]+(/messages)?|outbound(/\d+)?)"),
 )
 
 

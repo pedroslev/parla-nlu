@@ -200,13 +200,14 @@ assert s == 200
 (sent,) = wait(1)
 assert json.loads(sent["body"])["text"]["body"] == "Hola, soy Ana" and json.loads(sent["body"])["to"] == "5491112345678"
 
-# --- una imagen sin texto llega como «[imagen]» con sus datos en el historial
+# --- una imagen sin texto llega como «[imagen]»; si no se puede bajar (esta API falsa no tiene GET), queda el motivo
+# (la descarga, el ASR y lo demás: tests/test_media.py)
 assert wa([{"from": "5491112345678", "id": "m11", "type": "image", "image": {"id": "img-1", "mime_type": "image/jpeg"}}]) == 200
 deadline = time.time() + 5
 while time.time() < deadline and app.load_session(AID, "wa-5491112345678")["history"][-1].get("media") is None:
     time.sleep(0.05)
 last = app.load_session(AID, "wa-5491112345678")["history"][-1]
-assert last["text"] == "[imagen]" and last["media"] == {"type": "image", "id": "img-1", "mime": "image/jpeg"}, last
+assert last["text"] == "[imagen]" and last["media"]["type"] == "image" and "al descargar" in last["media"]["error"], last
 wait(0)
 
 # --- Telegram: conectar el webhook genera el secreto y llama a setWebhook

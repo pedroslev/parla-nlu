@@ -20,6 +20,17 @@ window.fileCard = (f) => f?.mime?.startsWith('image/')
   : h('a', { class: 'file-card', href: f.url, target: '_blank', rel: 'noopener', title: t('Abrir o descargar {name}', { name: f.name }) },
     icon('clip'), h('span', {}, h('strong', {}, f.name), h('small', {}, fileSize(f.size || 0) + ' · ' + t('Abrir o descargar'))));
 
+// lo que mandó el cliente por WhatsApp o Telegram (history[].media): foto, audio, video, documento o ubicación
+window.mediaView = (m) => !m ? null
+  : m.error && !m.url ? h('small', { class: 'help', style: 'display:block;font-size:12px' }, t('El archivo no se guardó: {error}', { error: m.error }))
+  : m.type === 'location' && m.lat != null ? h('a', { class: 'file-card', href: 'https://www.openstreetmap.org/?mlat=' + m.lat + '&mlon=' + m.lng + '#map=17/' + m.lat + '/' + m.lng, target: '_blank', rel: 'noopener' },
+    icon('globe'), h('span', {}, h('strong', {}, m.name || t('Ubicación')), h('small', {}, t('Ver en el mapa'))))
+  : !m.url ? null
+  : m.type === 'audio' ? h('span', { style: 'display:block;margin-top:6px' }, h('audio', { controls: '', preload: 'none', src: m.url, 'aria-label': t('Audio del cliente') }),
+    m.transcript ? h('small', { style: 'display:block;font-size:12px;opacity:.8' }, t('Transcripción del audio')) : null)
+  : m.type === 'video' ? h('video', { class: 'file-img', controls: '', preload: 'none', src: m.url, 'aria-label': t('Video del cliente') })
+  : window.fileCard({ url: m.url, name: m.name || m.type, mime: m.mime, size: m.size });
+
 const fl = { agent: null, loaded: false, list: [], busy: false, error: '' };
 async function flLoad() {
   Object.assign(fl, { agent: agent.id, loaded: false, list: [], error: '' });

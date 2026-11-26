@@ -314,7 +314,7 @@ function svDetail(s, redraw) {
         : [t('No entendió qué quería')];
       const where = m.flow ? ' · ' + (m.waiting ? t('en «{flow}», esperando {slot}', { flow: m.flow, slot: m.waiting }) : t('en «{flow}»', { flow: m.flow })) : '';
       const missed = !m.answer_to && (!m.intent || m.fallback);
-      return [h('div', { class: 'msg user' }, m.text), stamp(m, 'user'),
+      return [h('div', { class: 'msg user' }, m.text, window.mediaView(m.media)), stamp(m, 'user'),
         missed ? h('div', { class: 'sv-miss' }, t('No lo entendió')) : null,
         h('div', { class: 'read sv-tech' }, read, ents, where, m.via ? ' · ' + t('respondió {who}', { who: m.via === 'ia' ? t('la IA') : m.via === 'knowledge' ? t('Conocimiento') : m.via }) : '')];
     }

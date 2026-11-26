@@ -31,6 +31,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Inbound media on WhatsApp and Telegram: files are downloaded (16 MB, allowed types only), stored per conversation
+  (served only to users who can see the agent's conversations, deleted with the conversation), voice notes are
+  transcribed with the agent's ASR and answered, locations/contacts arrive as slot-friendly text, `media` is available
+  in steps (`{{ media.url }}`), optional image description with `ai.vision`. Inbox and Conversations show thumbnails,
+  an audio player and file links ([docs/channels.md](docs/channels.md#how-each-thing-is-sent)).
+- WhatsApp templates from the Inbox and `POST …/sessions/{sid}/messages` outside the 24-hour window (`template`
+  field, `409 template_required` with the catalog otherwise) and `GET /api/v1/bots/{bot}/outbound[/{id}]` send status
+  ([docs/outbound.md](docs/outbound.md#send-status-api)). In-app API docs: real-time voice WebSocket, send status, media.
+
 - Real-time voice over WebSocket ([docs/ai-and-voice.md](docs/ai-and-voice.md#real-time-voice)): streaming ASR
   (Deepgram live with partials and endpointing; otherwise a VAD that sends each utterance to the usual ASR), TTS from
   the first sentence of the reply (streaming HTTP for OpenAI, Deepgram Aura and ElevenLabs) and true barge-in (audio

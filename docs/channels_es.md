@@ -95,9 +95,26 @@ en Telegram), viaja como `#n` y Parla lo traduce al valor de ese botón.
 Lo que llega de la persona:
 
 - Texto, botones y elecciones de la lista van al bot como un mensaje.
-- Imágenes, audios, documentos, videos, stickers y ubicaciones no se descargan: el bot recibe el epígrafe o un
-  marcador (`[imagen]`, `[audio]`…), y la conversación guarda `media` (`type`, `id`, `mime`) para que quien lee la
-  Bandeja sepa que llegó algo. Los audios no se transcriben.
+- **Archivos** (imágenes, audios, documentos, videos, stickers): se descargan (WhatsApp: `GET /{media-id}` → `url` →
+  `GET` con el token; Telegram: `getFile` → `file_path`), hasta 16 MB, 30 s como máximo, solo imágenes, audio, video,
+  PDF, Office, texto, CSV y zip (nunca HTML/SVG). Se guardan con los archivos del agente pero atados a la conversación:
+  no salen en la lista de archivos del bot, `/files/…` los sirve solo a quien ve las conversaciones de ese agente
+  (sesión o clave de API) y se borran con la conversación (borrado por API o retención). Muy grande o de un tipo no
+  permitido: no se guarda, el bot recibe el marcador (`[imagen]`, `[documento]`…) y `media.error` dice por qué.
+- **Notas de voz y audios**: se transcriben con el ASR del agente (**IA y voz → Reconocimiento de voz**; Whisper local
+  o un proveedor, con el costo en el turno) y el texto le llega al bot como el mensaje de la persona. El historial
+  guarda el texto más `media.url` y `media.transcript` (tapados como el resto con la redacción de datos personales).
+  Si el ASR falla, el bot recibe `[audio sin transcribir]` y contesta su «no entendí».
+- El turno recibe `media`: `{type, url, mime, name, size, caption, transcript}`, que se usa en los pasos como
+  `{{ media.url }}`, `{{ media.type }}`, `{{ media.caption }}` (solo en el turno que lo trajo; `{{ }}` con `media`
+  vacío da error, así que poné una condición). Una **ubicación** llega como texto que sirve para un slot
+  (`Nombre, dirección (-34.6037,-58.3816)` o `-34.6037,-58.3816`) con `media.lat`/`lng`/`name`/`address`; un
+  **contacto** como `Nombre +teléfono` con `media.name`/`phone`.
+- **Visión (opcional, apagada):** con `"ai": {"vision": true}` y un proveedor OpenAI, Claude o Gemini, cada imagen se
+  describe en una frase (`media.description`, con el costo de la IA) y los pasos de IA la ven junto al mensaje como
+  `[imagen: …]`. Intenciones y slots siguen recibiendo solo el epígrafe.
+- La Bandeja y Conversaciones muestran las fotos en miniatura, los audios con reproductor (y la transcripción como
+  mensaje), los archivos como enlace y las ubicaciones con un enlace al mapa.
 - En Telegram, `/start` empieza la conversación de cero (el evento `start`: corre el flujo `__start__`). WhatsApp no
   tiene ese evento: el primer mensaje va directo al bot y el flujo `__start__` no corre.
 
@@ -114,9 +131,9 @@ la persona del equipo desde la Bandeja se manda por el canal. **Devolver al bot*
 - **La ventana de 24 horas de WhatsApp.** WhatsApp solo deja mandar mensajes libres hasta 24 horas después del
   último mensaje de la persona. Pasado eso, hay que usar una **plantilla** aprobada. Cuando el bot escribe primero
   (la API de salida, campañas y recordatorios), la plantilla se elige sola de **Canales → WhatsApp → Plantillas
-  aprobadas** (`channels.whatsapp.templates`): ver [outbound_es.md](outbound_es.md). Una respuesta de la **Bandeja**
-  después de 24 horas sigue fallando (Meta responde el error 131047 y lo ves en **Canales → Último error**), porque la
-  Bandeja manda texto libre.
+  aprobadas** (`channels.whatsapp.templates`): ver [outbound_es.md](outbound_es.md). Desde la **Bandeja** (o la API
+  del contact center) después de 24 horas, Parla pide una de esas plantillas en vez de mandar texto libre: ver
+  [outbound_es.md](outbound_es.md#plantillas-desde-la-bandeja-y-el-contact-center).
 - El filtro de repetidos, el orden por conversación y el estado de **Canales** viven en memoria: se pierden al
   reiniciar y no funcionan con varias réplicas (corré una; ver [deployment_es.md](deployment_es.md)).
 - Si Meta o Telegram reintentan un mensaje justo después de reiniciar, podría contestarse dos veces.

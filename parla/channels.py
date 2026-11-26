@@ -27,15 +27,19 @@ import urllib.request
 import uuid
 from collections import OrderedDict
 
-from . import auth, costs, files, outbound, telemetry, vault
+from . import auth, costs, files, llm, outbound, telemetry, vault, voice
 
 CHANNELS = ("whatsapp", "telegram")
 SECRETS = {"whatsapp": ("WHATSAPP_TOKEN", "WHATSAPP_APP_SECRET", "WHATSAPP_VERIFY_TOKEN"),
            "telegram": ("TELEGRAM_TOKEN", "TELEGRAM_WEBHOOK_SECRET")}
 MAX_BODY = 1_000_000
 TIMEOUT = 10
+MEDIA_TIMEOUT = 30
 PLACEHOLDER = {"image": "[imagen]", "photo": "[imagen]", "document": "[documento]", "audio": "[audio]", "voice": "[audio]",
-               "video": "[video]", "sticker": "[sticker]", "location": "[ubicación]", "contacts": "[contacto]", "contact": "[contacto]"}
+               "video": "[video]", "video_note": "[video]", "sticker": "[sticker]", "location": "[ubicación]",
+               "venue": "[ubicación]", "contacts": "[contacto]", "contact": "[contacto]"}
+KIND = {"photo": "image", "voice": "audio", "video_note": "video", "contact": "contacts", "venue": "location"}   # un nombre por tipo
+UNHEARD = "[audio sin transcribir]"
 OPTIONS = {"es": "Opciones", "pt": "Opções", "en": "Options"}     # el botón que abre la lista de WhatsApp
 
 
@@ -137,6 +141,90 @@ def _post(agent_id, url, payload=None, body=None, ctype="application/json", toke
         except OSError as error:             # sin red, DNS, timeout
             if attempt == 2:
                 raise _failed(agent_id, "sin respuesta: %s" % getattr(error, "reason", error), 0) from None
+
+
+def _get(agent_id, url, token=None, limit=files.MAX_INBOUND):
+    """GET con tiempo máximo y tope de tamaño: (contenido, tipo). ChannelError si falla o se pasa del tope."""
+    if not url.startswith(("http://", "https://")):
+        raise _failed(agent_id, "dirección de descarga inválida", 0)
+    headers = {"Authorization": "Bearer " + token} if token else {}
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=MEDIA_TIMEOUT) as r:
+            body = r.read(limit + 1)
+            ctype = r.headers.get("Content-Type") or ""
+    except urllib.error.HTTPError as error:
+        raise _failed(agent_id, "HTTP %d al descargar" % error.code, error.code) from None
+    except OSError as error:
+        raise _failed(agent_id, "sin respuesta: %s" % getattr(error, "reason", error), 0) from None
+    if len(body) > limit:
+        raise ChannelError("el archivo es muy grande (máximo %d MB)" % (limit // 1024 // 1024))
+    return body, ctype
+
+
+def _download(agent_id, channel, media):
+    """El archivo de un mensaje entrante: (contenido, tipo, nombre). WhatsApp: GET /{media-id} -> url -> GET con el
+    token; Telegram: getFile -> file_path -> /file/bot<token>/<file_path>."""
+    if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,300}", str(media.get("id") or "")):
+        raise ChannelError("el mensaje no trae el id del archivo")
+    if channel == "whatsapp":
+        token = _secret(agent_id, "WHATSAPP_TOKEN")
+        info = json.loads(_get(agent_id, "%s/%s" % (_wa_api(), media["id"]), token, 100_000)[0] or b"{}")
+        if int(info.get("file_size") or 0) > files.MAX_INBOUND:
+            raise ChannelError("el archivo es muy grande (máximo %d MB)" % (files.MAX_INBOUND // 1024 // 1024))
+        body, ctype = _get(agent_id, str(info.get("url") or ""), token)
+        return body, media.get("mime") or info.get("mime_type") or ctype, media.get("name")
+    base = _tg_base(agent_id)
+    info = (json.loads(_get(agent_id, base + "getFile?file_id=" + urllib.parse.quote(media["id"]), None, 100_000)[0] or b"{}").get("result") or {})
+    if int(info.get("file_size") or 0) > files.MAX_INBOUND:
+        raise ChannelError("el archivo es muy grande (máximo %d MB)" % (files.MAX_INBOUND // 1024 // 1024))
+    path = str(info.get("file_path") or "")
+    if not re.fullmatch(r"[A-Za-z0-9_./-]{1,300}", path) or ".." in path:
+        raise ChannelError("Telegram no devolvió el archivo")
+    body, ctype = _get(agent_id, "%s/file/bot%s/%s" % (_tg_api(), _secret(agent_id, "TELEGRAM_TOKEN"), path))
+    mime = media.get("mime") or ("image/jpeg" if media["type"] == "image" else ctype)
+    return body, mime, media.get("name") or path.rpartition("/")[2]
+
+
+def _vision(agent, body, mime, lang):
+    """Con ai.vision: true y un proveedor que ve imágenes, una descripción corta de la foto para la IA. None si no."""
+    if not (agent.get("ai") or {}).get("vision") or not mime.startswith("image/"):
+        return None
+    cfg = llm.settings(agent)
+    if cfg.get("provider") not in llm.VISION:
+        return None
+    return llm.describe(cfg, body, mime, lang) or None
+
+
+def _media(agent, channel, sid, item):
+    """Descarga y guarda el archivo del mensaje, y arma lo que recibe el turno: (texto para el bot, media).
+    Un audio se transcribe con el ASR del agente; una ubicación o un contacto llegan como texto."""
+    app, media = auth._app(), dict(item["media"])
+    text, kind = item["text"], media["type"]
+    if kind in ("location", "contacts"):
+        return text, media
+    lang = ((app.load_session(agent["id"], sid) or {}).get("state") or {}).get("lang") or app.languages(agent)[0]
+    try:
+        body, mime, name = _download(agent["id"], channel, media)
+        saved = files.store(agent["id"], sid, name or kind, mime, body)
+    except (ChannelError, ValueError) as error:
+        _log(agent["id"], channel, "no se pudo guardar un archivo: %s" % error)
+        media.update(error=str(error))
+        return (UNHEARD if kind == "audio" else text), {k: v for k, v in media.items() if k != "id"}
+    media = {k: v for k, v in media.items() if k not in ("id", "mime")} | {"url": saved["url"], "file": saved["id"], "mime": saved["mime"],
+                                                                         "name": saved["name"], "size": saved["size"]}
+    if kind == "audio":
+        try:
+            heard = voice.transcribe(body, saved["mime"], lang, app.vocabulary(agent), voice.settings(agent)["asr"])
+            media["transcript"] = str((heard or {}).get("text") or "").strip()[:4000]
+        except Exception as error:  # noqa: BLE001 - sin ASR, formato raro: el bot recibe el aviso y contesta lo de siempre
+            _log(agent["id"], channel, "audio sin transcribir: %s" % error)
+            media["error"] = "no se pudo transcribir"
+        return media.get("transcript") or UNHEARD, media
+    try:
+        media["description"] = _vision(agent, body, saved["mime"], lang)
+    except Exception as error:  # noqa: BLE001 - la foto igual llega; solo falta la descripción
+        _log(agent["id"], channel, "no se pudo describir la imagen: %s" % error)
+    return text, {k: v for k, v in media.items() if v is not None}
 
 
 def _multipart(fields, field, name, mime, content):
@@ -244,6 +332,32 @@ def parse_statuses(agent, payload):
     return out
 
 
+def _place(loc):
+    """Una ubicación como texto que sirve para un slot («-34.6037,-58.3816» o «Nombre, dirección (-34.6, -58.3)»)."""
+    try:
+        lat, lng = float(loc.get("latitude")), float(loc.get("longitude"))
+    except (TypeError, ValueError, AttributeError):
+        return None
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        return None
+    name, address = (str(loc.get(k) or "").strip()[:200] for k in ("name", "address"))
+    where = ", ".join(p for p in (name, address) if p)
+    return {"type": "location", "lat": lat, "lng": lng, **({"name": name} if name else {}), **({"address": address} if address else {}),
+            "text": "%s (%s,%s)" % (where, lat, lng) if where else "%s,%s" % (lat, lng)}
+
+
+def _person(card):
+    """Un contacto compartido (WhatsApp contacts[0] o Telegram contact) -> {type, name, phone, text}."""
+    if not isinstance(card, dict):
+        return None
+    names = card.get("name") if isinstance(card.get("name"), dict) else {}
+    name = str(names.get("formatted_name") or " ".join(str(card.get(k) or "") for k in ("first_name", "last_name"))).strip()[:120]
+    phone = str(card.get("phone_number") or ((card.get("phones") or [{}])[0] or {}).get("phone") or "").strip()[:40]
+    if not (name or phone):
+        return None
+    return {"type": "contacts", **({"name": name} if name else {}), **({"phone": phone} if phone else {}), "text": " ".join(p for p in (name, phone) if p)}
+
+
 def parse_whatsapp(agent, payload):
     """Los mensajes de un webhook de WhatsApp para el número configurado (los «statuses» van por parse_statuses)."""
     out, phone_id = [], str(config(agent, "whatsapp").get("phone_number_id") or "")
@@ -261,9 +375,13 @@ def parse_whatsapp(agent, payload):
                     text = (inter.get("button_reply") or inter.get("list_reply") or {}).get("id")
                 elif kind == "button":            # respuesta rápida de una plantilla
                     text = (m.get("button") or {}).get("payload") or (m.get("button") or {}).get("text")
+                elif kind in ("location", "contacts"):
+                    media = _place(m.get("location")) if kind == "location" else _person((m.get("contacts") or [{}])[0])
+                    text = media.pop("text") if media else None
                 elif kind in PLACEHOLDER:
                     item = m.get(kind) if isinstance(m.get(kind), dict) else {}
-                    media = {"type": kind, "id": item.get("id"), "mime": item.get("mime_type")}
+                    media = {"type": KIND.get(kind, kind), "id": item.get("id"), "mime": item.get("mime_type"), "name": item.get("filename"),
+                             **({"caption": item["caption"]} if item.get("caption") else {}), **({"voice": True} if item.get("voice") else {})}
                     text = item.get("caption") or PLACEHOLDER[kind]
                 else:
                     continue                      # reacciones, mensajes que WhatsApp no soporta
@@ -285,10 +403,16 @@ def parse_telegram(update):
     else:
         text = message.get("text") or message.get("caption")
         kind = next((k for k in PLACEHOLDER if k in message), None)
-        if kind:
+        if kind in ("location", "venue", "contact"):
+            venue = message.get("venue") if isinstance(message.get("venue"), dict) else {}
+            media = (_place(dict(venue.get("location") or message.get("location") or {}, name=venue.get("title"), address=venue.get("address")))
+                     if kind != "contact" else _person(message["contact"]))
+            text = media.pop("text") if media else None
+        elif kind:
             item = message[kind][-1] if isinstance(message[kind], list) and message[kind] else message[kind]
-            media = {"type": kind, "id": (item or {}).get("file_id") if isinstance(item, dict) else None,
-                     "mime": (item or {}).get("mime_type") if isinstance(item, dict) else None}
+            item = item if isinstance(item, dict) else {}
+            media = {"type": KIND.get(kind, kind), "id": item.get("file_id"), "mime": item.get("mime_type"), "name": item.get("file_name"),
+                     **({"caption": message["caption"]} if message.get("caption") else {}), **({"voice": True} if kind == "voice" else {})}
             text = text or PLACEHOLDER[kind]
     if not isinstance(text, str) or not text.strip():
         return []
@@ -313,15 +437,12 @@ def _handle(agent_id, channel, item):
                     "environment": "production"}
             if not item.get("start"):
                 data["text"] = _resolve(app.load_session(agent_id, item["sid"]), item["text"])
-            status, body = app.api_v1("POST", ["bots", agent_id, "events"], data)
+            with costs.scope(agent_id, item["sid"], channel):     # la transcripción cuenta en el mismo turno
+                if item.get("media"):        # se descarga, se guarda y (si es audio) se transcribe: el bot recibe el texto
+                    data["text"], data["media"] = _media(app.load(agent_id), channel, item["sid"], item)
+                status, body = app.api_v1("POST", ["bots", agent_id, "events"], data)
             if status != 200:
                 raise ChannelError(body.get("error"))
-            if item.get("media"):            # que la Bandeja sepa que llegó un archivo (no se descarga)
-                record = app.load_session(agent_id, item["sid"])
-                last = next((h for h in reversed(record["history"]) if h["from"] == "user"), None)
-                if last is not None:
-                    last["media"] = item["media"]
-                    app.save_session(agent_id, record)
             _send(app.load(agent_id), channel, item["sid"], body.get("replies") or [], body.get("language"))
         except Exception as error:  # noqa: BLE001 - en un hilo: que quede en la consola y en el estado del canal
             _log(agent_id, channel, error)

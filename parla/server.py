@@ -1286,7 +1286,8 @@ def handle(agent, st, text, parse=parse):
     for slot in agent["slots"]:
         slots.setdefault(slot["name"], None)
     language_of(agent, st, text)
-    remember(st, "user", text)
+    seen = (slots.get("media") or {}).get("description") if isinstance(slots.get("media"), dict) else None
+    remember(st, "user", text + ("\n[imagen: %s]" % seen if seen else ""))     # ai.vision: la IA sabe qué hay en la foto
     st.pop("finished", None)
     out, trace = [], []
     empty = {"intent": None, "confidence": 0.0, "ranking": [], "entities": []}
@@ -1706,6 +1707,7 @@ def save_session(agent_id, record):
 def delete_session(agent_id, sid):
     db.q("DELETE FROM sessions WHERE agent_id = ? AND session_id = ?", (agent_id, sid))
     costs.forget(agent_id, session=sid)
+    files.prune(agent_id, session=sid)          # fotos y audios que mandó la persona
 
 
 def open_session(agent_id, sid, channel, environment="production"):
@@ -1832,7 +1834,26 @@ def measure(agent, record, result, text, was_handoff, sp):
         sp.set(**{"parla.message": cover(text), "parla.reply": cover(" / ".join(result["messages"]))})
 
 
-def converse(agent_id, record, text):
+MEDIA_KEYS = {"type": str, "url": str, "file": str, "mime": str, "name": str, "size": int, "caption": str, "transcript": str,
+              "description": str, "error": str, "voice": bool, "lat": float, "lng": float, "address": str, "phone": str}
+
+
+def inbound_media(agent_id, media):
+    """El archivo, la ubicación o el contacto que mandó la persona (channels.py), limpio: solo campos conocidos y una
+    url de /files/ de este agente (nada de direcciones de afuera en la Bandeja). None si no hay."""
+    if not isinstance(media, dict) or media.get("type") not in ("image", "audio", "video", "document", "sticker", "location", "contacts"):
+        return None
+    out = {}
+    for key, value in media.items():
+        kind = MEDIA_KEYS.get(key)
+        if kind and isinstance(value, bool) == (kind is bool) and isinstance(value, (int, float) if kind is float else kind):
+            out[key] = value[:4000] if kind is str else value
+    if "url" in out and not re.fullmatch(r"/files/%s/[A-Za-z0-9_-]{22}" % agent_id, out["url"]):
+        out.pop("url")
+    return out
+
+
+def converse(agent_id, record, text, media=None):
     """Un turno contra la última versión entrenada. Lo usan el chat de prueba y la API; queda guardado."""
     number, agent = session_agent(agent_id, record)
     snap = trained_for(agent_id, number)
@@ -1854,7 +1875,7 @@ def converse(agent_id, record, text):
         used = spent.take()          # lo que costó este turno (y el audio de antes, si vino por voz)
     nlu = result["nlu"]
     record["updated"] = now()
-    record["history"].append({"from": "user", "text": text, "at": record["updated"], "intent": nlu["intent"],
+    record["history"].append({"from": "user", "text": text, "at": record["updated"], **({"media": media} if media else {}), "intent": nlu["intent"],
                               "confidence": round(nlu["confidence"], 3), "answer_to": result["answer_to"],
                               "entities": [{"entity": e["entity"], "value": e["value"]} for e in nlu["entities"]],
                               "fallback": result["fallback"], "via": result["via"], **before,
@@ -2034,11 +2055,17 @@ def api_v1(method, parts, data, query=None, user=None, public=False):
             if not isinstance(text, str) or not text.strip():
                 return 400, {"error": "falta «text» con el mensaje de la persona"}
             sid = sid or uuid.uuid4().hex[:16]
+            media = inbound_media(agent["id"], data.get("media"))
             record = open_session(agent["id"], sid, channel, environment)
+            slots = record["state"].setdefault("slots", {})
+            if media:                   # {{ media.url }}, {{ media.type }}… en los pasos de este turno
+                slots["media"] = media
+            elif isinstance(slots.get("media"), dict) and "type" in slots["media"]:
+                slots.pop("media")
             stopped = outbound.inbound(agent, record, text)    # ventana de 24 h, «respondió» y bajas (STOP, BAJA…)
             if stopped:
                 return 200, optout_turn(agent, record, text.strip()[:4000], stopped)
-            result = converse(agent["id"], record, text.strip()[:4000])
+            result = converse(agent["id"], record, text.strip()[:4000], media)
             return 200, dict(session_info(agent, record), messages=result["messages"], understood={
                 key: next(h for h in reversed(record["history"]) if h["from"] == "user")[key]
                 for key in ("intent", "confidence", "entities", "answer_to")}, **turn_fields(result, record))
@@ -2054,6 +2081,8 @@ def api_v1(method, parts, data, query=None, user=None, public=False):
         if public:
             return 403, {"error": "pedido rechazado"}
         return outbound.api_send(agent, data)
+    if rest[:1] == ["outbound"] and len(rest) <= 2 and method == "GET":     # el estado de los envíos
+        return (403, {"error": "pedido rechazado"}) if public else outbound.api_status(agent, rest[1:], query)
     if len(rest) == 3 and rest[0] == "sessions" and rest[2] == "messages" and method == "GET":
         # lo nuevo desde el índice «after»: así el widget recibe lo que escribe la persona de la bandeja
         # ponytail: el historial se recorta a MAX_HISTORY y corre los índices; usar ids si las charlas son muy largas
@@ -2087,7 +2116,8 @@ def api_v1(method, parts, data, query=None, user=None, public=False):
         if record is None:
             return 404, {"error": "no hay una conversación «%s» con este bot" % sid}
         if method == "GET":
-            return 200, dict(session_info(agent, record), history=record["history"], usage=costs.session_usage(agent["id"], sid))
+            return 200, dict(session_info(agent, record), history=record["history"], usage=costs.session_usage(agent["id"], sid),
+                             **whatsapp_window(agent, record))
         if method == "DELETE":
             delete_session(agent["id"], sid)
             return 200, {"sessionId": sid, "deleted": True}
@@ -2184,14 +2214,18 @@ def contact_center(agent, sid, what, data, user_name):
         return 409, {"error": "esa conversación ya terminó"}
     if what == "messages":
         text = str(data.get("text") or "").strip()[:4000]
-        if not text:
+        if not text and not (record.get("channel") == "whatsapp" and data.get("template")):
             return 400, {"error": "falta «text» con lo que le querés escribir"}
         who = str(data.get("from_name") or user_name or "Contact center").strip()[:60]
         channel = record.get("channel")
         if channel == "phone":
             return 409, {"error": "es una llamada: no se le pueden mandar mensajes de texto"}
-        if channel == "whatsapp" and not outbound.in_window(record):
-            return 409, {"error": "pasaron más de 24 horas desde el último mensaje de la persona: WhatsApp solo deja escribirle con una plantilla aprobada (POST /outbound)"}
+        if channel == "whatsapp" and (data.get("template") or not outbound.in_window(record)):
+            sent = operator_template(agent, record, data.get("template"))
+            if sent[0] != 200:
+                return sent
+            record = human(agent["id"], sid, "reply", sent[1]["text"], who, relay=False, template=sent[1]["template"])
+            return 200, dict(session_info(agent, record), delivered=True, template=sent[1]["template"]["name"])
         if channel in channels.CHANNELS:
             try:
                 channels.send_now(agent["id"], record, [{"text": text, "buttons": []}])
@@ -2217,12 +2251,34 @@ def contact_center(agent, sid, what, data, user_name):
     return 200, session_info(agent, record)
 
 
+def operator_template(agent, record, template):
+    """Fuera de las 24 h de WhatsApp una persona solo puede mandar una plantilla aprobada (Bandeja o contact center).
+    -> (200, {text, template}) o (409/400/502, {error, code, templates}) para que elija una."""
+    if not template:
+        return 409, {"error": "pasaron más de 24 horas desde el último mensaje de la persona: WhatsApp solo deja escribirle con una plantilla aprobada. Elegí una en «template»",
+                     "code": "template_required", "templates": outbound.catalog(agent)}
+    try:
+        return 200, outbound.operator_template(agent, record, template)
+    except outbound.OutboundError as error:
+        return 400, {"error": str(error), "code": "template_invalid", "templates": outbound.catalog(agent)}
+    except channels.ChannelError as error:
+        return 502, {"error": "no se pudo enviar: %s" % outbound.explain("whatsapp", error)[0]}
+
+
+def whatsapp_window(agent, record):
+    """Para la Bandeja: ¿se le puede escribir texto libre? Si no, las plantillas para elegir."""
+    if record.get("channel") != "whatsapp":
+        return {}
+    is_open = outbound.in_window(record)
+    return {"whatsapp_window": {"open": is_open, **({} if is_open else {"templates": outbound.catalog(agent)})}}
+
+
 def inbox(agent_id):
     """Conversaciones que atiende (o espera) una persona, la más reciente primero."""
     return {"sessions": [dict(session_summary(r), handoff=r["handoff"]) for r in sessions_of(agent_id, {"handoff": True})]}
 
 
-def human(agent_id, sid, action, text, who, data=None, flow=None, resolution=None, relay=True):
+def human(agent_id, sid, action, text, who, data=None, flow=None, resolution=None, relay=True, template=None):
     """Una persona toma la charla (take / accept), le escribe (reply), la devuelve al bot (release, con data para los
     slots y flow para seguir) o la cierra (close, con resolution). Lo usan la Bandeja, la API del contact center
     externo y el tiempo máximo del handoff. Devuelve el registro o None."""
@@ -2245,7 +2301,7 @@ def human(agent_id, sid, action, text, who, data=None, flow=None, resolution=Non
         record["history"].append({"from": "event", "text": "La tomó %s" % who, "at": at})
     if action == "reply":
         state["handoff"]["by"] = state["handoff"].get("by") or who
-        record["history"].append({"from": "human", "text": text, "at": at, "by": who})
+        record["history"].append({"from": "human", "text": text, "at": at, "by": who, **({"template": template} if template else {})})
         remember(state, "bot", text)
     result = None
     if action == "release":
@@ -2366,6 +2422,8 @@ class Handler(BaseHTTPRequestHandler):
         served = method == "GET" and re.fullmatch(r"/files/([0-9a-f]{8})/([A-Za-z0-9_-]{22})", urllib.parse.urlsplit(self.path).path)
         if served:      # archivos de un paso «Enviar un archivo»: públicos para el widget y la API, el id aleatorio es la llave
             found = files.read(*served.groups())
+            if found and files.session_of(*served.groups()) and not auth.sees(self, served.group(1)):
+                found = None            # lo que mandó una persona (foto, audio): solo quien ve las conversaciones del agente
             if not found:
                 return self.reply({"error": "no existe"}, 404)
             self.extra_headers = dict(found[1])
@@ -2694,12 +2752,19 @@ class Handler(BaseHTTPRequestHandler):
         elif action and action.startswith("sessions/") and method == "POST":   # reply | take | release
             _, sid, what = action.split("/")
             text = str(data.get("text") or "").strip()[:4000]
-            if what == "reply" and not text:
+            if what == "reply" and not text and not data.get("template"):
                 return self.reply({"error": "falta «text» con lo que le querés escribir"}, 400)
             held = ((load_session(agent_id, sid) or {}).get("handoff") or {})
             if what in ("take", "reply") and held.get("active") and held.get("mode") == "external":
                 return self.reply({"error": "la atiende el contact center externo: desde la Bandeja solo se puede mirar"}, 409)
             who = (getattr(self, "user", None) or {}).get("name") or "Persona"
+            current = load_session(agent_id, sid) or {}
+            if what == "reply" and current.get("channel") == "whatsapp" and (data.get("template") or not outbound.in_window(current)):
+                status, sent = operator_template(load(agent_id), current, data.get("template"))   # fuera de las 24 h: plantilla
+                if status != 200:
+                    return self.reply(sent, status)
+                record = human(agent_id, sid, what, sent["text"], who, relay=False, template=sent["template"])
+                return self.reply(dict(session_info(load(agent_id), record), history=record["history"]))
             record = human(agent_id, sid, what, text, who)
             if record is None:
                 return self.reply({"error": "no existe esa conversación"}, 404)
@@ -2905,7 +2970,8 @@ PII_IDLE_HOURS = 24      # con pii_redaction: una charla quieta tanto tiempo se 
 def cleanup():
     """Retención, al arrancar y cada hora: conversaciones sin movimiento en retention_days del agente (si no lo
     tiene, PARLA_RETENTION_DAYS; 0 o nada = para siempre), logins vencidos y auditoría de más de PARLA_AUDIT_DAYS (365).
-    Los archivos del paso «Enviar un archivo» son del agente, no de cada conversación: no se tocan."""
+    Los archivos del paso «Enviar un archivo» son del agente, no de cada conversación: no se tocan; los que mandó la
+    persona (fotos, audios) se borran con su conversación."""
     default = _days(os.environ.get("PARLA_RETENTION_DAYS"))
     for (agent_id,) in db.q("SELECT DISTINCT agent_id FROM sessions"):
         agent = settings_of(agent_id)
@@ -2914,6 +2980,7 @@ def cleanup():
         if days:
             db.q("DELETE FROM sessions WHERE agent_id = ? AND updated < ?", (agent_id, ago(days)))
             costs.forget(agent_id, before=ago(days))
+            files.prune(agent_id, keep={sid for (sid,) in db.q("SELECT session_id FROM sessions WHERE agent_id = ?", (agent_id,))})
         if pii.categories(agent.get("pii_redaction")):
             idle = db.q("SELECT record FROM sessions WHERE agent_id = ? AND updated < ? AND handoff = 0 AND json_extract(record, '$.ended') = 0",
                         (agent_id, ago(PII_IDLE_HOURS / 24)))

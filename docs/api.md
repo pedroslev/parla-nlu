@@ -213,6 +213,12 @@ values and `data` come with personal data masked («[email]», «[teléfono]», 
 [{"kind", "group", "provider", "model", "qty", "unit", "cost", "priced"}]}`); `user` history entries carry the turn's
 `usage` (`{"kind|provider|model": qty}`). See [costs.md](costs.md).
 
+Messages that came over WhatsApp or Telegram with a file, voice note, location or contact carry `media` in the
+history (`{type, url, mime, name, size, caption, transcript, description, lat, lng, phone, error}`; see
+[channels.md](channels.md#how-each-thing-is-sent)). `POST /events` also accepts `media`, but `url` is kept only if it
+is a `/files/` of this bot. WhatsApp conversations also carry `whatsapp_window: {open, templates?}` (closed = only a
+template, see [outbound.md](outbound.md#templates-from-the-inbox-and-the-contact-center)).
+
 ### `GET /api/v1/bots/{bot}/sessions/{sessionId}/messages?after=N`
 
 What's new since index `N` (the `next` of the previous response). Use it to receive what a person writes from the
@@ -346,6 +352,18 @@ curl -s http://127.0.0.1:8000/api/v1/bots/clinica/outbound \
 - 409: outside the window without a template, the person opted out, or a person is handling the conversation.
   429: more than `agent.outbound.api_per_minute` (default 30) per minute. 502: the channel rejected it.
 
+### `GET /api/v1/bots/{bot}/outbound/{id}` and `GET /api/v1/bots/{bot}/outbound`
+
+The status of a send (`id` from `POST /outbound`) or the list, newest first, with `?to=&status=&from=&to_date=`
+(plus `kind`, `channel`, `limit`). Analyst or above, or an `integration` key. Fields and statuses in
+[outbound.md](outbound.md#send-status-api).
+
+```json
+{"id": 17, "kind": "api", "channel": "whatsapp", "to": "5491112345678", "status": "delivered", "error": null,
+ "attempts": 0, "sessionId": "wa-5491112345678", "message_id": "wamid.HBgN…", "campaign": null,
+ "created": "2026-11-26T10:00:00", "sent_at": "2026-11-26T10:00:01", "updated": "2026-11-26T10:00:05"}
+```
+
 ### Contact center (external handoff)
 
 For a contact center outside Parla ([contact-centers.md](contact-centers.md)). Owner/editor key or an
@@ -413,7 +431,9 @@ chat. Behind a proxy, add your domain to `PARLA_HOSTS` (see [deployment.md](depl
 
 The files sent by a `file` step (`{agente}` is the agent). Outside `/api/` and without login: the `fileId` is random
 (22 characters) and acts as the key. They are served with the type based on the extension and
-`X-Content-Type-Options: nosniff`; PDFs, images and TXT open in the browser, everything else is downloaded.
+`X-Content-Type-Options: nosniff`; PDFs, images and TXT open in the browser, everything else is downloaded. Media a customer sent
+over WhatsApp/Telegram (`history[].media.url`) also lives here, but only for a session or API key that can see the
+agent's conversations (404 otherwise), and it's deleted with the conversation.
 
 ## Internal API
 

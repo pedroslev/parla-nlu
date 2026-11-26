@@ -212,6 +212,12 @@ valores de las entidades y `data` vienen con los datos personales tapados («[em
 [{"kind", "group", "provider", "model", "qty", "unit", "cost", "priced"}]}`); las entradas `user` del historial traen
 el `usage` del turno (`{"kind|provider|model": cantidad}`). Ver [costs_es.md](costs_es.md).
 
+Los mensajes que llegaron por WhatsApp o Telegram con un archivo, nota de voz, ubicación o contacto traen `media` en
+el historial (`{type, url, mime, name, size, caption, transcript, description, lat, lng, phone, error}`; ver
+[channels_es.md](channels_es.md#cómo-se-manda-cada-cosa)). `POST /events` también acepta `media`, pero `url` solo
+queda si es un `/files/` de este bot. Las conversaciones de WhatsApp también traen `whatsapp_window: {open, templates?}`
+(cerrada = solo una plantilla, ver [outbound_es.md](outbound_es.md#plantillas-desde-la-bandeja-y-el-contact-center)).
+
 ### `GET /api/v1/bots/{bot}/sessions/{sessionId}/messages?after=N`
 
 Lo nuevo desde el índice `N` (el `next` de la respuesta anterior). Sirve para recibir lo que escribe una persona
@@ -348,6 +354,18 @@ curl -s http://127.0.0.1:8000/api/v1/bots/clinica/outbound \
 - 409: fuera de la ventana sin plantilla, la persona se dio de baja, o una persona está atendiendo la conversación.
   429: más de `agent.outbound.api_per_minute` (30 por defecto) por minuto. 502: el canal lo rechazó.
 
+### `GET /api/v1/bots/{bot}/outbound/{id}` y `GET /api/v1/bots/{bot}/outbound`
+
+El estado de un envío (`id` de `POST /outbound`) o la lista, el más nuevo primero, con `?to=&status=&from=&to_date=`
+(más `kind`, `channel`, `limit`). Analista o más, o una clave `integration`. Campos y estados en
+[outbound_es.md](outbound_es.md#api-de-estado-de-los-envíos).
+
+```json
+{"id": 17, "kind": "api", "channel": "whatsapp", "to": "5491112345678", "status": "delivered", "error": null,
+ "attempts": 0, "sessionId": "wa-5491112345678", "message_id": "wamid.HBgN…", "campaign": null,
+ "created": "2026-11-26T10:00:00", "sent_at": "2026-11-26T10:00:01", "updated": "2026-11-26T10:00:05"}
+```
+
 ### Contact center (derivación externa)
 
 Para un contact center fuera de Parla ([contact-centers_es.md](contact-centers_es.md)). Clave de dueño/editor o una
@@ -416,7 +434,9 @@ del widget. Detrás de un proxy, sumá tu dominio a `PARLA_HOSTS` (ver [deployme
 
 Los archivos que manda un paso `file`. Fuera de `/api/` y sin login: el `fileId` es aleatorio (22 caracteres) y hace
 de llave. Se sirven con el tipo según la extensión y `X-Content-Type-Options: nosniff`; PDF, imágenes y TXT se
-abren en el navegador, el resto se descarga.
+abren en el navegador, el resto se descarga. Lo que mandó un cliente por
+WhatsApp/Telegram (`history[].media.url`) también vive acá, pero solo para una sesión o clave que vea las
+conversaciones del agente (si no, 404), y se borra con la conversación.
 
 ## API interna
 

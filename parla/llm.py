@@ -431,7 +431,7 @@ def _gemini(cfg, messages, schema, timeout, max_tokens, sink=None):
     if not cfg.get("api_key"):
         raise LLMError("falta la API key: guardala en «Claves» como %s" % cfg.get("api_key_secret"), 401)
     system = "\n\n".join(m["content"] for m in messages if m.get("role") == "system")
-    contents = [{"role": "model" if m["role"] == "assistant" else "user", "parts": [{"text": m["content"]}]}
+    contents = [{"role": "model" if m["role"] == "assistant" else "user", "parts": m.get("parts") or [{"text": m["content"]}]}
                 for m in messages if m.get("role") in ("user", "assistant")]
     url = "%s/v1beta/models/%s:generateContent" % (cfg["url"], urllib.parse.quote(cfg["model"], safe=".-_"))
     plain = schema and cfg["model"] in _gemini_plain
@@ -475,6 +475,26 @@ def _gemini(cfg, messages, schema, timeout, max_tokens, sink=None):
     if candidate.get("finishReason") == "MAX_TOKENS" and not text:
         raise LLMError("la respuesta se cortó: el modelo llegó al máximo de tokens")
     return _first_json(text) if schema else text
+
+
+VISION = ("openai", "anthropic", "gemini")     # proveedores que ven imágenes (ai.vision: true en el agente)
+DESCRIBE = {"es": "Describí esta imagen en una o dos frases, con el texto que se lea en ella.",
+            "en": "Describe this image in one or two sentences, including any text you can read.",
+            "pt": "Descreva esta imagem em uma ou duas frases, com o texto que dá para ler nela."}
+
+
+def describe(cfg, image, mime, language="es"):
+    """Una descripción corta de una foto que mandó la persona (solo con ai.vision). El mensaje va en el formato de cada uno."""
+    cfg = _cfg(cfg)
+    ask, data = DESCRIBE.get((language or "es")[:2], DESCRIBE["es"]), __import__("base64").b64encode(image).decode()
+    if cfg["provider"] == "anthropic":
+        content = [{"type": "image", "source": {"type": "base64", "media_type": mime, "data": data}}, {"type": "text", "text": ask}]
+        message = {"role": "user", "content": content}
+    elif cfg["provider"] == "gemini":
+        message = {"role": "user", "content": ask, "parts": [{"inline_data": {"mime_type": mime, "data": data}}, {"text": ask}]}
+    else:
+        message = {"role": "user", "content": [{"type": "text", "text": ask}, {"type": "image_url", "image_url": {"url": "data:%s;base64,%s" % (mime, data)}}]}
+    return chat(cfg, [message], timeout=30, max_tokens=200)[:600]
 
 
 def chat(cfg, messages, schema=None, timeout=45, max_tokens=300, stream=None):

@@ -90,9 +90,26 @@ WhatsApp, 64 on Telegram), it travels as `#n` and Parla translates it back to th
 What comes from the person:
 
 - Text, buttons and list choices go to the bot as a message.
-- Images, audio, documents, videos, stickers and locations aren't downloaded: the bot receives the caption or a
-  placeholder (`[imagen]`, `[audio]`…), and the conversation keeps `media` (`type`, `id`, `mime`) so whoever reads the
-  Inbox knows something arrived. Voice notes aren't transcribed.
+- **Media** (images, audio, documents, videos, stickers) is downloaded (WhatsApp: `GET /{media-id}` → `url` →
+  `GET` with the token; Telegram: `getFile` → `file_path`), 16 MB max, 30 s timeout, only images, audio, video, PDF,
+  Office, text, CSV and zip (never HTML/SVG). It's stored with the agent's files but tied to the conversation: it isn't
+  listed among the bot's files, `/files/…` serves it only to someone who can see that agent's conversations (session
+  or API key), and it's deleted with the conversation (API delete or retention). Too big or a disallowed type: not
+  stored, the bot gets the placeholder (`[imagen]`, `[documento]`…) and `media.error` says why.
+- **Voice notes and audio** are transcribed with the agent's ASR (**AI & voice → Speech recognition**; local Whisper
+  or a provider, cost recorded in the turn) and the transcript goes to the bot as the person's message. The history
+  keeps the text plus `media.url` and `media.transcript` (masked like the rest with PII redaction). If ASR fails, the
+  bot gets `[audio sin transcribir]` and answers its fallback.
+- The turn receives `media`: `{type, url, mime, name, size, caption, transcript}`, usable in steps as
+  `{{ media.url }}`, `{{ media.type }}`, `{{ media.caption }}` (only on the turn that brought it; `{{ }}` on a missing
+  `media` is an error, so guard it with a condition). A **location** arrives as slot-friendly text
+  (`Name, address (-34.6037,-58.3816)` or `-34.6037,-58.3816`) with `media.lat`/`lng`/`name`/`address`; a **contact** as
+  `Name +phone` with `media.name`/`phone`.
+- **Vision (optional, off):** with `"ai": {"vision": true}` and an OpenAI, Claude or Gemini provider, each image is
+  described in a sentence (`media.description`, AI cost recorded) and the AI steps see it next to the message as
+  `[imagen: …]`. Intents and slots still get only the caption.
+- Inbox and Conversations show photos as thumbnails, audio with a player (plus the transcript as the message), files
+  as links and locations with a map link.
 - On Telegram, `/start` starts the conversation from scratch (the `start` event: it runs the `__start__` flow).
   WhatsApp has no such event: the first message goes straight to the bot and the `__start__` flow doesn't run.
 
@@ -109,8 +126,9 @@ writes from the Inbox is sent through the channel. **Hand back to the bot** give
 - **WhatsApp's 24-hour window.** WhatsApp only allows free-form messages within 24 hours of the person's last
   message. After that, a message has to be an approved **template**. Writing first (the outbound API, campaigns
   and reminders) chooses the template on its own, from **Channels → WhatsApp → Approved templates**
-  (`channels.whatsapp.templates`): see [outbound.md](outbound.md). An **Inbox** reply after 24 hours still fails
-  (Meta answers error 131047, shown in **Channels → Last error**), because the Inbox sends free text.
+  (`channels.whatsapp.templates`): see [outbound.md](outbound.md). From the **Inbox** (or the contact-center API)
+  after 24 hours, Parla asks for one of those templates instead of sending free text: see
+  [outbound.md](outbound.md#templates-from-the-inbox-and-the-contact-center).
 - The duplicate filter, the per-conversation order and the status in **Channels** live in memory: they are lost on
   restart and don't work across several replicas (run one; see [deployment.md](deployment.md)).
 - If Meta or Telegram retry a message right after a restart, it could be answered twice.

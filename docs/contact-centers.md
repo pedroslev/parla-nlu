@@ -114,12 +114,13 @@ everything else is 403. It keeps the user's bot list. An analyst's key stays rea
 | `POST /api/v1/bots/{bot}/sessions/{sid}/handoff` | `{"action": "accept", "agent_name"?}` | Taken by an external agent (`handoff.by`). Starts the handoff if it wasn't active. |
 | | `{"action": "release", "data"?: {slot: value}, "flow"?: "name"}` | Back to the bot. `data` fills slots, `flow` runs (its replies reach the customer). |
 | | `{"action": "close", "resolution"?}` | Ends the conversation (`conversation.ended` with `resolution`). |
-| `POST /api/v1/bots/{bot}/sessions/{sid}/messages` | `{"text", "from_name"?}` | Delivers to the customer through the conversation's channel and records it as `human`. |
+| `POST /api/v1/bots/{bot}/sessions/{sid}/messages` | `{"text", "from_name"?, "template"?}` | Delivers to the customer through the conversation's channel and records it as `human`. `template` (WhatsApp): `{"name", "language"?, "params"?}`. |
 | `GET /api/v1/bots/{bot}/lookup?phone=…` \| `?chat=…` \| `?sid=…` | | The latest open conversation of that customer (handed-off first), with the same context as the webhook. 404 if none. |
 | `GET /api/v1/bots/{bot}/sessions/{sid}[/messages?after=N]` | | The conversation (already existing). |
 
 `messages` delivery: web widget (immediately via WebSocket/SSE), WhatsApp and Telegram (synchronous: `502` if the
-provider rejects it). WhatsApp outside the 24 h window → `409` (only an approved template, `POST /outbound`). A
+provider rejects it). WhatsApp outside the 24 h window without `template` → `409` `template_required` with the
+catalog in `templates`; send it again with `template` ([outbound.md](outbound.md#templates-from-the-inbox-and-the-contact-center)). A
 phone call → `409`. Channel `api` → only recorded (your client polls `…/messages`). An ended conversation → `409`.
 Audit: `handoff.accept`, `handoff.release`, `handoff.close`, `handoff.message`.
 

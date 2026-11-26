@@ -46,6 +46,11 @@ La lista se actualiza sola cada pocos segundos; **Actualizar** la fuerza.
 
 **Ver en Conversaciones** abre la misma conversación en el visor completo.
 
+Las fotos, notas de voz (con reproductor; la transcripción es el mensaje), archivos y ubicaciones que manda el
+cliente aparecen en la conversación. En **WhatsApp después de 24 horas** sin un mensaje del cliente, la caja de
+respuesta pasa a ser un **selector de plantilla**: elegí una plantilla aprobada, revisá los valores (completados con
+los datos de la conversación) y tocá **Enviar plantilla**. Cuando el cliente contesta, volvés a escribir normal.
+
 > No te olvides de devolverla. Mientras una conversación está en la Bandeja, el bot no habla en ella, aunque el
 > cliente vuelva mañana con una pregunta simple.
 

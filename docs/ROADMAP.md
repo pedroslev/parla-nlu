@@ -12,6 +12,11 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Shipped recently
 
+- **Inbound media**: WhatsApp/Telegram photos, documents and voice notes are downloaded and stored with the
+  conversation; voice notes are transcribed and answered; locations and contacts arrive as text; optional image
+  description for the AI (`ai.vision`). Templates from the Inbox and the contact-center API after 24 hours, and a
+  send status API (`GET …/outbound[/{id}]`).
+
 - **Costs per conversation**: tokens, audio minutes, characters, phone minutes and WhatsApp/Telegram messages
   measured per turn, priced with an owner-editable table (verified defaults with source and date), in Reports, the
   conversation viewer, campaigns, a costs API, CSV and Prometheus. The handoff AI summary no longer delays the turn.
@@ -73,8 +78,7 @@ Want to help or need something sooner? Open an issue or comment on an existing o
 
 ## Next
 
-- **Outbound, next steps**: answering machine detection on calls, a time zone per recipient, and delivery status
-  for single API sends.
+- **Outbound, next steps**: answering machine detection on calls and a time zone per recipient.
 
 ## Later
 

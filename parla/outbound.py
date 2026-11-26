@@ -243,6 +243,49 @@ def template_message(tpl, address, data):
             "template": {"name": tpl["name"], "language": {"code": str(tpl["language"])}, **({"components": components} if components else {})}}
 
 
+def _post_template(agent, sid, tpl, message):
+    token = channels._secret(agent["id"], "WHATSAPP_TOKEN")
+    phone_id = str(channels.config(agent, "whatsapp").get("phone_number_id") or "")
+    if not token or not re.fullmatch(r"\d{1,30}", phone_id):
+        raise OutboundError("falta la clave WHATSAPP_TOKEN o el «phone_number_id»")
+    sent = channels._post(agent["id"], "%s/%s/messages" % (channels._wa_api(), phone_id), message, token=token)
+    costs.record("whatsapp", "meta", "template:%s" % str(tpl.get("category") or "unknown").lower()[:30], 1,
+                 agent=agent["id"], session=sid, channel="whatsapp")
+    return sent
+
+
+def catalog(agent):
+    """Las plantillas aprobadas del agente (channels.whatsapp.templates), para elegir una desde la Bandeja."""
+    return [{k: t[k] for k in ("name", "language", "params", "category", "text") if k in t}
+            for t in channels.config(agent, "whatsapp").get("templates") or [] if isinstance(t, dict) and t.get("name")]
+
+
+def operator_template(agent, record, template):
+    """Una persona (Bandeja o contact center) le escribe fuera de las 24 h: manda una plantilla aprobada.
+    template: nombre o {name, language?, params?}; params es la lista de valores para {{1}}, {{2}}… y, si no viene,
+    salen de los slots de la conversación (los nombres de «params» del catálogo). -> {text (para el historial), template}."""
+    given = {"name": template} if isinstance(template, str) else template
+    if not isinstance(given, dict):
+        raise OutboundError("«template» tiene que ser el nombre de una plantilla o {name, language, params}")
+    found = next((t for t in catalog(agent) if t["name"] == given.get("name")), None)
+    if not found:
+        raise OutboundError("no existe la plantilla «%s» en Canales → WhatsApp → Plantillas" % str(given.get("name") or "")[:80])
+    names = [str(n) for n in found.get("params") or []]
+    values = given.get("params")
+    if isinstance(values, list):
+        names = [names[i] if i < len(names) else str(i + 1) for i in range(len(values))]
+        data = {names[i]: v for i, v in enumerate(values)}
+    elif values is None:
+        data = (record.get("state") or {}).get("slots") or {}
+    else:
+        raise OutboundError("«params» de la plantilla es la lista de valores para {{1}}, {{2}}…")
+    tpl = template_for(agent, {"name": found["name"], "language": given.get("language") or found.get("language"), "params": names})
+    sent = _post_template(agent, record["sessionId"], tpl, template_message(tpl, address_from_session(record["sessionId"])[1], data))
+    shown = [str(data.get(n)) for n in names]
+    return {"text": "[%s%s]" % (tpl["name"], ": " + " · ".join(shown) if shown else ""),
+            "template": {"name": tpl["name"], "message_id": ((sent.get("messages") or [{}])[0]).get("id")}}
+
+
 # ---------- enviar ----------
 
 def _production_flows(agent):
@@ -276,14 +319,7 @@ def send(agent, channel, to, data=None, flow=None, template=None, text=None, cam
         if not tpl:
             raise OutboundError("pasaron más de 24 horas desde el último mensaje de esa persona en WhatsApp (o nunca escribió): "
                                 "solo se puede mandar una plantilla aprobada. Elegí una en «template»", 409)
-        message = template_message(tpl, address, data)
-        token = channels._secret(agent["id"], "WHATSAPP_TOKEN")
-        phone_id = str(channels.config(agent, "whatsapp").get("phone_number_id") or "")
-        if not token or not re.fullmatch(r"\d{1,30}", phone_id):
-            raise OutboundError("falta la clave WHATSAPP_TOKEN o el «phone_number_id»")
-        sent = channels._post(agent["id"], "%s/%s/messages" % (channels._wa_api(), phone_id), message, token=token)
-        costs.record("whatsapp", "meta", "template:%s" % str(tpl.get("category") or "unknown").lower()[:30], 1,
-                     agent=agent["id"], session=sid, channel="whatsapp")
+        sent = _post_template(agent, sid, tpl, template_message(tpl, address, data))
         app.outbound_session(agent["id"], sid, channel, data, flow=None, campaign=campaign, on_reply=flow,
                              note="Se envió la plantilla «%s»" % tpl["name"])
         return {"sessionId": sid, "via": "template", "messages": [], "message_id": ((sent.get("messages") or [{}])[0]).get("id")}
@@ -912,6 +948,42 @@ def api_send(agent, data, now=None):
     cats = pii.categories(_app().settings_of(agent["id"]).get("pii_redaction"))
     _finish(row, agent["id"], channel, "sent", None, sent, dict(spec, data=pii.scrub(spec["data"], cats)) if cats else None)
     return 200, dict(sent, id=row, channel=channel, to=address, status="sent")
+
+
+ROW = "id, kind, channel, address, status, error, attempts, session_id, message_id, campaign_id, created, sent_at, updated"
+
+
+def _row(r):
+    return dict(zip(("id", "kind", "channel", "to", "status", "error", "attempts", "sessionId", "message_id", "campaign",
+                     "created", "sent_at", "updated"), r))
+
+
+def api_status(agent, rest, query):
+    """GET /api/v1/bots/{bot}/outbound[/{id}]: el estado de un envío (el id que devolvió POST /outbound) o la lista,
+    con ?to=&status=&from=&to_date=&kind=&limit=. -> (status, cuerpo)."""
+    if rest:
+        if not re.fullmatch(r"\d{1,18}", rest[0]):
+            return 404, {"error": "no existe ese envío"}
+        rows = db.q("SELECT %s FROM campaign_recipients WHERE agent_id = ? AND id = ?" % ROW, (agent["id"], int(rest[0])))
+        return (200, _row(rows[0])) if rows else (404, {"error": "no existe ese envío"})
+    where, args = ["agent_id = ?"], [agent["id"]]
+    if query.get("to"):
+        try:
+            where, args = where + ["address = ?"], args + [address_of(query.get("channel") or "whatsapp", query["to"])]
+        except OutboundError as error:
+            return error.status, {"error": str(error)}
+    for key, sql in (("status", "status = ?"), ("kind", "kind = ?"), ("channel", "channel = ?"), ("from", "created >= ?"), ("to_date", "created <= ?")):
+        if query.get(key):
+            value = str(query[key])
+            where, args = where + [sql], args + [value + "T23:59:59" if key == "to_date" and len(value) == 10 else value]
+    if query.get("status") and query["status"] not in STATUSES:
+        return 400, {"error": "«status» tiene que ser uno de: %s" % ", ".join(STATUSES)}
+    try:
+        limit = min(500, max(1, int(query.get("limit") or 100)))
+    except ValueError:
+        return 400, {"error": "«limit» tiene que ser un número"}
+    rows = db.q("SELECT %s FROM campaign_recipients WHERE %s ORDER BY id DESC LIMIT ?" % (ROW, " AND ".join(where)), args + [limit])
+    return 200, {"outbound": [_row(r) for r in rows]}
 
 
 def gauge_rows():

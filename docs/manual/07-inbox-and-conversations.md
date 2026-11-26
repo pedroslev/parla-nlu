@@ -45,6 +45,11 @@ The list refreshes on its own every few seconds; **Refresh** forces it.
 
 **View in Conversations** opens the same conversation in the full viewer.
 
+Photos, voice notes (with a player; the transcript is the message), files and locations the customer sends show up
+in the conversation. On **WhatsApp after 24 hours** without a message from the customer, the reply box becomes a
+**template picker**: choose an approved template, check the values (prefilled from the conversation's data) and
+click **Send template**. When the customer replies, you can write normally again.
+
 > Don't forget to hand it back. While a conversation is in the Inbox, the bot stays silent in it, even if the
 > customer comes back tomorrow with a simple question.
 

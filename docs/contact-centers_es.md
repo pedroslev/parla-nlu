@@ -94,12 +94,13 @@ Clave de API Bearer de un dueño o editor, o mejor una **clave de integración**
 | `POST /api/v1/bots/{bot}/sessions/{sid}/handoff` | `{"action": "accept", "agent_name"?}` | La toma un agente externo (`handoff.by`). Si no estaba en handoff, la pasa. |
 | | `{"action": "release", "data"?: {slot: valor}, "flow"?: "nombre"}` | Vuelve al bot. `data` llena slots, `flow` corre (sus respuestas le llegan a la persona). |
 | | `{"action": "close", "resolution"?}` | Termina la conversación (`conversation.ended` con `resolution`). |
-| `POST /api/v1/bots/{bot}/sessions/{sid}/messages` | `{"text", "from_name"?}` | Se lo entrega a la persona por el canal de la conversación y queda como `human`. |
+| `POST /api/v1/bots/{bot}/sessions/{sid}/messages` | `{"text", "from_name"?, "template"?}` | Se lo entrega a la persona por el canal de la conversación y queda como `human`. `template` (WhatsApp): `{"name", "language"?, "params"?}`. |
 | `GET /api/v1/bots/{bot}/lookup?phone=…` \| `?chat=…` \| `?sid=…` | | La última conversación abierta de esa persona (primero las derivadas), con el mismo contexto que el webhook. 404 si no hay. |
 | `GET /api/v1/bots/{bot}/sessions/{sid}[/messages?after=N]` | | La conversación (ya existía). |
 
 Entrega de `messages`: widget web (enseguida por WebSocket/SSE), WhatsApp y Telegram (en el momento: `502` si el
-proveedor lo rechaza). WhatsApp fuera de la ventana de 24 h → `409` (solo una plantilla aprobada, `POST /outbound`).
+proveedor lo rechaza). WhatsApp fuera de la ventana de 24 h sin `template` → `409` `template_required` con el
+catálogo en `templates`; mandalo de nuevo con `template` ([outbound_es.md](outbound_es.md#plantillas-desde-la-bandeja-y-el-contact-center)).
 Una llamada → `409`. Canal `api` → solo queda guardado (tu cliente consulta `…/messages`). Conversación terminada →
 `409`. Auditoría: `handoff.accept`, `handoff.release`, `handoff.close`, `handoff.message`.
 

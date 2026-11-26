@@ -61,12 +61,33 @@ window.inboxView = () => {
   const act = async (what, payload) => {
     note.textContent = '';
     try { await api('POST', '/' + agent.id + '/sessions/' + encodeURIComponent(ibSel) + '/' + what, payload); await refresh(); return true; }
-    catch (e) { note.textContent = t('No se pudo: {error}.', { error: e.message }); return false; }
+    catch (e) {
+      note.textContent = t('No se pudo: {error}.', { error: e.message });
+      if (e.data?.code === 'template_required') { openSig = ''; await refresh(); note.textContent = t('Pasaron más de 24 horas: elegí una plantilla.'); }
+      return false;
+    }
   };
   async function send() {
     const t = text.value.trim();
     if (!t) return;
     if (await act('reply', { text: t })) text.value = '';
+  }
+
+  // WhatsApp fuera de las 24 h: solo una plantilla aprobada, con los valores sacados de los datos de la charla
+  function templatePicker(s) {
+    const list = s.whatsapp_window.templates || [];
+    if (!list.length) return h('p', { class: 'help' }, t('Pasaron más de 24 horas desde el último mensaje del cliente: WhatsApp solo deja escribirle con una plantilla aprobada. Cargá las plantillas en Canales → WhatsApp.'));
+    const pick = h('select', { 'aria-label': t('Plantilla') }, list.map((tp) => h('option', { value: tp.name }, tp.name + (tp.language ? ' (' + tp.language + ')' : ''))));
+    const fields = h('div', { class: 'row', style: 'flex-wrap:wrap;gap:8px' });
+    const draw = () => {
+      const tp = list.find((x) => x.name === pick.value) || list[0];
+      fields.replaceChildren(...(tp.params || []).map((p, i) => h('input', { 'data-param': '', value: s.slots?.[p] ?? '', placeholder: '{{' + (i + 1) + '}} ' + p, 'aria-label': t('Valor para {name}', { name: p }) })));
+    };
+    pick.onchange = draw; draw();
+    const go = () => act('reply', { template: { name: pick.value, params: [...fields.querySelectorAll('[data-param]')].map((x) => x.value.trim()) } });
+    return h('div', { class: 'stack', style: 'gap:8px' },
+      h('p', { class: 'help' }, t('Pasaron más de 24 horas desde el último mensaje del cliente: WhatsApp solo deja escribirle con una plantilla aprobada. Cuando conteste, seguís escribiendo normal.')),
+      h('div', { class: 'ib-reply' }, pick, fields, h('button', { class: 'btn', onclick: go }, icon('arrow'), t('Enviar plantilla'))));
   }
 
   function drawList() {
@@ -100,7 +121,7 @@ window.inboxView = () => {
       const external = ho.active !== false && ho.mode === 'external';
       const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
       log.replaceChildren(...(s.history || []).flatMap((m) => {
-        if (m.from === 'user') return [h('div', { class: 'msg user' }, m.text), h('div', { class: 'ib-who user' }, t('Cliente') + ' · ' + ibTime(m.at))];
+        if (m.from === 'user') return [h('div', { class: 'msg user' }, m.text, window.mediaView(m.media)), h('div', { class: 'ib-who user' }, t('Cliente') + ' · ' + ibTime(m.at))];
         if (m.from === 'human') return [h('div', { class: 'msg human' }, m.text), h('div', { class: 'ib-who' }, (m.by || t('Persona')) + ' · ' + ibTime(m.at))];
         if (m.from === 'bot') return [h('div', { class: 'msg bot' }, m.file && m.text === m.file.name ? null : m.text, m.file ? window.fileCard(m.file) : null), h('div', { class: 'ib-who' }, t('Bot') + ' · ' + ibTime(m.at))];
         return h('div', { class: 'msg event' }, window.tEvent(m.text) + ' · ' + ibTime(m.at));
@@ -111,11 +132,13 @@ window.inboxView = () => {
         external ? h('span', { class: 'tag', style: 'background:var(--warn-soft);color:var(--warn)' }, t('En el contact center externo'))
           : [ho.by ? null : h('button', { class: 'btn quiet small', onclick: () => act('take') }, icon('hand'), t('Tomar conversación')),
             h('button', { class: 'btn small', onclick: () => act('release') }, icon('back'), t('Devolver al bot'))]);
-      const call = String(s.channel === 'phone') + external;      // una llamada no tiene caja para escribir; la del contact center externo tampoco
+      const closed = s.whatsapp_window?.open === false;           // WhatsApp fuera de las 24 h: plantilla en vez de texto
+      const call = String(s.channel === 'phone') + external + closed;      // una llamada no tiene caja para escribir; la del contact center externo tampoco
       if (!detail.contains(log) || detail.dataset.call !== call) (detail.dataset.call = call, detail.replaceChildren(head, log, external
         ? h('p', { class: 'help' }, t('La atiende el contact center externo (Canales → Derivación): acá solo se puede mirar. La devuelve o la cierra el contact center por la API.'))
         : s.channel === 'phone'
         ? h('p', { class: 'help' }, t('Es una llamada: no se le puede escribir. Al tomarla, Parla la transfiere al número de «Transferir a una persona» (Canales → Teléfono) apenas la persona deje de hablar.'))
+        : closed ? templatePicker(s)
         : h('div', { class: 'ib-reply' }, text, h('button', { class: 'btn', onclick: send }, icon('arrow'), t('Enviar'))), note,
         h('button', { class: 'link', style: 'align-self:flex-start;font-size:13px', onclick: () => ibOpenInSessions(id) }, t('Ver en Conversaciones'))));
     } catch (e) {

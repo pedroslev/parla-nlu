@@ -164,6 +164,25 @@ used to receive messages; statuses come with it). Without it, recipients stay as
 
 When a send is several messages (a flow that says three things), only the last message's status is followed.
 
+### Send status API
+
+`POST /outbound` returns `id`. `GET /api/v1/bots/{bot}/outbound/{id}` gives
+`{id, kind, channel, to, status, error, attempts, sessionId, message_id, campaign, created, sent_at, updated}`
+(`status`: `sent`, `delivered`, `read`, `replied`, `failed`…, `error` with the reason). `GET …/outbound` lists sends
+(API, campaigns and reminders), newest first, with `?to=&status=&from=&to_date=` (`YYYY-MM-DD`) and `kind`, `channel`,
+`limit` (≤ 500). Analyst or above, or an `integration` key; support (agent) can't. `updated` is the time of the last
+status change (there are no separate delivered/read timestamps).
+
+### Templates from the Inbox and the contact center
+
+Outside the 24 hours, an Inbox reply or `POST …/sessions/{sid}/messages` doesn't send free text (Meta would reject it
+with 131047). It answers `409` with `"code": "template_required"` and `templates` (the catalog). The Inbox then shows
+a template picker with its `params` prefilled from the conversation's slots; the API takes
+`"template": {"name", "language"?, "params"?}`, where `params` is the list of values for `{{1}}`, `{{2}}`… (if
+missing, they come from the slots named in the catalog). An unknown template → `400` `template_invalid`. It's recorded
+as a `human` message `[name: values]` with `template`. When the customer replies, the window opens and replies are
+free text again. `GET …/sessions/{sid}` includes `whatsapp_window: {open, templates?}`.
+
 ## Telegram
 
 Telegram only lets a bot write to people who **started a chat with it** (or didn't block it). `to` is the chat id,

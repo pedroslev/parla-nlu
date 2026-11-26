@@ -85,6 +85,8 @@
     handoff: () => ({ method: 'POST', path: '/bots/' + ref() + '/sessions/' + encodeURIComponent(sid) + '/handoff', body: { action: 'accept', agent_name: 'Marta' } }),
     reply: () => ({ method: 'POST', path: '/bots/' + ref() + '/sessions/' + encodeURIComponent(sid) + '/messages', body: { text: t('Hola, soy Marta. ¿En qué te ayudo?'), from_name: 'Marta' } }),
     lookup: () => ({ method: 'GET', path: '/bots/' + ref() + '/lookup?phone=5491122334455' }),
+    status: () => ({ method: 'GET', path: '/bots/' + ref() + '/outbound/42' }),
+    statuses: () => ({ method: 'GET', path: '/bots/' + ref() + '/outbound?status=failed&' + monthRange().replace('to=', 'to_date=') }),
     costs: () => ({ method: 'GET', path: '/bots/' + ref() + '/costs?' + monthRange() + '&group=day' }),
   };
 
@@ -104,6 +106,8 @@
     handoff: t('Para un contact center fuera de Parla: tomar la conversación derivada (accept), devolverla al bot (release, con data y flow opcionales) o cerrarla (close, con resolution). Devuelve la conversación sin history.'),
     reply: t('Lo que escribe la persona del contact center: Parla lo entrega por el canal de la charla (widget, WhatsApp, Telegram). 409 en llamadas, conversaciones terminadas o WhatsApp fuera de las 24 h.'),
     lookup: t('La conversación abierta más reciente de ese cliente (primero las derivadas), por phone, chat o sid. El mismo cuerpo que el webhook. 404 si no hay.'),
+    status: t('El estado de un envío con el id que devolvió POST …/outbound: sent, delivered, read, replied o failed (con error), y sus fechas. Analista o más, o una clave «integration».'),
+    statuses: t('Los envíos del bot, el más nuevo primero (API, campañas y recordatorios). Filtros opcionales: to, status, from y to_date (AAAA-MM-DD), kind, channel y limit (hasta 500).'),
     costs: t('Lo que costó cada conversación: el uso medido (tokens, minutos, caracteres, mensajes) por la tabla de precios de esta instalación. Estimado con los precios actuales; la factura del proveedor es la fuente de verdad. Analista o más.'),
     audio: t('Un mensaje de voz: Parla lo pasa a texto en esta computadora (sin servicios de afuera), lo atiende como un message y, con speak, te devuelve la respuesta también en audio. Trae lo mismo que message más heard y audio.'),
   };
@@ -509,6 +513,17 @@
       codeBox(() => 'curl -N ' + q(BASE() + '/bots/' + ref() + '/sessions/' + encodeURIComponent(sid) + '/stream?after=0')));
   }
 
+  function voiceSection() {
+    return h('section', { class: 'panel ad-panel' },
+      h('h2', {}, t('Voz en tiempo real: WebSocket')),
+      h('p', { class: 'help' }, t('Misma autenticación y reglas de Origin que /ws (el widget público incluido). Los mensajes binarios son audio PCM16 little-endian mono a 16 kHz, de ida y de vuelta (20 a 100 ms por mensaje); los de texto son JSON. La conversación tiene que existir: empezala con POST …/events.')),
+      h('div', { class: 'ad-ep' }, h('span', { class: 'ad-m GET' }, 'GET'), h('code', {}, '/bots/{bot}/voice/ws')),
+      codeBox(() => '← {"type": "ready", "rate": 16000}\n→ {"type": "start", "sessionId": "' + sid + '", "language": "es", "channel": "web", "replay": true}\n→ <PCM16>   ← <PCM16>\n← {"type": "partial", "text": "quiero una"}\n← {"type": "transcript", "text": "quiero una muzza"}\n← {"type": "speaking", "latency_ms": 412}\n← {"type": "reply", "status": 200, "body": {…}}\n← {"type": "clear"}\n→ {"type": "stop"}'),
+      h('p', { class: 'help' }, t('partial solo con Deepgram. transcript cierra el turno de la persona y corre como un message. clear: la persona interrumpió, cortá lo que suena y lo que está en cola.')),
+      h('p', { class: 'help' }, t('Teléfono: '), inline('/bots/{bot}/phone/twilio/stream'), t(' (Twilio Media Streams, μ-law 8 kHz) y '), inline('/bots/{bot}/phone/jambonz/stream?t=…'),
+        t(' (jambonz listen, L16 8 kHz) usan el protocolo de cada proveedor; Parla los arma solo con el modo «stream» de Canales → Teléfono.')));
+  }
+
   function webhookSection() {
     return h('section', { class: 'panel ad-panel' },
       h('h2', {}, t('Webhooks que manda Parla')),
@@ -604,6 +619,8 @@
           ['text', t('Sí'), t('Lo que escribió o dijo la persona (hasta 4000 caracteres).')],
           ['sessionId', t('No'), t('La conversación. Si no lo mandás, se crea una nueva y viene en la respuesta. Si la conversación estaba terminada, sigue con la memoria en blanco.')],
           ['type', t('No'), t('"message". Se puede omitir si mandás text.')],
+          ['media', t('No'), [t('Lo que mandó la persona por WhatsApp o Telegram (lo arma Parla): '), inline('{type, url, mime, name, size, caption, transcript, description, lat, lng}'),
+            t('. En los pasos: '), inline('{{ media.url }}'), ', ', inline('{{ media.type }}'), t('… url solo puede ser un /files/ de este bot.')]],
           ['environment', t('No'), [t('Qué versión del bot contesta: '), inline('"production"'), t(' (por defecto, la que ven tus usuarios), '), inline('"staging"'), t(' (Pruebas, para que el cliente la pruebe antes de pasarla a producción) o '), inline('"draft"'), t(' (el borrador, con los cambios sin publicar). Solo cuenta al empezar la conversación: después sigue en la misma.')]],
         ],
         extra: h('label', { class: 'f' }, t('Texto del mensaje (cambialo y volvé a probar para seguir la charla)'), msgInput),
@@ -671,6 +688,14 @@
           ['flow', t('No'), t('El flujo que corre: enseguida en Telegram y en llamadas, cuando la persona responde en WhatsApp.')],
           ['data', t('No'), t('Datos que se guardan en slots y completan la plantilla.')],
         ] }),
+      endpoint('status', { title: t('Estado de un envío'), purpose: PURPOSE.status, noTry: true,
+        after: fieldsOut([
+          ['id / kind / channel / to', t('El envío: api, campaign o remind, por qué canal y a quién.')],
+          ['status / error', t('queued, sending, sent, delivered, read, replied, failed, opted_out o canceled; error dice por qué falló.')],
+          ['created / sent_at / updated', t('Cuándo se pidió, cuándo salió y el último cambio de estado.')],
+          ['sessionId / message_id / campaign', t('La conversación, el id del canal (wamid) y la campaña, si es de una.')],
+        ]) }),
+      endpoint('statuses', { title: t('Listar envíos'), purpose: PURPOSE.statuses, noTry: true }),
       endpoint('costs', { title: t('Costos'), purpose: PURPOSE.costs,
         rows: [
           ['from / to', t('No'), t('Solo el uso de esos días, inclusive (AAAA-MM-DD).')],
@@ -693,12 +718,14 @@
           ['resolution', t('No'), t('En close: cómo terminó.')],
         ] }),
       endpoint('reply', { title: t('Escribirle al cliente desde el contact center'), purpose: PURPOSE.reply, noTry: true,
-        rows: [['text', t('Sí'), t('El mensaje.')], ['from_name', t('No'), t('El nombre de quien escribe.')]] }),
+        rows: [['text', t('Sí'), t('El mensaje.')], ['from_name', t('No'), t('El nombre de quien escribe.')],
+          ['template', t('No'), t('WhatsApp fuera de las 24 h: {name, language?, params?} de una plantilla del catálogo. params son los valores de {{1}}, {{2}}…; si no vienen, salen de los slots. Sin plantilla: 409 con code "template_required" y la lista en templates.')]] }),
       endpoint('lookup', { title: t('Buscar la conversación de un cliente'), purpose: PURPOSE.lookup, noTry: true,
         rows: [['phone / chat / sid', t('Uno'), t('El teléfono (con código de país), el chat de Telegram o el sessionId.')]] }),
       h('p', { class: 'help' }, t('Estas rutas aceptan una clave de dueño o editor, o una clave con scope «integration» (sirve solo para esto).')),
       webhookSection(),
       pushSection(),
+      voiceSection(),
       endpoint('audio', { title: t('Mandar un mensaje de voz'), purpose: PURPOSE.audio, noTry: true,
         rows: [
           ['audio', t('Sí'), [t('La grabación en base64 (también acepta '), inline('data:audio/webm;base64,…'), t('). Hasta 25 MB.')]],

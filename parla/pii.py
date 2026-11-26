@@ -70,4 +70,8 @@ def record(rec, cats):
         for key in ("text", "entities", "data", "tool"):
             if key in entry:
                 entry[key] = scrub(entry[key], cats)
+        media = entry.get("media") if isinstance(entry.get("media"), dict) else {}
+        for key in ("transcript", "caption", "description", "name", "phone", "address"):     # lo que dijo o mandó la persona
+            if isinstance(media.get(key), str):
+                media[key] = scrub(media[key], cats)
     return out

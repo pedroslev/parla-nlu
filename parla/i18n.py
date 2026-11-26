@@ -399,6 +399,14 @@ EN = {
     "la campaña ya terminó: armá otra": "the campaign already finished: create another one",
     "«flow» tiene que ser el nombre de un flujo": "“flow” must be the name of a flow",
     "demasiados envíos por minuto con la API (máximo %d): para muchos, armá una campaña": "too many API sends per minute (maximum %d): for many, create a campaign",
+    "el mensaje no trae el id del archivo": "the message has no file id",
+    "Telegram no devolvió el archivo": "Telegram did not return the file",
+    "ese tipo de archivo no se acepta (%s)": "that file type is not accepted (%s)",
+    "no existe la plantilla «%s» en Canales → WhatsApp → Plantillas": "there is no template “%s” in Channels → WhatsApp → Templates",
+    "«params» de la plantilla es la lista de valores para {{1}}, {{2}}…": "the template “params” is the list of values for {{1}}, {{2}}…",
+    "«status» tiene que ser uno de: %s": "“status” must be one of: %s",
+    "no existe ese envío": "that send does not exist",
+    "pasaron más de 24 horas desde el último mensaje de la persona: WhatsApp solo deja escribirle con una plantilla aprobada. Elegí una en «template»": "more than 24 hours have passed since the person's last message: WhatsApp only allows an approved template. Choose one in “template”",
 }
 # Portugués de Brasil: mismas claves que EN
 PT = {
@@ -792,6 +800,14 @@ PT = {
     "la campaña ya terminó: armá otra": "a campanha já terminou: crie outra",
     "«flow» tiene que ser el nombre de un flujo": "“flow” tem que ser o nome de um fluxo",
     "demasiados envíos por minuto con la API (máximo %d): para muchos, armá una campaña": "envios demais por minuto pela API (máximo %d): para muitos, crie uma campanha",
+    "el mensaje no trae el id del archivo": "a mensagem não traz o id do arquivo",
+    "Telegram no devolvió el archivo": "o Telegram não devolveu o arquivo",
+    "ese tipo de archivo no se acepta (%s)": "esse tipo de arquivo não é aceito (%s)",
+    "no existe la plantilla «%s» en Canales → WhatsApp → Plantillas": "não existe o modelo “%s” em Canais → WhatsApp → Modelos",
+    "«params» de la plantilla es la lista de valores para {{1}}, {{2}}…": "“params” do modelo é a lista de valores para {{1}}, {{2}}…",
+    "«status» tiene que ser uno de: %s": "“status” tem que ser um de: %s",
+    "no existe ese envío": "esse envio não existe",
+    "pasaron más de 24 horas desde el último mensaje de la persona: WhatsApp solo deja escribirle con una plantilla aprobada. Elegí una en «template»": "passaram mais de 24 horas desde a última mensagem da pessoa: o WhatsApp só deixa escrever com um modelo aprovado. Escolha um em “template”",
 }
 DICTS = {"en": EN, "pt": PT}
 # Los flujos del sistema de un bot en inglés o portugués (languages[0]): textos y frases de fábrica, sobre server.SYSTEM_DEFAULTS.

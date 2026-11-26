@@ -167,6 +167,25 @@ contestan.
 
 Cuando un envío son varios mensajes (un flujo que dice tres cosas), solo se sigue el estado del último.
 
+### API de estado de los envíos
+
+`POST /outbound` devuelve `id`. `GET /api/v1/bots/{bot}/outbound/{id}` da
+`{id, kind, channel, to, status, error, attempts, sessionId, message_id, campaign, created, sent_at, updated}`
+(`status`: `sent`, `delivered`, `read`, `replied`, `failed`…, `error` con el motivo). `GET …/outbound` lista los envíos
+(API, campañas y recordatorios), el más nuevo primero, con `?to=&status=&from=&to_date=` (`AAAA-MM-DD`) y `kind`,
+`channel`, `limit` (≤ 500). Analista o más, o una clave `integration`; atención (agent) no. `updated` es la hora del
+último cambio de estado (no hay fechas separadas de entregado/leído).
+
+### Plantillas desde la Bandeja y el contact center
+
+Fuera de las 24 horas, una respuesta de la Bandeja o `POST …/sessions/{sid}/messages` no manda texto libre (Meta lo
+rechazaría con 131047). Contesta `409` con `"code": "template_required"` y `templates` (el catálogo). La Bandeja
+muestra entonces un selector de plantilla con sus `params` completados con los slots de la conversación; la API
+recibe `"template": {"name", "language"?, "params"?}`, donde `params` es la lista de valores para `{{1}}`, `{{2}}`…
+(si no viene, salen de los slots que nombra el catálogo). Una plantilla que no existe → `400` `template_invalid`.
+Queda como mensaje `human` `[nombre: valores]` con `template`. Cuando el cliente contesta, la ventana se abre y se
+vuelve a escribir texto libre. `GET …/sessions/{sid}` trae `whatsapp_window: {open, templates?}`.
+
 ## Telegram
 
 Telegram solo deja que un bot le escriba a quien **empezó un chat con él** (y no lo bloqueó). `to` es el chat id, el
